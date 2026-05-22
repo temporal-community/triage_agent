@@ -86,7 +86,7 @@ GitHub webhook → FastAPI receiver → PRActionWorkflow
 | Known CVEs | api.osv.dev | None |
 | Release age | pypi.org | None |
 | Maintainer change | pypi.org (compare versions) | None |
-| Supply chain score + alerts | socket.dev | API key (optional) |
+| Supply chain score + alerts | api.socket.dev/v0/purl | API key (optional) |
 | Package diff | pypi.org sdist download | None |
 
 ### Classifier
@@ -175,7 +175,7 @@ See [CLAUDE.md](CLAUDE.md) for architecture details and [HANDOFF.md](HANDOFF.md)
 - [x] LLM classifier with rule-based fallback
 - [x] Real GitHub comment + merge via PAT
 - [x] Graceful degradation (zero-key dry run)
-- [ ] Socket.dev integration
+- [x] Socket.dev integration
 - [x] Package diff activity (sdist download + diff)
 - [x] Per-repo config fetched from `.github/triage-agent.yml`
 - [ ] GitHub App auth (replaces PAT)
