@@ -18,6 +18,7 @@ from temporalio.worker import Worker
 
 from activities.models import (
     AttestationSignals,
+    DepsDevSignals,
     DiffSignals,
     MaintainerSignals,
     OSVSignals,
@@ -27,6 +28,7 @@ from activities.models import (
     ReleaseAgeSignals,
     ReleaseSignals,
     RepoConfig,
+    ScorecardSignals,
     SocketSignals,
     Verdict,
     VersionLineSignals,
@@ -178,6 +180,20 @@ def _version_lineage():
     return check
 
 
+def _depsdev():
+    @activity.defn(name="activities.depsdev.fetch")
+    async def fetch(*_):
+        return DepsDevSignals()
+    return fetch
+
+
+def _scorecard():
+    @activity.defn(name="activities.scorecard.fetch")
+    async def fetch(*_):
+        return ScorecardSignals()
+    return fetch
+
+
 # ---------------------------------------------------------------------------
 # Scenarios: (fixture_name, verdict_class, repo_config, human_signal | None)
 # ---------------------------------------------------------------------------
@@ -225,7 +241,8 @@ async def _run_scenario(
 ) -> None:
     acts = [
         _pypi(), _socket(), _osv(), _diff(), _maintainer(), _release_age(),
-        _attestation(), _release_notes(), _version_lineage(), _classifier(classification),
+        _attestation(), _release_notes(), _version_lineage(), _depsdev(), _scorecard(),
+        _classifier(classification),
         _repo_config(config), _comment(), _merge(), _review(), _label(), _close_pr(),
         _check_pr_files(),
     ]

@@ -9,6 +9,7 @@ with workflow.unsafe.imports_passed_through():
         PyPISignals, SocketSignals, OSVSignals,
         DiffSignals, MaintainerSignals, ReleaseAgeSignals,
         AttestationSignals, ReleaseSignals, VersionLineSignals,
+        DepsDevSignals, ScorecardSignals,
     )
 
 
@@ -34,7 +35,7 @@ class PackageTriageWorkflow:
         opts: dict = dict(start_to_close_timeout=timedelta(seconds=30), retry_policy=retry)
         args = [ecosystem, package, old_version, new_version]
 
-        pypi, sock, osv, diff, maint, age, attest, rel, ver = await asyncio.gather(
+        pypi, sock, osv, diff, maint, age, attest, rel, ver, depsdev, sc = await asyncio.gather(
             workflow.execute_activity(
                 "activities.pypi_metadata.fetch", args=args, result_type=PyPISignals, **opts
             ),
@@ -66,6 +67,12 @@ class PackageTriageWorkflow:
             workflow.execute_activity(
                 "activities.version_lineage.check", args=args, result_type=VersionLineSignals, **opts
             ),
+            workflow.execute_activity(
+                "activities.depsdev.fetch", args=args, result_type=DepsDevSignals, **opts
+            ),
+            workflow.execute_activity(
+                "activities.scorecard.fetch", args=args, result_type=ScorecardSignals, **opts
+            ),
         )
 
         signals = PackageSignals(
@@ -82,6 +89,8 @@ class PackageTriageWorkflow:
             **attest.model_dump(),
             **rel.model_dump(),
             **ver.model_dump(),
+            **depsdev.model_dump(),
+            **sc.model_dump(),
         )
 
         return await workflow.execute_activity(

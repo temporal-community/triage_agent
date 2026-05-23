@@ -110,6 +110,25 @@ timestamp_skew_minutes, possible_rerelease, tag_signature_verified, tag_was_prev
 - release_notes (in untrusted_registry): review for mention of security fixes, CVEs, or
   breaking changes — those are not red flags but signal the reviewer should read carefully.
 
+deps.dev and OpenSSF Scorecard signals (is_deprecated, deprecated_reason, scorecard_score,
+scorecard_maintained, scorecard_dangerous_workflow, scorecard_token_permissions,
+scorecard_branch_protection, scorecard_signed_releases, scorecard_repo):
+- is_deprecated=true: the package registry has marked this package deprecated. Always flag
+  as YELLOW at minimum — bumping a dead package is worse than no change at all.
+- deprecated_reason: registry-provided message. May suggest a replacement package.
+- scorecard_score: OpenSSF Scorecard overall health score (0-10) for the upstream source
+  repo. null means the repo wasn't found in the Scorecard dataset (common for smaller
+  packages — not itself a risk signal). Below 4.0 warrants YELLOW.
+- scorecard_maintained=0: upstream repo shows no recent activity — zombie project.
+  Combined with a major bump or new maintainer, treat as YELLOW.
+- scorecard_dangerous_workflow=0: Scorecard detected CI workflows vulnerable to injection
+  (e.g. pull_request_target used unsafely). YELLOW independent of the diff — the build
+  pipeline may be compromisable even if the published artifact looks clean.
+- scorecard_token_permissions < 5: CI tokens are overprivileged. Minor flag alone; more
+  significant combined with publisher_changed or a new maintainer.
+- scorecard_branch_protection, scorecard_signed_releases: supporting context. Low scores
+  are minor on their own; weight them alongside other trust signals.
+
 Use `package_description` (when present) to assess the package's risk category.
 Packages that touch auth, cryptography, network I/O, secrets, or code execution
 warrant closer scrutiny than color-formatting or logging utilities — apply

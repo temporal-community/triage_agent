@@ -193,6 +193,24 @@ def _rule_based(signals: PackageSignals) -> Verdict:
         )
     if signals.new_dependency_count >= 5:
         flags.append(f"{signals.new_dependency_count} new direct dependencies added")
+    if signals.is_deprecated:
+        reason = f": {signals.deprecated_reason}" if signals.deprecated_reason else ""
+        flags.append(f"package is deprecated at the registry level{reason}")
+    if signals.scorecard_maintained is not None and signals.scorecard_maintained == 0:
+        flags.append(
+            "upstream repo appears unmaintained (Scorecard Maintained: 0/10"
+            + (f", repo: {signals.scorecard_repo}" if signals.scorecard_repo else "")
+            + ")"
+        )
+    if signals.scorecard_dangerous_workflow is not None and signals.scorecard_dangerous_workflow == 0:
+        flags.append(
+            "upstream repo has dangerous CI workflow patterns (Scorecard Dangerous-Workflow: 0/10) — "
+            "possible workflow injection vector"
+        )
+    if signals.scorecard_token_permissions is not None and signals.scorecard_token_permissions < 5:
+        flags.append(
+            f"CI tokens appear overprivileged (Scorecard Token-Permissions: {signals.scorecard_token_permissions}/10)"
+        )
     if signals.socket_alerts:
         flags.extend(signals.socket_alerts)
     if signals.socket_score is not None and signals.socket_score < 50:

@@ -83,6 +83,21 @@ class ReleaseSignals(BaseModel):
     metadata_repo: str | None = None            # "owner/repo" extracted from package registry metadata (project_urls / repository / source_code_uri)
 
 
+class DepsDevSignals(BaseModel):
+    is_deprecated: bool = False
+    deprecated_reason: str | None = None
+
+
+class ScorecardSignals(BaseModel):
+    scorecard_score: float | None = None
+    scorecard_repo: str | None = None           # "owner/repo" that was queried
+    scorecard_maintained: int | None = None     # 0-10 or None if N/A
+    scorecard_dangerous_workflow: int | None = None
+    scorecard_token_permissions: int | None = None
+    scorecard_branch_protection: int | None = None
+    scorecard_signed_releases: int | None = None
+
+
 class AttestationSignals(BaseModel):
     has_attestation: bool = False           # new version has a verifiable SLSA/Sigstore attestation
     publisher_kind: str | None = None       # "GitHub", "GitLab", etc.
@@ -136,6 +151,15 @@ class PackageSignals(BaseModel):
     stale_version_line: bool = False
     latest_major: int | None = None
     bump_major: int | None = None
+    is_deprecated: bool = False
+    deprecated_reason: str | None = None
+    scorecard_score: float | None = None
+    scorecard_repo: str | None = None
+    scorecard_maintained: int | None = None
+    scorecard_dangerous_workflow: int | None = None
+    scorecard_token_permissions: int | None = None
+    scorecard_branch_protection: int | None = None
+    scorecard_signed_releases: int | None = None
 
 
 class Verdict(BaseModel):

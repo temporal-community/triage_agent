@@ -9,6 +9,7 @@ from workflows.package_triage_workflow import PackageTriageWorkflow
 from workflows.pr_action_workflow import PRActionWorkflow
 from activities import pypi_metadata, socket, osv, package_diff, release_age, maintainer
 from activities import attestation, classifier, release_notes, repo_config, github, version_lineage
+from activities import depsdev, scorecard
 
 load_dotenv()
 
@@ -43,6 +44,8 @@ async def main() -> None:
             github.get_pr,
             github.check_pr_files,
             version_lineage.check,
+            depsdev.fetch,
+            scorecard.fetch,
         ],
     )
     print(f"Worker started on task queue: {task_queue}")
