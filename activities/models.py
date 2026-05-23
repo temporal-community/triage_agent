@@ -15,12 +15,17 @@ class PRContext(BaseModel):
 
 
 class RepoConfig(BaseModel):
-    """Loaded from .github/triage-agent.yml in target repo. All fields optional."""
+    """Loaded from .github/triage-agent.yml in target repo. All fields optional.
+
+    Default behavior (no config file): observe-only — posts a comment on every PR,
+    no auto-merge, no review requests, no blocking.
+    """
     auto_merge_enabled: bool = False
     reviewers: list[str] = []
     min_release_age_hours: int = 168        # 7 days
     auto_merge_classifications: list[str] = ["green"]
     block_classifications: list[str] = []   # e.g. ["red"] to close suspicious PRs
+    max_new_dependencies: int = 5           # flag as yellow when more direct deps than this are added
 
 
 # Partial signal models — one per signal activity, merged into PackageSignals in the workflow.
@@ -138,4 +143,5 @@ class Verdict(BaseModel):
     confidence: float
     reasoning: str
     flags: list[str]
-    release_age_hours: float | None = None  # passed through for per-repo age gate enforcement
+    release_age_hours: float | None = None      # passed through for per-repo age gate enforcement
+    new_dependency_count: int = 0               # passed through for per-repo max_new_dependencies gate

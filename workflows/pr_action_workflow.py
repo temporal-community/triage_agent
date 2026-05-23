@@ -109,6 +109,18 @@ class PRActionWorkflow:
                 ],
             })
 
+        if (
+            verdict.classification == "green"
+            and verdict.new_dependency_count >= config.max_new_dependencies
+        ):
+            verdict = verdict.model_copy(update={
+                "classification": "yellow",
+                "flags": verdict.flags + [
+                    f"{verdict.new_dependency_count} new direct dependencies added "
+                    f"(max_new_dependencies: {config.max_new_dependencies} for this repo)"
+                ],
+            })
+
         await workflow.execute_activity(
             "activities.github.comment", args=[pr, verdict], **opts
         )

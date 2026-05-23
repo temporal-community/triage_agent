@@ -27,8 +27,9 @@ YELLOW — needs human eyes. ANY of:
   - stale_version_line=true — the bump targets an older major line (bump_major) while a
     newer stable major (latest_major) is actively maintained; legitimate if the project
     officially supports multiple version lines, but unusual enough to warrant a check
-  - new_dependency_count >= 3 — a large number of direct dependencies were added in this
+  - new_dependency_count >= 5 — a large number of direct dependencies were added in this
     version bump; many new transitive dependencies can expand the attack surface significantly
+    (per-repo threshold is configurable via max_new_dependencies in triage-agent.yml)
 
 RED — likely supply chain attack. ANY of:
   - ANY entry in the "=== DANGEROUS BINARY/EXECUTABLE FILES ===" diff section —

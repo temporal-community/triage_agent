@@ -77,9 +77,14 @@ async def classify(signals: PackageSignals) -> Verdict:
 
     tool_use = next(b for b in response.content if b.type == "tool_use")
     verdict = Verdict(**tool_use.input)
-    # Pass release_age_hours through so PRActionWorkflow can enforce per-repo age gates.
+    # Pass signals through so PRActionWorkflow can enforce per-repo gates.
+    updates: dict = {}
     if verdict.release_age_hours is None:
-        verdict = verdict.model_copy(update={"release_age_hours": signals.release_age_hours})
+        updates["release_age_hours"] = signals.release_age_hours
+    if verdict.new_dependency_count == 0 and signals.new_dependency_count:
+        updates["new_dependency_count"] = signals.new_dependency_count
+    if updates:
+        verdict = verdict.model_copy(update=updates)
     activity.logger.info(
         f"Classified {signals.package_name} {signals.new_version} as "
         f"{verdict.classification} ({verdict.confidence:.0%})"
@@ -98,6 +103,7 @@ def _rule_based(signals: PackageSignals) -> Verdict:
             confidence=0.95,
             reasoning=f"Known vulnerabilities: {', '.join(signals.osv_vulnerabilities)}",
             flags=[f"CVE: {v}" for v in signals.osv_vulnerabilities],
+            new_dependency_count=signals.new_dependency_count,
         )
 
     # Hard RED: new install hook
@@ -108,6 +114,7 @@ def _rule_based(signals: PackageSignals) -> Verdict:
             reasoning="A new install-time script was added to this version.",
             flags=["install script added"],
             release_age_hours=signals.release_age_hours,
+            new_dependency_count=signals.new_dependency_count,
         )
 
     # Collect yellow signals
@@ -157,6 +164,7 @@ def _rule_based(signals: PackageSignals) -> Verdict:
                 f"metadata={signals.metadata_repo}"
             ],
             release_age_hours=signals.release_age_hours,
+            new_dependency_count=signals.new_dependency_count,
         )
     if (
         signals.has_attestation
@@ -183,7 +191,7 @@ def _rule_based(signals: PackageSignals) -> Verdict:
             f"patching older {signals.bump_major}.x version line while "
             f"{signals.latest_major}.x is actively maintained — verify this is intentional"
         )
-    if signals.new_dependency_count >= 3:
+    if signals.new_dependency_count >= 5:
         flags.append(f"{signals.new_dependency_count} new direct dependencies added")
     if signals.socket_alerts:
         flags.extend(signals.socket_alerts)
@@ -199,6 +207,7 @@ def _rule_based(signals: PackageSignals) -> Verdict:
             reasoning=f"[rule-based] Flagged: {', '.join(flags)}.",
             flags=flags,
             release_age_hours=signals.release_age_hours,
+            new_dependency_count=signals.new_dependency_count,
         )
 
     age_str = f"{signals.release_age_hours:.0f}h old" if signals.release_age_hours is not None else "age unknown"
@@ -213,4 +222,5 @@ def _rule_based(signals: PackageSignals) -> Verdict:
         ),
         flags=[],
         release_age_hours=signals.release_age_hours,
+        new_dependency_count=signals.new_dependency_count,
     )

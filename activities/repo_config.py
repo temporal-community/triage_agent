@@ -40,7 +40,10 @@ async def _fetch_from_github(pr: PRContext) -> RepoConfig:
         resp = await client.get(url, headers=headers)
 
     if resp.status_code == 404:
-        activity.logger.info(f"No .github/triage-agent.yml in {pr.repo} — using defaults")
+        activity.logger.info(
+            f"No .github/triage-agent.yml in {pr.repo} — "
+            "using observe-only defaults (comment on every PR, no auto-merge, no review requests, no blocking)"
+        )
         return RepoConfig()
 
     if resp.status_code == 401:
