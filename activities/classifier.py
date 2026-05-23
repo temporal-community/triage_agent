@@ -96,6 +96,16 @@ def _rule_based(signals: PackageSignals) -> Verdict:
             flags=[f"CVE: {v}" for v in signals.osv_vulnerabilities],
         )
 
+    # Hard RED: new install hook
+    if signals.install_script_added:
+        return Verdict(
+            classification="red",
+            confidence=0.90,
+            reasoning="A new install-time script was added to this version.",
+            flags=["install script added"],
+            release_age_hours=signals.release_age_hours,
+        )
+
     # Collect yellow signals
     if signals.is_major_bump:
         flags.append("major version bump")
@@ -105,11 +115,15 @@ def _rule_based(signals: PackageSignals) -> Verdict:
         flags.append(f"very fresh release ({signals.release_age_hours:.0f}h old)")
     elif signals.release_age_hours < 168:
         flags.append(f"recent release ({signals.release_age_hours:.0f}h old)")
+    if signals.install_script_changed:
+        flags.append("install script modified")
     if signals.maintainer_changed:
         flags.append("maintainer changed")
     if signals.publisher_changed:
         old = f" (was {signals.old_publisher_repo})" if signals.old_publisher_repo else ""
         flags.append(f"trusted publisher changed{old}")
+    if signals.publisher_account_age_days is not None and signals.publisher_account_age_days < 90:
+        flags.append(f"publisher GitHub account is only {signals.publisher_account_age_days} days old")
     if signals.socket_alerts:
         flags.extend(signals.socket_alerts)
     if signals.socket_score is not None and signals.socket_score < 50:

@@ -73,7 +73,7 @@ def signals():
         diff_size_bytes=1024,
         maintainer_changed=False,
         weekly_downloads=5_000_000,
-        publish_account_age_days=1800,
+        publisher_account_age_days=1800,
     )
 
 

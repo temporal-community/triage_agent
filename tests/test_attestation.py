@@ -277,7 +277,7 @@ def test_rule_based_classifier_flags_publisher_changed():
         diff_size_bytes=0,
         maintainer_changed=False,
         weekly_downloads=100_000,
-        publish_account_age_days=None,
+        publisher_account_age_days=None,
         publisher_changed=True,
         old_publisher_repo="trusted/repo",
         publisher_repo="new/repo",
@@ -287,3 +287,134 @@ def test_rule_based_classifier_flags_publisher_changed():
     assert verdict.classification == "yellow"
     assert any("trusted publisher changed" in f for f in verdict.flags)
     assert "trusted/repo" in " ".join(verdict.flags)
+
+
+# ---------------------------------------------------------------------------
+# Publisher account age — fetch_github_account_age + classifier integration
+# ---------------------------------------------------------------------------
+
+@respx.mock
+async def test_pypi_attestation_populates_publisher_account_age(monkeypatch):
+    """publisher_account_age_days is populated via GitHub users API when GITHUB_TOKEN is set."""
+    monkeypatch.setenv("GITHUB_TOKEN", "ghp_test")
+    respx.get(f"{PYPI_BASE}/requests/2.31.0/json").mock(
+        return_value=httpx.Response(200, json=_pypi_urls("requests", "2.31.0"))
+    )
+    respx.get(f"{PYPI_BASE}/requests/2.32.0/json").mock(
+        return_value=httpx.Response(200, json=_pypi_urls("requests", "2.32.0"))
+    )
+    respx.get(f"{PYPI_INTEGRITY}/requests/2.31.0/requests-2.31.0.tar.gz/provenance").mock(
+        return_value=httpx.Response(200, json=_pypi_provenance(repo="psf/requests"))
+    )
+    respx.get(f"{PYPI_INTEGRITY}/requests/2.32.0/requests-2.32.0.tar.gz/provenance").mock(
+        return_value=httpx.Response(200, json=_pypi_provenance(repo="psf/requests"))
+    )
+    respx.get("https://api.github.com/users/psf").mock(
+        return_value=httpx.Response(200, json={"login": "psf", "created_at": "2010-03-15T00:00:00Z"})
+    )
+
+    env = ActivityEnvironment()
+    result = await env.run(attestation_check, "pip", "requests", "2.31.0", "2.32.0")
+    assert result.has_attestation is True
+    assert result.publisher_account_age_days is not None
+    assert result.publisher_account_age_days > 3000  # psf org is well over 8 years old
+
+
+@respx.mock
+async def test_publisher_account_age_none_without_token(monkeypatch):
+    """publisher_account_age_days stays None when GITHUB_TOKEN is absent."""
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    respx.get(f"{PYPI_BASE}/requests/2.31.0/json").mock(
+        return_value=httpx.Response(200, json=_pypi_urls("requests", "2.31.0"))
+    )
+    respx.get(f"{PYPI_BASE}/requests/2.32.0/json").mock(
+        return_value=httpx.Response(200, json=_pypi_urls("requests", "2.32.0"))
+    )
+    respx.get(f"{PYPI_INTEGRITY}/requests/2.31.0/requests-2.31.0.tar.gz/provenance").mock(
+        return_value=httpx.Response(200, json=_pypi_provenance(repo="psf/requests"))
+    )
+    respx.get(f"{PYPI_INTEGRITY}/requests/2.32.0/requests-2.32.0.tar.gz/provenance").mock(
+        return_value=httpx.Response(200, json=_pypi_provenance(repo="psf/requests"))
+    )
+
+    env = ActivityEnvironment()
+    result = await env.run(attestation_check, "pip", "requests", "2.31.0", "2.32.0")
+    assert result.has_attestation is True
+    assert result.publisher_account_age_days is None
+
+
+def test_rule_based_classifier_flags_young_publisher_account():
+    from activities.classifier import _rule_based
+    from activities.models import PackageSignals
+
+    signals = PackageSignals(
+        ecosystem="npm",
+        package_name="coolpkg",
+        old_version="1.0.0",
+        new_version="1.0.1",
+        release_age_hours=200.0,
+        is_major_bump=False,
+        socket_score=None,
+        socket_alerts=[],
+        osv_vulnerabilities=[],
+        diff_summary="[no significant changes detected]",
+        diff_size_bytes=0,
+        maintainer_changed=False,
+        weekly_downloads=50_000,
+        has_attestation=True,
+        publisher_repo="neworg/coolpkg",
+        publisher_account_age_days=30,
+    )
+    verdict = _rule_based(signals)
+    assert verdict.classification == "yellow"
+    assert any("30 days old" in f for f in verdict.flags)
+
+
+def test_rule_based_classifier_install_script_added_is_red():
+    from activities.classifier import _rule_based
+    from activities.models import PackageSignals
+
+    signals = PackageSignals(
+        ecosystem="pip",
+        package_name="mypkg",
+        old_version="1.0.0",
+        new_version="1.0.1",
+        release_age_hours=300.0,
+        is_major_bump=False,
+        socket_score=80,
+        socket_alerts=[],
+        osv_vulnerabilities=[],
+        diff_summary="+ setup.py",
+        diff_size_bytes=100,
+        maintainer_changed=False,
+        weekly_downloads=100_000,
+        install_script_added=True,
+    )
+    verdict = _rule_based(signals)
+    assert verdict.classification == "red"
+    assert "install script added" in verdict.flags
+
+
+def test_rule_based_classifier_install_script_changed_is_yellow():
+    from activities.classifier import _rule_based
+    from activities.models import PackageSignals
+
+    signals = PackageSignals(
+        ecosystem="pip",
+        package_name="mypkg",
+        old_version="1.0.0",
+        new_version="1.0.1",
+        release_age_hours=300.0,
+        is_major_bump=False,
+        socket_score=80,
+        socket_alerts=[],
+        osv_vulnerabilities=[],
+        diff_summary="--- setup.py\n+++ setup.py\n-version='1.0.0'\n+version='1.0.1'",
+        diff_size_bytes=100,
+        maintainer_changed=False,
+        weekly_downloads=100_000,
+        install_script_changed=True,
+    )
+    verdict = _rule_based(signals)
+    assert verdict.classification == "yellow"
+    assert any("install script modified" in f for f in verdict.flags)

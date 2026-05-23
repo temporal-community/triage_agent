@@ -55,7 +55,6 @@ async def test_pypi_metadata_fetch_success():
 
     assert result.weekly_downloads == 50_000_000
     assert result.is_major_bump is False
-    assert result.publish_account_age_days is None
 
 
 @respx.mock
@@ -492,7 +491,6 @@ async def test_rubygems_metadata_fetch_success():
     assert result.weekly_downloads == 500_000_000
     assert result.package_description == "Full-stack web framework."
     assert result.is_major_bump is False
-    assert result.publish_account_age_days is None
 
 
 @respx.mock

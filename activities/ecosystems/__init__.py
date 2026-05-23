@@ -10,6 +10,7 @@ To add a new ecosystem:
 """
 from __future__ import annotations
 
+import os
 import stat
 import urllib.parse
 import zipfile
@@ -105,6 +106,31 @@ def parse_upload_time(raw: str) -> datetime:
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
     return dt
+
+
+async def fetch_github_account_age(owner: str) -> int | None:
+    """Return age in days of a GitHub user/org account, or None if unavailable.
+
+    Requires GITHUB_TOKEN — skipped without one to avoid unauthenticated rate limits.
+    """
+    token = os.environ.get("GITHUB_TOKEN")
+    if not token:
+        return None
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "Authorization": f"Bearer {token}",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(f"https://api.github.com/users/{owner}", headers=headers)
+            if resp.status_code == 200:
+                created_at = resp.json().get("created_at", "")
+                if created_at:
+                    created = parse_upload_time(created_at)
+                    return max(0, (datetime.now(timezone.utc) - created).days)
+    except Exception:  # noqa: BLE001
+        pass
+    return None
 
 
 def safe_zip_extractall(zf: zipfile.ZipFile, dest: Path) -> None:

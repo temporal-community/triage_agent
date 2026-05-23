@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 import httpx
 from temporalio.exceptions import ApplicationError
 
-from activities.ecosystems import is_major, parse_upload_time, validate_archive_url
+from activities.ecosystems import fetch_github_account_age, is_major, parse_upload_time, validate_archive_url
 from activities.models import AttestationSignals, MaintainerSignals, PyPISignals, ReleaseAgeSignals
 
 
@@ -38,7 +38,6 @@ class NpmProvider:
 
         return PyPISignals(
             weekly_downloads=weekly_downloads,
-            publish_account_age_days=None,
             is_major_bump=is_major(old_version, new_version),
             package_description=summary,
         )
@@ -130,6 +129,11 @@ class NpmProvider:
         if new_pub is None:
             return AttestationSignals(has_attestation=False)
 
+        age_days = None
+        if new_pub.get("repo"):
+            owner = new_pub["repo"].split("/")[0]
+            age_days = await fetch_github_account_age(owner)
+
         publisher_changed = old_pub is not None and old_pub != new_pub
         return AttestationSignals(
             has_attestation=True,
@@ -137,6 +141,7 @@ class NpmProvider:
             publisher_repo=new_pub.get("repo"),
             publisher_changed=publisher_changed,
             old_publisher_repo=old_pub.get("repo") if publisher_changed else None,
+            publisher_account_age_days=age_days,
         )
 
     def extract_archive(self, archive_bytes: bytes, filename: str, dest: str) -> None:

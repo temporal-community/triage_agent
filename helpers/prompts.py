@@ -26,7 +26,11 @@ RED — likely supply chain attack. ANY of:
   - ANY entry in the "=== DANGEROUS BINARY/EXECUTABLE FILES ===" diff section —
     new or modified .so/.pyd/.dll/.pkl files execute code on load; this is an
     automatic RED regardless of all other signals
-  - install scripts added or modified (setup.py, postinstall hooks)
+  - install_script_added=true — a new install-lifecycle script appeared (setup.py,
+    postinstall.js, extconf.rb, etc.); treat as automatic RED
+  - install_script_changed=true with suspicious diff content — modified install hook;
+    treat as RED if the diff adds network calls, credential access, or obfuscated code;
+    treat as YELLOW if the change is clearly benign (e.g., version string update)
   - obfuscated code, base64 blobs, hex-encoded strings
   - exec/eval on dynamic strings
   - new network call whose result is passed to exec/eval/pickle.loads
@@ -36,7 +40,7 @@ RED — likely supply chain attack. ANY of:
   - version <24h old with unusual diff content
 
 SLSA/Sigstore attestation signals (has_attestation, publisher_kind, publisher_repo,
-publisher_changed, old_publisher_repo):
+publisher_changed, old_publisher_repo, publisher_account_age_days):
 - has_attestation=false is NOT itself a red/yellow flag — most packages don't use
   trusted publishers yet. It simply means there's no cryptographic provenance.
 - has_attestation=true is a mild positive trust signal: the artifact was built by a
@@ -45,6 +49,10 @@ publisher_changed, old_publisher_repo):
   was published from a different repository or workflow than the old version.
   Combined with other signals (fresh release, new maintainer, unusual diff), treat as red.
 - publisher_changed=true alone (no other flags, established package) → yellow.
+- publisher_account_age_days: age of the publisher's GitHub account. null means unknown.
+  A very young account (<30 days) combined with any other red/yellow signal is a strong
+  red flag. Under 90 days alone warrants yellow. Established accounts (>1 year) are
+  a mild positive signal when combined with has_attestation=true.
 
 Use `package_description` (when present) to assess the package's risk category.
 Packages that touch auth, cryptography, network I/O, secrets, or code execution

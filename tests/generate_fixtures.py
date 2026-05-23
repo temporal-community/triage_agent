@@ -54,7 +54,7 @@ _PR = PRContext(
 def _pypi(is_major: bool = False):
     @activity.defn(name="activities.pypi_metadata.fetch")
     async def fetch(*_):
-        return PyPISignals(weekly_downloads=5_000_000, publish_account_age_days=3000, is_major_bump=is_major)
+        return PyPISignals(weekly_downloads=5_000_000, is_major_bump=is_major)
     return fetch
 
 

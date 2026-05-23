@@ -39,7 +39,6 @@ class RubyGemsProvider:
 
         return PyPISignals(
             weekly_downloads=total_downloads,
-            publish_account_age_days=None,
             is_major_bump=is_major(old_version, new_version),
             package_description=summary,
         )

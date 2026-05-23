@@ -10,6 +10,7 @@ import base64
 import difflib
 import hashlib
 import hmac
+import json
 import tempfile
 from pathlib import Path
 
@@ -45,6 +46,17 @@ HIGH_SIGNAL_NAMES = {
     "Gemfile",
 }
 HIGH_SIGNAL_SUFFIXES = {".pth", ".gemspec"}
+
+# Subset of HIGH_SIGNAL_NAMES that execute code on install — changes are an explicit red/yellow flag.
+INSTALL_HOOK_NAMES = {
+    "setup.py",       # pip: customises build/install steps
+    "install.js",     # npm: install lifecycle script
+    "postinstall.js", # npm: postinstall hook
+    "preinstall.js",  # npm: preinstall hook
+    "extconf.rb",     # rubygems: C-extension build script
+}
+# Keys in package.json scripts{} that run during install.
+NPM_INSTALL_SCRIPTS = {"install", "preinstall", "postinstall", "prepare"}
 
 # Files that execute code on load / are impossible to text-diff safely.
 # A new or modified file with any of these extensions is an automatic RED signal.
@@ -92,13 +104,15 @@ async def compute(ecosystem: str, package: str, old_version: str, new_version: s
         )
 
     # Extraction and diff are CPU/blocking I/O — run in a thread.
-    diff_summary = await asyncio.to_thread(
+    diff_summary, install_script_added, install_script_changed = await asyncio.to_thread(
         _extract_and_diff, old_bytes, old_filename, new_bytes, new_filename, provider
     )
 
     return DiffSignals(
         diff_summary=diff_summary,
         diff_size_bytes=len(diff_summary.encode()),
+        install_script_added=install_script_added,
+        install_script_changed=install_script_changed,
     )
 
 
@@ -164,7 +178,7 @@ def _extract_and_diff(
     new_bytes: bytes,
     new_filename: str,
     provider,
-) -> str:
+) -> tuple[str, bool, bool]:
     try:
         with tempfile.TemporaryDirectory() as old_dir, tempfile.TemporaryDirectory() as new_dir:
             provider.extract_archive(old_bytes, old_filename, old_dir)
@@ -173,7 +187,7 @@ def _extract_and_diff(
             new_map = _get_file_map(new_dir)
             return _build_diff(old_map, new_map)
     except Exception as exc:  # noqa: BLE001
-        return f"[extraction error: {exc}]"
+        return f"[extraction error: {exc}]", False, False
 
 
 def _is_noise(rel: str) -> bool:
@@ -227,7 +241,10 @@ def _get_file_map(base_dir: str) -> dict[str, Path]:
     return result
 
 
-def _build_diff(old_map: dict[str, Path], new_map: dict[str, Path]) -> str:
+def _build_diff(
+    old_map: dict[str, Path], new_map: dict[str, Path]
+) -> tuple[str, bool, bool]:
+    """Return (diff_text, install_script_added, install_script_changed)."""
     old_keys = set(old_map)
     new_keys = set(new_map)
 
@@ -237,8 +254,13 @@ def _build_diff(old_map: dict[str, Path], new_map: dict[str, Path]) -> str:
     dangerous_new: list[str] = []
     dangerous_changed: list[str] = []
     regular_new_files: list[str] = []
+    install_script_added = False
+    install_script_changed = False
 
     for rel in new_files:
+        name = Path(rel).name
+        if name in INSTALL_HOOK_NAMES:
+            install_script_added = True
         if Path(rel).suffix.lower() in DANGEROUS_BINARY_SUFFIXES:
             dangerous_new.append(rel)
         else:
@@ -262,7 +284,13 @@ def _build_diff(old_map: dict[str, Path], new_map: dict[str, Path]) -> str:
         new_text = _read_text(new_map[rel])
         if old_text == new_text:
             continue
+
         name = Path(rel).name
+        if name in INSTALL_HOOK_NAMES:
+            install_script_changed = True
+        elif name == "package.json" and _npm_install_scripts_added(old_map[rel], new_map[rel]):
+            install_script_added = True
+
         if name in HIGH_SIGNAL_NAMES or Path(name).suffix in HIGH_SIGNAL_SUFFIXES:
             patch = _unified_diff(old_text, new_text, rel)
             high_signal_changed.append((rel, patch))
@@ -296,7 +324,7 @@ def _build_diff(old_map: dict[str, Path], new_map: dict[str, Path]) -> str:
         sections.append("=== CHANGED (other) ===\n" + ", ".join(other_changed))
 
     if not sections:
-        return "[no significant changes detected]"
+        return "[no significant changes detected]", install_script_added, install_script_changed
 
     result = "\n\n".join(sections)
 
@@ -305,7 +333,17 @@ def _build_diff(old_map: dict[str, Path], new_map: dict[str, Path]) -> str:
         truncated = result.encode()[:MAX_DIFF_BYTES].decode(errors="replace")
         result = truncated + f"\n[diff truncated at 100KB — {total_bytes} bytes total]"
 
-    return result
+    return result, install_script_added, install_script_changed
+
+
+def _npm_install_scripts_added(old_path: Path, new_path: Path) -> bool:
+    """Return True if new install-lifecycle script keys appear in package.json scripts field."""
+    try:
+        old_scripts = set(json.loads(old_path.read_text(errors="replace")).get("scripts", {}).keys())
+        new_scripts = set(json.loads(new_path.read_text(errors="replace")).get("scripts", {}).keys())
+        return bool((new_scripts - old_scripts) & NPM_INSTALL_SCRIPTS)
+    except Exception:  # noqa: BLE001
+        return False
 
 
 def _read_text(path: Path) -> str:

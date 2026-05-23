@@ -27,7 +27,6 @@ class RepoConfig(BaseModel):
 
 class PyPISignals(BaseModel):
     weekly_downloads: int | None
-    publish_account_age_days: int | None
     is_major_bump: bool
     package_description: str | None = None
 
@@ -44,6 +43,8 @@ class OSVSignals(BaseModel):
 class DiffSignals(BaseModel):
     diff_summary: str
     diff_size_bytes: int
+    install_script_added: bool = False
+    install_script_changed: bool = False
 
 
 class MaintainerSignals(BaseModel):
@@ -60,6 +61,7 @@ class AttestationSignals(BaseModel):
     publisher_repo: str | None = None       # e.g. "psf/requests"
     publisher_changed: bool = False         # old version had a different trusted publisher
     old_publisher_repo: str | None = None   # previous publisher repo (context when changed)
+    publisher_account_age_days: int | None = None  # age of the publisher's GitHub account
 
 
 class PackageSignals(BaseModel):
@@ -76,13 +78,15 @@ class PackageSignals(BaseModel):
     diff_size_bytes: int
     maintainer_changed: bool
     weekly_downloads: int | None
-    publish_account_age_days: int | None
     package_description: str | None = None
+    install_script_added: bool = False
+    install_script_changed: bool = False
     has_attestation: bool = False
     publisher_kind: str | None = None
     publisher_repo: str | None = None
     publisher_changed: bool = False
     old_publisher_repo: str | None = None
+    publisher_account_age_days: int | None = None
 
 
 class Verdict(BaseModel):
