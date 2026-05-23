@@ -125,7 +125,19 @@ def _rule_based(signals: PackageSignals) -> Verdict:
         flags.append("maintainer changed")
     if signals.publisher_changed:
         old = f" (was {signals.old_publisher_repo})" if signals.old_publisher_repo else ""
-        flags.append(f"trusted publisher changed{old}")
+        # publisher_repo == metadata_repo means same repo, different workflow/path — likely a
+        # legitimate CI migration. Still worth a human glance but lower priority than a repo change.
+        if (
+            signals.publisher_repo
+            and signals.metadata_repo
+            and signals.publisher_repo.lower() == signals.metadata_repo.lower()
+        ):
+            flags.append(
+                f"trusted publisher changed{old} — new publisher matches declared repo "
+                f"({signals.publisher_repo}); likely a CI workflow migration, verify expected"
+            )
+        else:
+            flags.append(f"trusted publisher changed{old}")
     if (
         signals.has_attestation
         and signals.publisher_repo
@@ -166,6 +178,13 @@ def _rule_based(signals: PackageSignals) -> Verdict:
             f"registry publish and GitHub release timestamps differ by "
             f"{signals.timestamp_skew_minutes:.0f} minutes"
         )
+    if signals.stale_version_line and signals.latest_major is not None and signals.bump_major is not None:
+        flags.append(
+            f"patching older {signals.bump_major}.x version line while "
+            f"{signals.latest_major}.x is actively maintained — verify this is intentional"
+        )
+    if signals.new_dependency_count >= 3:
+        flags.append(f"{signals.new_dependency_count} new direct dependencies added")
     if signals.socket_alerts:
         flags.extend(signals.socket_alerts)
     if signals.socket_score is not None and signals.socket_score < 50:

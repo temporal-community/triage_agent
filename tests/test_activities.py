@@ -475,6 +475,7 @@ async def test_npm_maintainer_fetch_error_returns_no_change():
 # ---------------------------------------------------------------------------
 
 RUBYGEMS_API = "https://rubygems.org/api/v1/gems"
+RUBYGEMS_DL_SEARCH = "https://rubygems.org/api/v1/downloads/search.json"
 
 
 @respx.mock
@@ -485,11 +486,32 @@ async def test_rubygems_metadata_fetch_success():
             "downloads": 500_000_000,
         })
     )
+    respx.get(RUBYGEMS_DL_SEARCH).mock(
+        return_value=httpx.Response(200, json={"rubygems": {
+            "2024-01-01": 10_000, "2024-01-02": 12_000, "2024-01-03": 11_000,
+            "2024-01-04": 13_000, "2024-01-05": 9_000, "2024-01-06": 8_000,
+            "2024-01-07": 11_000,
+        }})
+    )
 
     env = ActivityEnvironment()
     result = await env.run(pypi_fetch, "rubygems", "rails", "7.0.0", "7.1.0")
-    assert result.weekly_downloads == 500_000_000
+    assert result.weekly_downloads == 74_000   # sum of 7 days, not total lifetime
     assert result.package_description == "Full-stack web framework."
+    assert result.is_major_bump is False
+
+
+@respx.mock
+async def test_rubygems_metadata_weekly_downloads_fallback_on_error():
+    """weekly_downloads is None when the search endpoint fails — metadata fetch still succeeds."""
+    respx.get(f"{RUBYGEMS_API}/rails.json").mock(
+        return_value=httpx.Response(200, json={"info": "Framework", "downloads": 100})
+    )
+    respx.get(RUBYGEMS_DL_SEARCH).mock(return_value=httpx.Response(500))
+
+    env = ActivityEnvironment()
+    result = await env.run(pypi_fetch, "rubygems", "rails", "7.0.0", "7.1.0")
+    assert result.weekly_downloads is None
     assert result.is_major_bump is False
 
 
@@ -498,6 +520,7 @@ async def test_rubygems_metadata_major_bump():
     respx.get(f"{RUBYGEMS_API}/rails.json").mock(
         return_value=httpx.Response(200, json={"info": "Framework", "downloads": 100})
     )
+    respx.get(RUBYGEMS_DL_SEARCH).mock(return_value=httpx.Response(500))
 
     env = ActivityEnvironment()
     result = await env.run(pypi_fetch, "rubygems", "rails", "7.1.0", "8.0.0")
@@ -508,6 +531,7 @@ async def test_rubygems_metadata_major_bump():
 async def test_rubygems_metadata_404_raises_non_retryable():
     from temporalio.exceptions import ApplicationError
     respx.get(f"{RUBYGEMS_API}/nosuchthing.json").mock(return_value=httpx.Response(404))
+    respx.get(RUBYGEMS_DL_SEARCH).mock(return_value=httpx.Response(404))
 
     env = ActivityEnvironment()
     with pytest.raises(ApplicationError) as exc_info:
@@ -520,6 +544,7 @@ async def test_rubygems_metadata_empty_description():
     respx.get(f"{RUBYGEMS_API}/mygem.json").mock(
         return_value=httpx.Response(200, json={"info": "", "downloads": 0})
     )
+    respx.get(RUBYGEMS_DL_SEARCH).mock(return_value=httpx.Response(500))
 
     env = ActivityEnvironment()
     result = await env.run(pypi_fetch, "rubygems", "mygem", "1.0.0", "1.0.1")

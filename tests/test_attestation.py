@@ -635,6 +635,63 @@ def test_rule_based_non_tag_source_ref_no_flag_without_attestation():
     assert not any("source_ref" in f for f in verdict.flags)
 
 
+def test_rule_based_publisher_changed_same_repo_is_lower_concern():
+    """publisher_changed=True where new repo matches metadata_repo → 'CI migration' flag text."""
+    from activities.classifier import _rule_based
+    signals = _signals_with_attestation(
+        publisher_changed=True,
+        old_publisher_repo="psf/requests-old-workflow",
+        publisher_repo="psf/requests",
+        metadata_repo="psf/requests",
+    )
+    verdict = _rule_based(signals)
+    assert verdict.classification == "yellow"
+    flags_text = " ".join(verdict.flags)
+    assert "migration" in flags_text or "CI" in flags_text
+
+
+@respx.mock
+async def test_pypi_attestation_oidc_first_time_true():
+    """oidc_first_time=True when old version 404s on provenance but new has it."""
+    respx.get(f"{PYPI_BASE}/pkg/1.0.0/json").mock(
+        return_value=httpx.Response(200, json=_pypi_urls("pkg", "1.0.0"))
+    )
+    respx.get(f"{PYPI_INTEGRITY}/pkg/1.0.0/pkg-1.0.0.tar.gz/provenance").mock(
+        return_value=httpx.Response(404)
+    )
+    respx.get(f"{PYPI_BASE}/pkg/1.1.0/json").mock(
+        return_value=httpx.Response(200, json=_pypi_urls("pkg", "1.1.0"))
+    )
+    respx.get(f"{PYPI_INTEGRITY}/pkg/1.1.0/pkg-1.1.0.tar.gz/provenance").mock(
+        return_value=httpx.Response(200, json=_pypi_provenance(repo="org/pkg"))
+    )
+
+    from activities.attestation import check as attestation_check
+    env = ActivityEnvironment()
+    result = await env.run(attestation_check, "pip", "pkg", "1.0.0", "1.1.0")
+    assert result.has_attestation is True
+    assert result.oidc_first_time is True
+    assert result.publisher_changed is False  # not "changed" — just first time
+
+
+@respx.mock
+async def test_pypi_attestation_oidc_first_time_false_when_both_had_attestation():
+    """oidc_first_time=False when both old and new versions have attestation."""
+    for version in ("1.0.0", "1.1.0"):
+        respx.get(f"{PYPI_BASE}/pkg/{version}/json").mock(
+            return_value=httpx.Response(200, json=_pypi_urls("pkg", version))
+        )
+        respx.get(f"{PYPI_INTEGRITY}/pkg/{version}/pkg-{version}.tar.gz/provenance").mock(
+            return_value=httpx.Response(200, json=_pypi_provenance(repo="org/pkg"))
+        )
+
+    from activities.attestation import check as attestation_check
+    env = ActivityEnvironment()
+    result = await env.run(attestation_check, "pip", "pkg", "1.0.0", "1.1.0")
+    assert result.has_attestation is True
+    assert result.oidc_first_time is False
+
+
 @respx.mock
 async def test_publisher_changed_false_when_only_commit_sha_differs():
     """publisher_changed must not fire when the same repo built different commits (the normal case)."""

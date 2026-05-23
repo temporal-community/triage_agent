@@ -104,7 +104,7 @@ async def compute(ecosystem: str, package: str, old_version: str, new_version: s
         )
 
     # Extraction and diff are CPU/blocking I/O — run in a thread.
-    diff_summary, install_script_added, install_script_changed = await asyncio.to_thread(
+    diff_summary, install_script_added, install_script_changed, new_dep_count = await asyncio.to_thread(
         _extract_and_diff, old_bytes, old_filename, new_bytes, new_filename, provider
     )
 
@@ -113,6 +113,7 @@ async def compute(ecosystem: str, package: str, old_version: str, new_version: s
         diff_size_bytes=len(diff_summary.encode()),
         install_script_added=install_script_added,
         install_script_changed=install_script_changed,
+        new_dependency_count=new_dep_count,
     )
 
 
@@ -178,7 +179,7 @@ def _extract_and_diff(
     new_bytes: bytes,
     new_filename: str,
     provider,
-) -> tuple[str, bool, bool]:
+) -> tuple[str, bool, bool, int]:
     try:
         with tempfile.TemporaryDirectory() as old_dir, tempfile.TemporaryDirectory() as new_dir:
             provider.extract_archive(old_bytes, old_filename, old_dir)
@@ -187,7 +188,7 @@ def _extract_and_diff(
             new_map = _get_file_map(new_dir)
             return _build_diff(old_map, new_map)
     except Exception as exc:  # noqa: BLE001
-        return f"[extraction error: {exc}]", False, False
+        return f"[extraction error: {exc}]", False, False, 0
 
 
 def _is_noise(rel: str) -> bool:
@@ -241,10 +242,16 @@ def _get_file_map(base_dir: str) -> dict[str, Path]:
     return result
 
 
+_REQUIREMENTS_NAMES = frozenset({
+    "requirements.txt", "requirements-dev.txt", "requirements-test.txt",
+    "requirements-prod.txt", "requirements-base.txt",
+})
+
+
 def _build_diff(
     old_map: dict[str, Path], new_map: dict[str, Path]
-) -> tuple[str, bool, bool]:
-    """Return (diff_text, install_script_added, install_script_changed)."""
+) -> tuple[str, bool, bool, int]:
+    """Return (diff_text, install_script_added, install_script_changed, new_dependency_count)."""
     old_keys = set(old_map)
     new_keys = set(new_map)
 
@@ -256,6 +263,7 @@ def _build_diff(
     regular_new_files: list[str] = []
     install_script_added = False
     install_script_changed = False
+    new_dependency_count = 0
 
     for rel in new_files:
         name = Path(rel).name
@@ -291,6 +299,11 @@ def _build_diff(
         elif name == "package.json" and _npm_install_scripts_added(old_map[rel], new_map[rel]):
             install_script_added = True
 
+        if name == "package.json":
+            new_dependency_count += _count_new_npm_deps(old_map[rel], new_map[rel])
+        elif name in _REQUIREMENTS_NAMES:
+            new_dependency_count += _count_new_pip_deps(old_map[rel], new_map[rel])
+
         if name in HIGH_SIGNAL_NAMES or Path(name).suffix in HIGH_SIGNAL_SUFFIXES:
             patch = _unified_diff(old_text, new_text, rel)
             high_signal_changed.append((rel, patch))
@@ -324,7 +337,7 @@ def _build_diff(
         sections.append("=== CHANGED (other) ===\n" + ", ".join(other_changed))
 
     if not sections:
-        return "[no significant changes detected]", install_script_added, install_script_changed
+        return "[no significant changes detected]", install_script_added, install_script_changed, new_dependency_count
 
     result = "\n\n".join(sections)
 
@@ -333,7 +346,7 @@ def _build_diff(
         truncated = result.encode()[:MAX_DIFF_BYTES].decode(errors="replace")
         result = truncated + f"\n[diff truncated at 100KB — {total_bytes} bytes total]"
 
-    return result, install_script_added, install_script_changed
+    return result, install_script_added, install_script_changed, new_dependency_count
 
 
 def _npm_install_scripts_added(old_path: Path, new_path: Path) -> bool:
@@ -344,6 +357,44 @@ def _npm_install_scripts_added(old_path: Path, new_path: Path) -> bool:
         return bool((new_scripts - old_scripts) & NPM_INSTALL_SCRIPTS)
     except Exception:  # noqa: BLE001
         return False
+
+
+def _count_new_npm_deps(old_path: Path, new_path: Path) -> int:
+    """Return net new dependency keys added to package.json dependencies + devDependencies."""
+    try:
+        old_data = json.loads(old_path.read_text(errors="replace"))
+        new_data = json.loads(new_path.read_text(errors="replace"))
+        old_deps: set[str] = set(old_data.get("dependencies", {})) | set(old_data.get("devDependencies", {}))
+        new_deps: set[str] = set(new_data.get("dependencies", {})) | set(new_data.get("devDependencies", {}))
+        return len(new_deps - old_deps)
+    except Exception:  # noqa: BLE001
+        return 0
+
+
+_REQUIREMENT_RE = __import__("re").compile(
+    r"^\s*([A-Za-z0-9_.-][A-Za-z0-9_.\-\[\]]*)\s*[><=!@~;]?", __import__("re").ASCII
+)
+
+
+def _count_new_pip_deps(old_path: Path, new_path: Path) -> int:
+    """Return net new dependency lines added to requirements.txt-style files."""
+    def _parse_reqs(text: str) -> set[str]:
+        names: set[str] = set()
+        for line in text.splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or line.startswith("-"):
+                continue
+            m = _REQUIREMENT_RE.match(line)
+            if m:
+                names.add(m.group(1).lower())
+        return names
+
+    try:
+        old_names = _parse_reqs(old_path.read_text(errors="replace"))
+        new_names = _parse_reqs(new_path.read_text(errors="replace"))
+        return len(new_names - old_names)
+    except Exception:  # noqa: BLE001
+        return 0
 
 
 def _read_text(path: Path) -> str:

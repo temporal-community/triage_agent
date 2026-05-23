@@ -29,6 +29,7 @@ from activities.models import (
     RepoConfig,
     SocketSignals,
     Verdict,
+    VersionLineSignals,
 )
 from workflows.package_triage_workflow import PackageTriageWorkflow
 from workflows.pr_action_workflow import PRActionWorkflow
@@ -170,6 +171,13 @@ def _check_pr_files(unexpected: list[str] | None = None):
     return check_pr_files
 
 
+def _version_lineage():
+    @activity.defn(name="activities.version_lineage.check")
+    async def check(*_):
+        return VersionLineSignals()
+    return check
+
+
 # ---------------------------------------------------------------------------
 # Scenarios: (fixture_name, verdict_class, repo_config, human_signal | None)
 # ---------------------------------------------------------------------------
@@ -217,8 +225,9 @@ async def _run_scenario(
 ) -> None:
     acts = [
         _pypi(), _socket(), _osv(), _diff(), _maintainer(), _release_age(),
-        _attestation(), _release_notes(), _classifier(classification), _repo_config(config),
-        _comment(), _merge(), _review(), _label(), _close_pr(), _check_pr_files(),
+        _attestation(), _release_notes(), _version_lineage(), _classifier(classification),
+        _repo_config(config), _comment(), _merge(), _review(), _label(), _close_pr(),
+        _check_pr_files(),
     ]
     async with Worker(
         env.client,

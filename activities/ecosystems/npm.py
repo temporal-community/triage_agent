@@ -157,6 +157,7 @@ class NpmProvider:
             source_ref=new_pub.get("source_ref"),
             source_commit_sha=new_pub.get("source_commit_sha"),
             build_invocation_id=new_pub.get("build_invocation_id"),
+            oidc_first_time=old_pub is None,
         )
 
     # ------------------------------------------------------------------

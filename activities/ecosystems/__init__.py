@@ -15,12 +15,14 @@ import re
 import stat
 import urllib.parse
 import zipfile
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Protocol
 
 import httpx
 from temporalio.exceptions import ApplicationError
+
+import re as _re
 
 from activities.models import (
     AttestationSignals,
@@ -28,6 +30,7 @@ from activities.models import (
     PyPISignals,
     ReleaseAgeSignals,
     ReleaseSignals,
+    VersionLineSignals,
 )
 
 MAX_EXTRACT_BYTES = 100 * 1024 * 1024  # zip bomb guard
@@ -109,6 +112,64 @@ def is_major(old: str, new: str) -> bool:
         return int(new.split(".")[0]) > int(old.split(".")[0])
     except (ValueError, IndexError):
         return False
+
+
+_PRE_RE = _re.compile(
+    r"(a|b|rc|alpha|beta|dev|pre|preview|post)[\d]*$", _re.IGNORECASE
+)
+
+
+def detect_stale_version_line(
+    all_versions: list[str],
+    new_version: str,
+    cutoff_days: int = 730,
+    release_dates: dict[str, datetime] | None = None,
+) -> VersionLineSignals:
+    """Return VersionLineSignals indicating whether new_version patches a stale major line.
+
+    A version line is considered stale when the bump's major version is lower than the
+    highest stable major and that highest major had a release within the last *cutoff_days*.
+
+    release_dates maps version string → datetime (UTC) for the *cutoff_days* check.
+    If omitted, only the version numbers are used (no recency check — more conservative).
+    """
+    def _major(v: str) -> int | None:
+        part = v.lstrip("vV").split(".")[0]
+        return int(part) if part.isdigit() else None
+
+    def _is_prerelease(v: str) -> bool:
+        return bool(_PRE_RE.search(v))
+
+    stable = [v for v in all_versions if not _is_prerelease(v) and _major(v) is not None]
+    if not stable:
+        return VersionLineSignals()
+
+    bump_major = _major(new_version)
+    if bump_major is None:
+        return VersionLineSignals()
+
+    majors = {_major(v) for v in stable}
+    latest_major = max(majors)  # type: ignore[type-var]
+
+    if bump_major >= latest_major:
+        return VersionLineSignals(bump_major=bump_major, latest_major=latest_major)
+
+    # bump is targeting an older major — check if the latest major is actively maintained
+    if release_dates:
+        cutoff = datetime.now(timezone.utc) - timedelta(days=cutoff_days)
+        latest_major_versions = [v for v in stable if _major(v) == latest_major]
+        latest_major_active = any(
+            release_dates.get(v, datetime.min.replace(tzinfo=timezone.utc)) >= cutoff
+            for v in latest_major_versions
+        )
+        if not latest_major_active:
+            return VersionLineSignals(bump_major=bump_major, latest_major=latest_major)
+
+    return VersionLineSignals(
+        stale_version_line=True,
+        bump_major=bump_major,
+        latest_major=latest_major,
+    )
 
 
 def parse_upload_time(raw: str) -> datetime:

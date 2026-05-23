@@ -8,7 +8,7 @@ from temporalio.contrib.pydantic import pydantic_data_converter
 from workflows.package_triage_workflow import PackageTriageWorkflow
 from workflows.pr_action_workflow import PRActionWorkflow
 from activities import pypi_metadata, socket, osv, package_diff, release_age, maintainer
-from activities import attestation, classifier, release_notes, repo_config, github
+from activities import attestation, classifier, release_notes, repo_config, github, version_lineage
 
 load_dotenv()
 
@@ -42,6 +42,7 @@ async def main() -> None:
             github.close_pr,
             github.get_pr,
             github.check_pr_files,
+            version_lineage.check,
         ],
     )
     print(f"Worker started on task queue: {task_queue}")

@@ -24,6 +24,11 @@ YELLOW — needs human eyes. ANY of:
   - possible_rerelease=true — GitHub release was drafted much later than created (unusual)
   - timestamp_skew_minutes > 120 — registry publish and GitHub release far apart in time
   - release_notes mention security fixes, CVEs, or breaking changes (worth human review)
+  - stale_version_line=true — the bump targets an older major line (bump_major) while a
+    newer stable major (latest_major) is actively maintained; legitimate if the project
+    officially supports multiple version lines, but unusual enough to warrant a check
+  - new_dependency_count >= 3 — a large number of direct dependencies were added in this
+    version bump; many new transitive dependencies can expand the attack surface significantly
 
 RED — likely supply chain attack. ANY of:
   - ANY entry in the "=== DANGEROUS BINARY/EXECUTABLE FILES ===" diff section —
@@ -49,10 +54,18 @@ source_commit_sha, build_invocation_id, metadata_repo):
   trusted publishers yet. It simply means there's no cryptographic provenance.
 - has_attestation=true is a mild positive trust signal: the artifact was built by a
   verified CI pipeline and matches a signed Sigstore entry in a public transparency log.
+- oidc_first_time=true means the old version had no attestation but the new one does —
+  the package just migrated from manual publishing to trusted CI (an OIDC improvement).
+  This is a POSITIVE signal. Do NOT flag it as yellow unless publisher_repo != metadata_repo
+  or another red/yellow signal is present. Confirm the automation is the expected CI system
+  by checking publisher_repo == metadata_repo.
 - publisher_changed=true IS a yellow/red flag depending on context: the new version
   was published from a different repository or workflow than the old version.
   Combined with other signals (fresh release, new maintainer, unusual diff), treat as red.
 - publisher_changed=true alone (no other flags, established package) → yellow.
+- publisher_changed=true with new publisher_repo matching metadata_repo → likely a CI
+  workflow migration within the same repo (lower concern). Still worth a glance; verify
+  the workflow change is expected.
 - publisher_account_age_days: age of the publisher's GitHub account. null means unknown.
   A very young account (<30 days) combined with any other red/yellow signal is a strong
   red flag. Under 90 days alone warrants yellow. Established accounts (>1 year) are

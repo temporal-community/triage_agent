@@ -45,10 +45,17 @@ class DiffSignals(BaseModel):
     diff_size_bytes: int
     install_script_added: bool = False
     install_script_changed: bool = False
+    new_dependency_count: int = 0  # net new direct dependencies added across manifest files
 
 
 class PRFilesSignals(BaseModel):
     unexpected_files: list[str] = []  # CI/infra/script paths that shouldn't appear in a dep-bump PR
+
+
+class VersionLineSignals(BaseModel):
+    stale_version_line: bool = False  # bump targets an older major while a newer stable major is active
+    latest_major: int | None = None   # highest stable major in the registry
+    bump_major: int | None = None     # major of the version being bumped to
 
 
 class MaintainerSignals(BaseModel):
@@ -81,6 +88,7 @@ class AttestationSignals(BaseModel):
     source_ref: str | None = None           # git ref the build ran against, e.g. "refs/tags/v1.2.3"
     source_commit_sha: str | None = None    # git commit SHA the artifact was built from
     build_invocation_id: str | None = None  # CI run URL / ID from SLSA provenance
+    oidc_first_time: bool = False           # True when old version had no attestation but new one does (personal→CI migration)
 
 
 class PackageSignals(BaseModel):
@@ -100,6 +108,7 @@ class PackageSignals(BaseModel):
     package_description: str | None = None
     install_script_added: bool = False
     install_script_changed: bool = False
+    new_dependency_count: int = 0
     github_release_exists: bool = False
     release_author: str | None = None
     release_is_automated: bool = False
@@ -117,7 +126,11 @@ class PackageSignals(BaseModel):
     source_ref: str | None = None
     source_commit_sha: str | None = None
     build_invocation_id: str | None = None
+    oidc_first_time: bool = False
     metadata_repo: str | None = None            # from ReleaseSignals — registry-declared GitHub repo
+    stale_version_line: bool = False
+    latest_major: int | None = None
+    bump_major: int | None = None
 
 
 class Verdict(BaseModel):

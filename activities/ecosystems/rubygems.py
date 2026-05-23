@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import io
 import tarfile
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import httpx
 from temporalio.exceptions import ApplicationError
@@ -31,23 +31,22 @@ class RubyGemsProvider:
         self, package: str, old_version: str, new_version: str
     ) -> PyPISignals:
         async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.get(f"https://rubygems.org/api/v1/gems/{package}.json")
-            if resp.status_code == 404:
+            gem_resp, dl_resp = await asyncio.gather(
+                client.get(f"https://rubygems.org/api/v1/gems/{package}.json"),
+                _fetch_weekly_downloads(client, package),
+            )
+            if gem_resp.status_code == 404:
                 raise ApplicationError(
                     f"{package} not found on RubyGems",
                     type="PackageNotFound",
                     non_retryable=True,
                 )
-            resp.raise_for_status()
-            data = resp.json()
+            gem_resp.raise_for_status()
+            data = gem_resp.json()
 
         summary = (data.get("info") or "")[:500] or None
-        # RubyGems has no weekly-downloads endpoint; total downloads is the best
-        # popularity proxy available from the public API.
-        total_downloads = data.get("downloads")
-
         return PyPISignals(
-            weekly_downloads=total_downloads,
+            weekly_downloads=dl_resp,
             is_major_bump=is_major(old_version, new_version),
             package_description=summary,
         )
@@ -223,3 +222,30 @@ def _author_set(version_data: dict) -> set[str]:
     # "authors" is a comma-separated string like "Alice, Bob"
     raw = (version_data.get("authors") or "").lower()
     return {a.strip() for a in raw.split(",") if a.strip()}
+
+
+async def _fetch_weekly_downloads(client: httpx.AsyncClient, package: str) -> int | None:
+    """Return approximate weekly downloads for a RubyGem via the daily-stats search endpoint.
+
+    RubyGems exposes per-day download counts at /api/v1/downloads/search.json.
+    Summing the last 7 completed days gives a figure comparable to PyPI/npm weekly stats.
+    Falls back to None on any error so the rest of metadata fetch is unaffected.
+    """
+    try:
+        to_date = date.today() - timedelta(days=1)   # yesterday (most recent complete day)
+        from_date = to_date - timedelta(days=6)       # 7 days total
+        resp = await client.get(
+            "https://rubygems.org/api/v1/downloads/search.json",
+            params={
+                "from": from_date.isoformat(),
+                "to": to_date.isoformat(),
+                "gem_name": package,
+            },
+        )
+        if resp.status_code == 200:
+            daily = resp.json().get("rubygems") or {}
+            total = sum(daily.values())
+            return total if total > 0 else None
+    except Exception:  # noqa: BLE001
+        pass
+    return None
