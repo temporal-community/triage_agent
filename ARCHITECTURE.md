@@ -46,27 +46,57 @@ Six activities run in parallel. Each is independently retried if its upstream AP
 
 | Signal | Source | What it catches |
 |---|---|---|
-| Package metadata | pypi.org / registry.npmjs.org | Description (used to calibrate thresholds), major version bump |
-| Weekly downloads | pypistats.org / api.npmjs.org | Suspiciously low download count (<1k/week) |
+| Package metadata | pypi.org / registry.npmjs.org / rubygems.org | Description (used to calibrate thresholds), major version bump |
+| Weekly downloads | pypistats.org / api.npmjs.org / rubygems.org¹ | Suspiciously low download count (<1k/week) |
 | Known CVEs | api.osv.dev | Vulnerabilities already reported against this version |
 | Supply chain score | api.socket.dev | Typosquatting, malware flags, permission creep, install scripts |
-| Release age | pypi.org / registry.npmjs.org | Versions < 24h old (no time for community review) |
-| Maintainer history | pypi.org / registry.npmjs.org | New maintainer on the account that published this version |
-| Package diff | pypi.org sdist / npm tarball | What code actually changed between the old and new version |
+| Release age | pypi.org / registry.npmjs.org / rubygems.org | Versions < 24h old (no time for community review) |
+| Maintainer history | pypi.org / registry.npmjs.org / rubygems.org | New maintainer on the account that published this version |
+| Package diff | pypi.org sdist / npm tarball / rubygems .gem | What code actually changed between the old and new version |
+
+¹ RubyGems has no weekly-downloads endpoint; total all-time downloads is used as the popularity proxy.
 
 ### Why the diff matters
 
 The diff activity downloads both package archives and produces a security-focused summary:
 
-- **DANGEROUS BINARY**: new or modified `.so`, `.pyd`, `.dll`, `.node` files — compiled extensions that execute arbitrary code on load. Automatic RED signal.
-- **High-signal files**: `setup.py`, `__init__.py`, `package.json`, `postinstall.js` — shown as full unified diffs because attackers target these.
+- **DANGEROUS BINARY**: new or modified `.so`, `.pyd`, `.dll`, `.node`, `.bundle` files — compiled extensions that execute arbitrary code on load. Automatic RED signal. (`.bundle` = Ruby native C extension.)
+- **High-signal files**: `setup.py`, `__init__.py`, `package.json`, `postinstall.js`, `Rakefile`, `Gemfile`, `*.gemspec` — shown as full unified diffs because attackers target these.
 - **Other changed files**: listed by name (not diffed), so you know what moved without noise.
-- Noise filtered out: `.dist-info/`, `__pycache__/`, `node_modules/`, `package-lock.json`, `.pyc` files.
+- Noise filtered out: `.dist-info/`, `__pycache__/`, `node_modules/`, `package-lock.json`, `.pyc`, `.rbc` (Ruby bytecode cache).
+- RubyGems `.gem` format: a nested archive (outer POSIX tar → `data.tar.gz` → source tree). SHA-256 integrity is verified against the `sha` field from the versions API before extraction.
 - Cap at 100 KB to avoid overwhelming the LLM context window.
 
 ### Why the package description matters
 
 The description (from `info.summary` / registry `description`) is passed to the classifier to calibrate thresholds. A cryptography library or secrets manager warrants tighter scrutiny than a color-formatting utility. This avoids a hardcoded "high-risk packages" list that goes stale.
+
+---
+
+## Adding a new ecosystem
+
+Each ecosystem is a single file in `activities/ecosystems/` implementing the `EcosystemProvider` Protocol:
+
+```python
+class EcosystemProvider(Protocol):
+    osv_name: str                       # OSV ecosystem name, e.g. "PyPI", "npm"
+
+    async def fetch_metadata(...)   -> PyPISignals
+    async def fetch_release_age(...)-> ReleaseAgeSignals
+    async def fetch_maintainer(...) -> MaintainerSignals
+    async def get_archive_url(...)  -> tuple[str, str, str] | None   # (url, filename, integrity)
+    def extract_archive(...)        -> None
+```
+
+The five activity files (`pypi_metadata.py`, `release_age.py`, `maintainer.py`, `package_diff.py`, `osv.py`) are 6-line wrappers that call `get_provider(ecosystem).method(...)`. Adding a new ecosystem means:
+
+1. **Create** `activities/ecosystems/{name}.py` implementing the Protocol
+2. **Register** it in `get_provider()` in `activities/ecosystems/__init__.py`
+3. **Update** the `Literal["pip", "npm", "rubygems"]` types in `activities/models.py`
+4. **Add** the Dependabot branch slug to `_DEPENDABOT_ECOSYSTEM_MAP` in `helpers/pr_parser.py`
+5. **Add** a name-validation regex entry in `api/webhook.py`'s `_NAME_RE_BY_ECOSYSTEM`
+
+Shared utilities in `activities/ecosystems/__init__.py` (`validate_archive_url`, `safe_zip_extractall`, `is_major`, `parse_upload_time`) are available to all providers. The CDN allowlist (`ALLOWED_CDN_HOSTS`) lives there too and must be extended for each new registry.
 
 ---
 
@@ -99,7 +129,7 @@ Falls back to threshold-based rules:
 
 The Scout processes untrusted data by design — it downloads packages uploaded by strangers. Several specific attack vectors are defended against:
 
-**SSRF via registry metadata**: The `dist.tarball` URL in npm metadata and PyPI's `urls[].url` are attacker-influenced if the registry is compromised or a MITM attack is in progress. Before making any HTTP request, `_validate_archive_url()` checks that the host is in a hardcoded allowlist (`files.pythonhosted.org`, `registry.npmjs.org`). Any other host, or non-HTTPS scheme, raises a non-retryable error.
+**SSRF via registry metadata**: Archive URLs from registry metadata are attacker-influenced if the registry is compromised or a MITM is in progress. Before making any HTTP request, `validate_archive_url()` checks that the host is in a hardcoded allowlist (`files.pythonhosted.org`, `registry.npmjs.org`, `rubygems.org`). Any other host, or non-HTTPS scheme, raises a non-retryable error.
 
 **Tampered downloads**: PyPI archives are verified against SHA-256 digests from the registry JSON. npm tarballs are verified against `dist.integrity` (SHA-512 SRI format), using `hmac.compare_digest` to prevent timing side-channels. A mismatch raises a non-retryable error rather than analyzing a potentially tampered archive.
 
@@ -212,5 +242,5 @@ uv run ruff format .          # format
 uv run ruff check .           # lint
 uv run mypy .                 # type check
 uv run pytest                 # tests (230 total)
-uv run pytest --cov=activities,workflows,helpers,api --cov-report=term-missing
+uv run pytest --cov=activities --cov=workflows --cov=helpers --cov-report=term-missing
 ```
