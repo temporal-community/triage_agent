@@ -1,14 +1,13 @@
 import httpx
 from temporalio import activity
 
+from activities.ecosystems import get_provider
 from activities.models import OSVSignals
-
-_ECOSYSTEM_MAP = {"pip": "PyPI", "npm": "npm", "rubygems": "RubyGems"}
 
 
 @activity.defn(name="activities.osv.check")
 async def check(ecosystem: str, package: str, old_version: str, new_version: str) -> OSVSignals:
-    osv_ecosystem = _ECOSYSTEM_MAP.get(ecosystem, "PyPI")
+    osv_ecosystem = get_provider(ecosystem).osv_name
     async with httpx.AsyncClient(timeout=15.0) as client:
         resp = await client.post(
             "https://api.osv.dev/v1/query",

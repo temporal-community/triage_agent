@@ -232,9 +232,9 @@ async def test_pypi_metadata_pypistats_network_error_returns_none():
 
 
 def test_pypi_is_major_non_semver_returns_false():
-    from activities.pypi_metadata import _is_major
-    assert _is_major("not-a-version", "also-not") is False
-    assert _is_major("", "") is False
+    from activities.ecosystems import is_major
+    assert is_major("not-a-version", "also-not") is False
+    assert is_major("", "") is False
 
 
 # ---------------------------------------------------------------------------
@@ -275,9 +275,9 @@ async def test_release_age_missing_timestamp_returns_none():
 
 
 def test_release_age_naive_datetime_gets_utc():
-    from activities.release_age import _parse_upload_time
+    from activities.ecosystems import parse_upload_time
     # No Z and no +00:00 → naive datetime → should be treated as UTC
-    dt = _parse_upload_time("2024-06-01T12:00:00")
+    dt = parse_upload_time("2024-06-01T12:00:00")
     from datetime import timezone
     assert dt.tzinfo is not None
     assert dt.tzinfo == timezone.utc

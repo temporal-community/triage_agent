@@ -18,13 +18,15 @@ import respx
 from temporalio.exceptions import ApplicationError
 from temporalio.testing import ActivityEnvironment
 
+import activities.ecosystems as ecosystems_module
 import activities.package_diff as pkg_diff_module
+from activities.ecosystems import safe_zip_extractall as _safe_zip_extractall
+from activities.ecosystems import validate_archive_url as _validate_archive_url
 from activities.package_diff import (
     _build_diff,
     _extract_and_diff,
     _get_file_map,
     _is_noise,
-    _safe_zip_extractall,
     compute,
 )
 
@@ -155,7 +157,7 @@ def test_safe_zip_bomb_blocked(tmp_path):
         zf.writestr("legit.txt", "small content")
     buf.seek(0)
     # Patch the limit so even a small file triggers it
-    with patch.object(pkg_diff_module, "MAX_EXTRACT_BYTES", 5):
+    with patch.object(ecosystems_module, "MAX_EXTRACT_BYTES", 5):
         with zipfile.ZipFile(buf) as zf:
             with pytest.raises(ApplicationError, match="zip bomb"):
                 _safe_zip_extractall(zf, tmp_path)
@@ -289,12 +291,14 @@ def test_get_file_map_filters_noise(tmp_path):
 # ---------------------------------------------------------------------------
 
 def test_extract_and_diff_bad_archive_returns_error_string():
-    result = _extract_and_diff(b"not a real archive", "bad.tar.gz", b"also bad", "bad2.tar.gz")
+    from activities.ecosystems.pip import PipProvider
+    result = _extract_and_diff(b"not a real archive", "bad.tar.gz", b"also bad", "bad2.tar.gz", PipProvider())
     assert result.startswith("[extraction error:")
 
 
 def test_extract_and_diff_unsupported_format_returns_error_string():
-    result = _extract_and_diff(b"data", "pkg.rpm", b"data", "pkg2.rpm")
+    from activities.ecosystems.pip import PipProvider
+    result = _extract_and_diff(b"data", "pkg.rpm", b"data", "pkg2.rpm", PipProvider())
     assert result.startswith("[extraction error:")
 
 
@@ -468,40 +472,40 @@ def test_is_noise_yarn_lock():
 # ---------------------------------------------------------------------------
 
 def test_validate_archive_url_rejects_http():
-    from activities.package_diff import _validate_archive_url
+    # _validate_archive_url imported at module level as alias
     from temporalio.exceptions import ApplicationError
     with pytest.raises(ApplicationError, match="only https"):
         _validate_archive_url("http://files.pythonhosted.org/pkg-1.0.0.tar.gz")
 
 
 def test_validate_archive_url_rejects_untrusted_host():
-    from activities.package_diff import _validate_archive_url
+    # _validate_archive_url imported at module level as alias
     from temporalio.exceptions import ApplicationError
     with pytest.raises(ApplicationError, match="Untrusted archive host"):
         _validate_archive_url("https://evil.example.com/pkg-1.0.0.tar.gz")
 
 
 def test_validate_archive_url_rejects_ssrf_metadata_endpoint():
-    from activities.package_diff import _validate_archive_url
+    # _validate_archive_url imported at module level as alias
     from temporalio.exceptions import ApplicationError
     with pytest.raises(ApplicationError, match="Untrusted archive host"):
         _validate_archive_url("https://169.254.169.254/latest/meta-data/iam/security-credentials/")
 
 
 def test_validate_archive_url_rejects_localhost():
-    from activities.package_diff import _validate_archive_url
+    # _validate_archive_url imported at module level as alias
     from temporalio.exceptions import ApplicationError
     with pytest.raises(ApplicationError, match="Untrusted archive host"):
         _validate_archive_url("https://localhost/internal-api")
 
 
 def test_validate_archive_url_accepts_pythonhosted():
-    from activities.package_diff import _validate_archive_url
+    # _validate_archive_url imported at module level as alias
     _validate_archive_url("https://files.pythonhosted.org/packages/pkg-1.0.0.tar.gz")
 
 
 def test_validate_archive_url_accepts_npm_registry():
-    from activities.package_diff import _validate_archive_url
+    # _validate_archive_url imported at module level as alias
     _validate_archive_url("https://registry.npmjs.org/lodash/-/lodash-4.17.21.tgz")
 
 
@@ -634,16 +638,15 @@ def _rubygems_versions_response(package: str, versions: list[tuple[str, str]]) -
     ]
 
 
-@respx.mock
 def test_extract_gem_to_dir(tmp_path):
-    from activities.package_diff import _extract_gem_to_dir
+    from activities.ecosystems.rubygems import RubyGemsProvider
     gem_bytes = _make_gem({"lib/my_gem.rb": "puts 'hello'"})
-    _extract_gem_to_dir(gem_bytes, str(tmp_path))
+    RubyGemsProvider().extract_archive(gem_bytes, "mygem-1.0.0.gem", str(tmp_path))
     assert (tmp_path / "lib" / "my_gem.rb").exists()
 
 
 def test_extract_gem_no_data_tarball_raises():
-    from activities.package_diff import _extract_gem_to_dir
+    from activities.ecosystems.rubygems import RubyGemsProvider
     import tempfile
     # Build outer tar with no data.tar.gz member
     buf = io.BytesIO()
@@ -655,7 +658,7 @@ def test_extract_gem_no_data_tarball_raises():
     buf.seek(0)
     with tempfile.TemporaryDirectory() as d:
         with pytest.raises(ValueError, match="No data.tar.gz"):
-            _extract_gem_to_dir(buf.read(), d)
+            RubyGemsProvider().extract_archive(buf.read(), "mygem-1.0.0.gem", d)
 
 
 @respx.mock
