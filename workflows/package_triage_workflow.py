@@ -8,6 +8,7 @@ with workflow.unsafe.imports_passed_through():
         PackageSignals, Verdict,
         PyPISignals, SocketSignals, OSVSignals,
         DiffSignals, MaintainerSignals, ReleaseAgeSignals,
+        AttestationSignals,
     )
 
 
@@ -33,7 +34,7 @@ class PackageTriageWorkflow:
         opts: dict = dict(start_to_close_timeout=timedelta(seconds=30), retry_policy=retry)
         args = [ecosystem, package, old_version, new_version]
 
-        pypi, sock, osv, diff, maint, age = await asyncio.gather(
+        pypi, sock, osv, diff, maint, age, attest = await asyncio.gather(
             workflow.execute_activity(
                 "activities.pypi_metadata.fetch", args=args, result_type=PyPISignals, **opts
             ),
@@ -56,6 +57,9 @@ class PackageTriageWorkflow:
             workflow.execute_activity(
                 "activities.release_age.check", args=args, result_type=ReleaseAgeSignals, **opts
             ),
+            workflow.execute_activity(
+                "activities.attestation.check", args=args, result_type=AttestationSignals, **opts
+            ),
         )
 
         signals = PackageSignals(
@@ -69,6 +73,7 @@ class PackageTriageWorkflow:
             **diff.model_dump(),
             **maint.model_dump(),
             **age.model_dump(),
+            **attest.model_dump(),
         )
 
         return await workflow.execute_activity(

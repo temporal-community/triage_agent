@@ -17,6 +17,7 @@ from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Worker
 
 from activities.models import (
+    AttestationSignals,
     DiffSignals,
     MaintainerSignals,
     OSVSignals,
@@ -89,6 +90,17 @@ def _release_age(hours: float = 720.0):
     @activity.defn(name="activities.release_age.check")
     async def check(*_):
         return ReleaseAgeSignals(release_age_hours=hours)
+    return check
+
+
+def _attestation(has_attestation: bool = True, publisher_repo: str = "psf/requests"):
+    @activity.defn(name="activities.attestation.check")
+    async def check(*_):
+        return AttestationSignals(
+            has_attestation=has_attestation,
+            publisher_kind="GitHub" if has_attestation else None,
+            publisher_repo=publisher_repo if has_attestation else None,
+        )
     return check
 
 
@@ -189,7 +201,7 @@ async def _run_scenario(
 ) -> None:
     acts = [
         _pypi(), _socket(), _osv(), _diff(), _maintainer(), _release_age(),
-        _classifier(classification), _repo_config(config),
+        _attestation(), _classifier(classification), _repo_config(config),
         _comment(), _merge(), _review(), _label(), _close_pr(),
     ]
     async with Worker(

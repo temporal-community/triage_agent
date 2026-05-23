@@ -16,7 +16,7 @@ from activities.ecosystems import (
     safe_zip_extractall,
     validate_archive_url,
 )
-from activities.models import MaintainerSignals, PyPISignals, ReleaseAgeSignals
+from activities.models import AttestationSignals, MaintainerSignals, PyPISignals, ReleaseAgeSignals
 
 
 class PipProvider:
@@ -131,6 +131,31 @@ class PipProvider:
     # extract_archive
     # ------------------------------------------------------------------
 
+    # ------------------------------------------------------------------
+    # fetch_attestations
+    # ------------------------------------------------------------------
+
+    async def fetch_attestations(
+        self, package: str, old_version: str, new_version: str
+    ) -> AttestationSignals:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            new_pub, old_pub = await asyncio.gather(
+                _fetch_pypi_publisher(client, package, new_version),
+                _fetch_pypi_publisher(client, package, old_version),
+            )
+
+        if new_pub is None:
+            return AttestationSignals(has_attestation=False)
+
+        publisher_changed = old_pub is not None and old_pub != new_pub
+        return AttestationSignals(
+            has_attestation=True,
+            publisher_kind=new_pub.get("kind"),
+            publisher_repo=new_pub.get("repo"),
+            publisher_changed=publisher_changed,
+            old_publisher_repo=old_pub.get("repo") if publisher_changed else None,
+        )
+
     def extract_archive(self, archive_bytes: bytes, filename: str, dest: str) -> None:
         buf = io.BytesIO(archive_bytes)
         dest_path = Path(dest).resolve()
@@ -181,3 +206,41 @@ def _maintainer_set(info: dict) -> set[str]:
         if val and val not in ("none", "unknown", ""):
             result.add(val)
     return result
+
+
+async def _fetch_pypi_publisher(
+    client: httpx.AsyncClient, package: str, version: str
+) -> dict | None:
+    """Return {"kind": ..., "repo": ...} from the PEP 740 provenance endpoint, or None.
+
+    PyPI generates attestations automatically for packages published via a
+    Trusted Publisher (GitHub Actions, GitLab CI, etc.).  A 404 means the
+    version was uploaded with a plain API token and has no attestation.
+    """
+    try:
+        resp = await client.get(f"https://pypi.org/pypi/{package}/{version}/json")
+        if resp.status_code != 200:
+            return None
+        urls = resp.json().get("urls", [])
+        # Prefer sdist; any file works since provenance is per-file
+        filename = next(
+            (u["filename"] for u in urls if u.get("packagetype") == "sdist"),
+            urls[0]["filename"] if urls else None,
+        )
+        if not filename:
+            return None
+
+        prov = await client.get(
+            f"https://pypi.org/integrity/{package}/{version}/{filename}/provenance"
+        )
+        if prov.status_code != 200:
+            return None
+
+        bundles = prov.json().get("attestation_bundles", [])
+        if not bundles:
+            return None
+        pub = bundles[0].get("publisher", {})
+        claims = pub.get("claims", {})
+        return {"kind": pub.get("kind"), "repo": claims.get("repository")}
+    except Exception:
+        return None

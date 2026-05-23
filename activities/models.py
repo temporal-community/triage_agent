@@ -54,6 +54,14 @@ class ReleaseAgeSignals(BaseModel):
     release_age_hours: float | None   # None when upload_time is missing from PyPI metadata
 
 
+class AttestationSignals(BaseModel):
+    has_attestation: bool = False           # new version has a verifiable SLSA/Sigstore attestation
+    publisher_kind: str | None = None       # "GitHub", "GitLab", etc.
+    publisher_repo: str | None = None       # e.g. "psf/requests"
+    publisher_changed: bool = False         # old version had a different trusted publisher
+    old_publisher_repo: str | None = None   # previous publisher repo (context when changed)
+
+
 class PackageSignals(BaseModel):
     ecosystem: Literal["pip", "npm", "rubygems"]
     package_name: str
@@ -70,6 +78,11 @@ class PackageSignals(BaseModel):
     weekly_downloads: int | None
     publish_account_age_days: int | None
     package_description: str | None = None
+    has_attestation: bool = False
+    publisher_kind: str | None = None
+    publisher_repo: str | None = None
+    publisher_changed: bool = False
+    old_publisher_repo: str | None = None
 
 
 class Verdict(BaseModel):

@@ -107,6 +107,9 @@ def _rule_based(signals: PackageSignals) -> Verdict:
         flags.append(f"recent release ({signals.release_age_hours:.0f}h old)")
     if signals.maintainer_changed:
         flags.append("maintainer changed")
+    if signals.publisher_changed:
+        old = f" (was {signals.old_publisher_repo})" if signals.old_publisher_repo else ""
+        flags.append(f"trusted publisher changed{old}")
     if signals.socket_alerts:
         flags.extend(signals.socket_alerts)
     if signals.socket_score is not None and signals.socket_score < 50:

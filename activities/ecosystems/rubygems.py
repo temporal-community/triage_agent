@@ -8,7 +8,7 @@ import httpx
 from temporalio.exceptions import ApplicationError
 
 from activities.ecosystems import is_major, parse_upload_time, validate_archive_url
-from activities.models import MaintainerSignals, PyPISignals, ReleaseAgeSignals
+from activities.models import AttestationSignals, MaintainerSignals, PyPISignals, ReleaseAgeSignals
 
 
 class RubyGemsProvider:
@@ -131,6 +131,16 @@ class RubyGemsProvider:
     # ------------------------------------------------------------------
     # extract_archive
     # ------------------------------------------------------------------
+
+    # ------------------------------------------------------------------
+    # fetch_attestations
+    # ------------------------------------------------------------------
+
+    async def fetch_attestations(
+        self, package: str, old_version: str, new_version: str
+    ) -> AttestationSignals:
+        # RubyGems does not yet support SLSA provenance or Sigstore attestations.
+        return AttestationSignals(has_attestation=False)
 
     def extract_archive(self, archive_bytes: bytes, filename: str, dest: str) -> None:
         """Extract a RubyGems .gem file (outer tar → data.tar.gz → source tree)."""

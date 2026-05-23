@@ -35,6 +35,17 @@ RED — likely supply chain attack. ANY of:
   - Socket critical alerts
   - version <24h old with unusual diff content
 
+SLSA/Sigstore attestation signals (has_attestation, publisher_kind, publisher_repo,
+publisher_changed, old_publisher_repo):
+- has_attestation=false is NOT itself a red/yellow flag — most packages don't use
+  trusted publishers yet. It simply means there's no cryptographic provenance.
+- has_attestation=true is a mild positive trust signal: the artifact was built by a
+  verified CI pipeline and matches a signed Sigstore entry in a public transparency log.
+- publisher_changed=true IS a yellow/red flag depending on context: the new version
+  was published from a different repository or workflow than the old version.
+  Combined with other signals (fresh release, new maintainer, unusual diff), treat as red.
+- publisher_changed=true alone (no other flags, established package) → yellow.
+
 Use `package_description` (when present) to assess the package's risk category.
 Packages that touch auth, cryptography, network I/O, secrets, or code execution
 warrant closer scrutiny than color-formatting or logging utilities — apply

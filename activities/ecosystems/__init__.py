@@ -20,7 +20,7 @@ from typing import Protocol
 import httpx
 from temporalio.exceptions import ApplicationError
 
-from activities.models import MaintainerSignals, PyPISignals, ReleaseAgeSignals
+from activities.models import AttestationSignals, MaintainerSignals, PyPISignals, ReleaseAgeSignals
 
 MAX_EXTRACT_BYTES = 100 * 1024 * 1024  # zip bomb guard
 
@@ -45,6 +45,10 @@ class EcosystemProvider(Protocol):
     ) -> tuple[str, str, str] | None: ...
 
     def extract_archive(self, archive_bytes: bytes, filename: str, dest: str) -> None: ...
+
+    async def fetch_attestations(
+        self, package: str, old_version: str, new_version: str
+    ) -> AttestationSignals: ...
 
 
 def get_provider(ecosystem: str) -> EcosystemProvider:

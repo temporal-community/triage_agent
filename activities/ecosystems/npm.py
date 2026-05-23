@@ -9,7 +9,7 @@ import httpx
 from temporalio.exceptions import ApplicationError
 
 from activities.ecosystems import is_major, parse_upload_time, validate_archive_url
-from activities.models import MaintainerSignals, PyPISignals, ReleaseAgeSignals
+from activities.models import AttestationSignals, MaintainerSignals, PyPISignals, ReleaseAgeSignals
 
 
 class NpmProvider:
@@ -114,6 +114,31 @@ class NpmProvider:
     # extract_archive
     # ------------------------------------------------------------------
 
+    # ------------------------------------------------------------------
+    # fetch_attestations
+    # ------------------------------------------------------------------
+
+    async def fetch_attestations(
+        self, package: str, old_version: str, new_version: str
+    ) -> AttestationSignals:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            new_pub, old_pub = await asyncio.gather(
+                _fetch_npm_publisher(client, package, new_version),
+                _fetch_npm_publisher(client, package, old_version),
+            )
+
+        if new_pub is None:
+            return AttestationSignals(has_attestation=False)
+
+        publisher_changed = old_pub is not None and old_pub != new_pub
+        return AttestationSignals(
+            has_attestation=True,
+            publisher_kind=new_pub.get("kind"),
+            publisher_repo=new_pub.get("repo"),
+            publisher_changed=publisher_changed,
+            old_publisher_repo=old_pub.get("repo") if publisher_changed else None,
+        )
+
     def extract_archive(self, archive_bytes: bytes, filename: str, dest: str) -> None:
         buf = io.BytesIO(archive_bytes)
         with tarfile.open(fileobj=buf) as tf:
@@ -153,3 +178,50 @@ def _maintainer_set(data: dict) -> set[str]:
         if name:
             result.add(name)
     return result
+
+
+async def _fetch_npm_publisher(
+    client: httpx.AsyncClient, package: str, version: str
+) -> dict | None:
+    """Return {"kind": "GitHub", "repo": "owner/repo"} or None.
+
+    npm provenance is available via the attestations endpoint introduced in 2023.
+    The SLSA v1 predicate encodes the source repository in
+    predicate.buildDefinition.externalParameters.workflow.repository.
+    """
+    import base64
+    import json as _json
+
+    try:
+        resp = await client.get(
+            f"https://registry.npmjs.org/-/npm/v1/attestations/{package}@{version}"
+        )
+        if resp.status_code != 200:
+            return None
+        attestations = resp.json().get("attestations", [])
+        for att in attestations:
+            if "provenance" not in att.get("predicateType", "").lower():
+                continue
+            payload_b64 = att.get("bundle", {}).get("dsseEnvelope", {}).get("payload", "")
+            if not payload_b64:
+                continue
+            # DSSE payload is standard base64 (may lack padding)
+            padding = 4 - len(payload_b64) % 4
+            payload = _json.loads(base64.b64decode(payload_b64 + "=" * (padding % 4)))
+            repo_url = (
+                payload.get("predicate", {})
+                .get("buildDefinition", {})
+                .get("externalParameters", {})
+                .get("workflow", {})
+                .get("repository", "")
+            )
+            if repo_url:
+                kind = "GitHub" if "github.com" in repo_url.lower() else "unknown"
+                # Normalize "https://github.com/owner/repo" → "owner/repo"
+                if repo_url.startswith("https://github.com/"):
+                    repo_url = repo_url[len("https://github.com/"):]
+                return {"kind": kind, "repo": repo_url}
+        # Endpoint returned 200 but no parseable provenance predicate
+        return {"kind": None, "repo": None}
+    except Exception:
+        return None
