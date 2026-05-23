@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**dependabot_triage_agent** is a Temporal-based workflow engine that automatically triages Dependabot and Renovate PRs on GitHub repositories. It gathers supply chain risk signals in parallel (PyPI metadata, Socket score, OSV CVEs, package diff, release age, maintainer history), uses Claude to classify risk as green/yellow/red, and acts accordingly: auto-merge low-risk bumps, request review on medium-risk ones, or escalate suspicious ones for human approval.
+**dependabot-supply-chain-scout** is a Temporal-based workflow engine that automatically vets Dependabot and Renovate PRs on GitHub repositories. It gathers supply chain risk signals in parallel (PyPI metadata, Socket score, OSV CVEs, package diff, release age, maintainer history), uses Claude to classify risk as green/yellow/red, and acts accordingly: auto-merge low-risk bumps, request review on medium-risk ones, or escalate suspicious ones for human approval.
 
-**Key design principle**: Demonstrates core Temporal idioms—parallel durable activities with independent retries, indefinite human-in-the-loop waits without resource holding, replay-safe LLM calls, and workflow-ID-based deduplication across repos.
+**Key design principle**: Graceful degradation — works with zero API keys (rule-based, log-only), gets smarter and more actionable as you add them. No config required to try it.
 
 ## Project Status
 
@@ -286,10 +286,8 @@ This is **durable indefinite wait**—the workflow holds no resources while wait
 
 ### Building & Deploying
 
-This project is **not yet deployed**—build order defined in HANDOFF.md shows the implementation sequence. For local dev and testing, use the run sequence above. For v1 deployment, worker will likely be deployed to Fly.io, Railway, or Render pointing at Temporal Cloud or self-hosted Temporal.
+This project is **not yet deployed**. For local dev and testing, use the run sequence above. For v1 deployment, worker will likely be deployed to Fly.io, Railway, or Render pointing at Temporal Cloud or self-hosted Temporal.
 
 ## Repo-Specific Notes
 
-This is the **official implementation** of the Dependabot triage agent (not a simplified recipe). A teaching version may later be contributed to `temporalio/ai-cookbook`, but focus here is the standalone, general-purpose tool.
-
-The HANDOFF.md file contains the full specification, design rationale, and build roadmap—consult it for nuanced questions about design trade-offs or v1 scope decisions.
+This is the **official implementation** of the Dependabot Supply Chain Scout — a standalone, general-purpose tool for OSS maintainers.

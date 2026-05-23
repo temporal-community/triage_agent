@@ -1,10 +1,8 @@
-# Dependabot Triage Agent
+# Dependabot Supply Chain Scout
 
-A durable, supply-chain-aware agent that automatically triages Dependabot and Renovate PRs. It gathers risk signals in parallel (PyPI metadata, OSV CVEs, release age, maintainer history, Socket score, package diff), classifies risk as green/yellow/red, and acts accordingly — posting a verdict comment, requesting review, or auto-merging low-risk bumps.
+A supply-chain-aware bot that automatically vets Dependabot and Renovate PRs before they merge. It scouts six independent risk signals in parallel — PyPI metadata, OSV CVEs, Socket score, package diff, release age, maintainer history — classifies risk as green/yellow/red, and acts accordingly: posting a verdict comment, requesting review, or auto-merging low-risk bumps.
 
-Built for "cobwebbed" open-source projects drowning in unreviewed dependency PRs, and motivated by active supply chain attack campaigns (Mini Shai-Hulud, May 2026) targeting PyPI packages.
-
-Built on [Temporal](https://temporal.io) to demonstrate durable parallel execution, indefinite human-in-the-loop waits, and cross-repo verdict deduplication.
+Gives every dependency PR a careful second opinion, whether your repo is actively maintained or sitting on a backlog of unreviewed bumps.
 
 > **Status:** Experimental. Local testing and personal installs only — not yet deployed as a public GitHub App.
 
@@ -16,8 +14,8 @@ No API keys required for a dry run. You only need Python 3.10+, `uv`, and a runn
 
 ```bash
 # 1. Clone and install
-git clone https://github.com/webchick/triage_agent
-cd triage_agent
+git clone https://github.com/webchick/dependabot-supply-chain-scout
+cd dependabot-supply-chain-scout
 uv sync
 
 # 2. Start Temporal dev server (separate terminal)
@@ -45,7 +43,7 @@ The agent degrades gracefully based on which keys you provide:
 |---|---|---|
 | _(none)_ | Rule-based (CVE thresholds, release age, download count) | Log-only — prints what it would do |
 | `ANTHROPIC_API_KEY` | Claude Sonnet 4.6 via tool-use | Log-only |
-| `ANTHROPIC_API_KEY` + `GITHUB_TOKEN` + `FORCE_AUTO_MERGE=true` | Claude Sonnet 4.6 | Posts comment + merges PR |
+| `ANTHROPIC_API_KEY` + `GITHUB_TOKEN` + `ENABLE_PR_ACTIONS=true` | Claude Sonnet 4.6 | Posts comment + merges PR |
 
 Copy `.env.example` to `.env` and fill in the keys you have.
 
@@ -82,12 +80,14 @@ GitHub webhook → FastAPI receiver → PRActionWorkflow
 
 | Signal | API | Auth |
 |---|---|---|
-| Weekly downloads, major bump | pypi.org + pypistats.org | None |
+| Package description, weekly downloads, major bump | pypi.org + pypistats.org | None |
 | Known CVEs | api.osv.dev | None |
 | Release age | pypi.org | None |
 | Maintainer change | pypi.org (compare versions) | None |
 | Supply chain score + alerts | api.socket.dev/v0/purl | API key (optional) |
 | Package diff | pypi.org sdist download | None |
+
+The package description (from PyPI's `info.summary`) is passed to the classifier to help it calibrate risk thresholds. A package that touches auth, cryptography, or network I/O warrants tighter scrutiny than a color-formatting utility — without needing a hardcoded "critical packages" list that goes stale.
 
 ### Classifier
 
@@ -138,7 +138,7 @@ GITHUB_WEBHOOK_SECRET=
 SOCKET_API_KEY=
 
 # Local testing
-FORCE_AUTO_MERGE=false           # set true to test the merge path locally
+ENABLE_PR_ACTIONS=false          # set true to enable real PR comments + merges locally
 ```
 
 ---
@@ -190,7 +190,18 @@ uv run pytest                 # tests
 uv run pytest --cov=activities,workflows,helpers --cov-report=term-missing
 ```
 
-See [CLAUDE.md](CLAUDE.md) for architecture details and [HANDOFF.md](HANDOFF.md) for design rationale and build roadmap.
+### Replay tests — how the agent stays trustworthy
+
+`tests/test_workflow_replay.py` loads committed JSON fixtures from `tests/fixtures/` and replays them through Temporal's `Replayer`. A replay failure means the workflow code became non-deterministic — the kind of silent breakage that corrupts live workflow state mid-execution without any obvious error.
+
+This is the answer to "how do I know a prompt change didn't break real-PR behavior?" The fixtures capture actual execution histories (GREEN auto-merge, YELLOW human-approved, YELLOW human-rejected, RED blocked, observe-only). If your change passes unit tests but breaks replay, Temporal would have crashed on a live workflow.
+
+To regenerate fixtures after an intentional workflow change:
+```bash
+uv run python tests/generate_fixtures.py
+```
+
+See [CLAUDE.md](CLAUDE.md) for architecture details.
 
 ---
 
@@ -211,4 +222,4 @@ See [CLAUDE.md](CLAUDE.md) for architecture details and [HANDOFF.md](HANDOFF.md)
 
 ---
 
-*Experimental project by the [Temporal community](https://github.com/temporal-community). Not an official Temporal Inc. product.*
+*Built with [Temporal](https://temporal.io) for durable, crash-proof workflow execution.*

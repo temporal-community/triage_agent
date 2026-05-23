@@ -1,7 +1,7 @@
 [project]
-name = "dependabot-triage-agent"
+name = "dependabot-supply-chain-scout"
 version = "0.1.0"
-description = "Durable Dependabot/Renovate PR triage agent built on Temporal"
+description = "Supply chain risk analysis for Dependabot and Renovate PRs, built on Temporal"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
