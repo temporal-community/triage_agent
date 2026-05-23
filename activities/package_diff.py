@@ -5,11 +5,15 @@ Downloads both sdists, extracts them, and returns a DiffSignals model.
 from __future__ import annotations
 
 import asyncio
+import base64
 import difflib
 import hashlib
+import hmac
 import io
+import stat
 import tarfile
 import tempfile
+import urllib.parse
 import zipfile
 from pathlib import Path
 
@@ -27,9 +31,17 @@ MAX_DOWNLOAD_BYTES = 20 * 1024 * 1024  # 20 MB
 MAX_EXTRACT_BYTES = 100 * 1024 * 1024  # 100 MB — zip bomb guard
 MAX_DIFF_BYTES = 100 * 1024  # 100 KB
 
-NOISE_DIRS = {".dist-info", "__pycache__", ".egg-info"}
+# Allowlist of CDN hosts from which we will download package archives.
+# Any URL whose host is not in this set is rejected before the HTTP request
+# is made, preventing SSRF attacks via attacker-controlled registry metadata.
+_ALLOWED_CDN_HOSTS: frozenset[str] = frozenset({
+    "files.pythonhosted.org",  # PyPI sdists + wheels
+    "registry.npmjs.org",       # npm tarballs
+})
+
+NOISE_DIRS = {".dist-info", "__pycache__", ".egg-info", "node_modules", ".nyc_output", "coverage"}
 NOISE_SUFFIXES = {".pyc", ".pyo"}
-NOISE_FILENAMES = {"RECORD", "WHEEL", "METADATA", "INSTALLER"}
+NOISE_FILENAMES = {"RECORD", "WHEEL", "METADATA", "INSTALLER", "package-lock.json", "yarn.lock", "npm-shrinkwrap.json"}
 
 HIGH_SIGNAL_NAMES = {
     "setup.py",
@@ -37,6 +49,7 @@ HIGH_SIGNAL_NAMES = {
     "pyproject.toml",
     "__init__.py",
     "package.json",
+    "index.js",
     "install.js",
     "postinstall.js",
     "preinstall.js",
@@ -47,6 +60,7 @@ HIGH_SIGNAL_SUFFIXES = {".pth"}  # Python path config files — silent code-exec
 # A new or modified file with any of these extensions is an automatic RED signal.
 DANGEROUS_BINARY_SUFFIXES = {
     ".so", ".pyd", ".dll",       # native compiled extensions — execute arbitrary code
+    ".node",                     # Node.js native add-ons — execute arbitrary native code
     ".pkl", ".pickle",            # deserializes and executes arbitrary Python objects
 }
 
@@ -61,10 +75,12 @@ async def compute(ecosystem: str, package: str, old_version: str, new_version: s
         f"Computing package diff for {package} {old_version} -> {new_version}"
     )
 
+    _url_fetcher = _get_npm_tarball_url if ecosystem == "npm" else _get_sdist_url
+
     async with httpx.AsyncClient(timeout=30.0) as client:
         old_info, new_info = await asyncio.gather(
-            _get_sdist_url(client, package, old_version),
-            _get_sdist_url(client, package, new_version),
+            _url_fetcher(client, package, old_version),
+            _url_fetcher(client, package, new_version),
         )
 
         if old_info is None or new_info is None:
@@ -119,13 +135,69 @@ async def _get_sdist_url(
     for pkg_type in ("sdist", "bdist_wheel"):
         for entry in urls:
             if entry.get("packagetype") == pkg_type:
-                return entry["url"], entry["filename"], entry.get("digests", {}).get("sha256", "")
+                archive_url = entry["url"]
+                _validate_archive_url(archive_url)
+                return archive_url, entry["filename"], entry.get("digests", {}).get("sha256", "")
 
     return None
 
 
-async def _download(client: httpx.AsyncClient, url: str, expected_sha256: str) -> bytes | None:
-    """Download *url*, verify SHA256, return bytes or None if oversized."""
+async def _get_npm_tarball_url(
+    client: httpx.AsyncClient, package: str, version: str
+) -> tuple[str, str, str] | None:
+    """Return (url, filename, integrity) for an npm package tarball, or None.
+
+    integrity is the dist.integrity SRI string (e.g. 'sha512-...') used by
+    _download for tamper detection. We prefer SHA512 over the legacy SHA1 shasum.
+    """
+    resp = await client.get(f"https://registry.npmjs.org/{package}/{version}")
+    if resp.status_code == 404:
+        raise ApplicationError(
+            f"{package}@{version} not found on npm registry",
+            type="PackageNotFound",
+            non_retryable=True,
+        )
+    resp.raise_for_status()
+    data = resp.json()
+    dist = data.get("dist") or {}
+    tarball_url = dist.get("tarball", "")
+    if not tarball_url:
+        return None
+    _validate_archive_url(tarball_url)
+    return tarball_url, tarball_url.split("/")[-1], dist.get("integrity", "")
+
+
+def _validate_archive_url(url: str) -> None:
+    """Reject any archive URL that doesn't come from a trusted CDN host.
+
+    Without this check an attacker who controls registry metadata (via a MITM
+    or a compromised upstream registry) could redirect our download to an
+    internal service (169.254.169.254, localhost, internal APIs).
+    """
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme != "https":
+        raise ApplicationError(
+            f"Insecure archive URL scheme '{parsed.scheme}' — only https is allowed",
+            non_retryable=True,
+        )
+    if parsed.netloc not in _ALLOWED_CDN_HOSTS:
+        raise ApplicationError(
+            f"Untrusted archive host '{parsed.netloc}' — "
+            f"expected one of {sorted(_ALLOWED_CDN_HOSTS)}",
+            non_retryable=True,
+        )
+
+
+async def _download(client: httpx.AsyncClient, url: str, integrity: str) -> bytes | None:
+    """Download *url*, verify integrity, return bytes or None if oversized.
+
+    integrity formats accepted:
+      - 64-char hex string        → SHA-256 (PyPI digests.sha256)
+      - 'sha512-<base64>'         → SHA-512 SRI (npm dist.integrity)
+      - ''                        → no verification (not recommended)
+    """
+    _validate_archive_url(url)
+
     chunks: list[bytes] = []
     total = 0
     async with client.stream("GET", url) as resp:
@@ -137,15 +209,32 @@ async def _download(client: httpx.AsyncClient, url: str, expected_sha256: str) -
             chunks.append(chunk)
     data = b"".join(chunks)
 
-    if expected_sha256:
-        actual = hashlib.sha256(data).hexdigest()
-        if actual != expected_sha256:
-            raise ApplicationError(
-                f"SHA256 mismatch for {url}: expected {expected_sha256}, got {actual}",
-                non_retryable=True,
-            )
+    if integrity:
+        _verify_integrity(data, integrity, url)
 
     return data
+
+
+def _verify_integrity(data: bytes, integrity: str, url: str) -> None:
+    """Verify data against a SHA-256 hex digest or a SHA-512 SRI string."""
+    if integrity.startswith("sha512-"):
+        expected_bytes = base64.b64decode(integrity[len("sha512-"):])
+        actual_bytes = hashlib.sha512(data).digest()
+        if not hmac.compare_digest(actual_bytes, expected_bytes):
+            raise ApplicationError(
+                f"SHA-512 integrity check failed for {url}",
+                non_retryable=True,
+            )
+    elif len(integrity) == 64:
+        # Plain SHA-256 hex digest (PyPI)
+        actual = hashlib.sha256(data).hexdigest()
+        if not hmac.compare_digest(actual, integrity):
+            raise ApplicationError(
+                f"SHA-256 mismatch for {url}: expected {integrity}, got {actual}",
+                non_retryable=True,
+            )
+    else:
+        activity.logger.warning(f"Unrecognised integrity format for {url}, skipping check")
 
 
 # ---------------------------------------------------------------------------
@@ -185,9 +274,19 @@ def _extract_to_dir(archive_bytes: bytes, filename: str, dest: str) -> None:
 
 
 def _safe_zip_extractall(zf: zipfile.ZipFile, dest: Path) -> None:
-    """Extract a zip file with path traversal protection and extraction size cap."""
+    """Extract a zip file with path traversal, symlink, and zip-bomb protection."""
     total_extracted = 0
     for member in zf.infolist():
+        # Reject symlink entries. Zip symlinks have Unix mode 0o120xxx on the
+        # external_attr field. A symlink pointing outside the destination could
+        # be used to read arbitrary files (e.g. ~/.ssh/id_rsa) even though the
+        # filename itself passes the path-traversal check below.
+        unix_mode = (member.external_attr >> 16) & 0xFFFF
+        if stat.S_ISLNK(unix_mode):
+            raise ApplicationError(
+                f"Zip contains symlink entry: {member.filename}",
+                non_retryable=True,
+            )
         # Normalize and check for path traversal
         member_path = (dest / member.filename).resolve()
         if not str(member_path).startswith(str(dest)):

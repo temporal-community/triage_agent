@@ -33,6 +33,7 @@ def _dependabot_payload(
     author: str = "dependabot[bot]",
     pr_number: int = TEST_PR_NUMBER,
     installation_id: int = 12345,
+    branch: str = "dependabot/pip/requests-2.32.0",
 ) -> bytes:
     payload = {
         "action": action,
@@ -41,7 +42,7 @@ def _dependabot_payload(
             "title": title,
             "body": "",
             "user": {"login": author},
-            "head": {"sha": TEST_HEAD_SHA},
+            "head": {"sha": TEST_HEAD_SHA, "ref": branch},
         },
         "repository": {"full_name": TEST_REPO},
         "installation": {"id": installation_id},
@@ -222,3 +223,77 @@ async def test_healthz(client):
     resp = await ac.get("/healthz")
     assert resp.status_code == 200
     assert resp.json()["status"] == "ok"
+
+
+# ---------------------------------------------------------------------------
+# Input validation — package name / version
+# ---------------------------------------------------------------------------
+
+async def test_path_traversal_in_package_name_ignored(client):
+    ac, mock_tc = client
+    body = _dependabot_payload(title="Bump ../../../etc/passwd from 1.0.0 to 1.0.1")
+    resp = await ac.post(
+        "/webhook",
+        content=body,
+        headers={"X-Hub-Signature-256": _sign(body), "X-GitHub-Event": "pull_request"},
+    )
+    assert resp.json()["status"] == "ignored"
+    mock_tc.start_workflow.assert_not_called()
+
+
+async def test_newline_in_package_name_ignored(client):
+    ac, mock_tc = client
+    body = _dependabot_payload(title="Bump requests\nevil from 2.31.0 to 2.32.0")
+    resp = await ac.post(
+        "/webhook",
+        content=body,
+        headers={"X-Hub-Signature-256": _sign(body), "X-GitHub-Event": "pull_request"},
+    )
+    # Either ignored (regex won't match) or invalid name — either way no workflow
+    assert resp.json()["status"] == "ignored"
+    mock_tc.start_workflow.assert_not_called()
+
+
+async def test_valid_scoped_npm_package_accepted(client):
+    ac, mock_tc = client
+    body = _dependabot_payload(
+        title="Bump @typescript-eslint/parser from 6.0.0 to 6.1.0",
+        branch="dependabot/npm_and_yarn/@typescript-eslint/parser-6.1.0",
+    )
+    resp = await ac.post(
+        "/webhook",
+        content=body,
+        headers={"X-Hub-Signature-256": _sign(body), "X-GitHub-Event": "pull_request"},
+    )
+    assert resp.json()["status"] == "started"
+    mock_tc.start_workflow.assert_called_once()
+
+
+def test_validate_package_rejects_path_traversal():
+    from api.webhook import _validate_parsed_package
+    assert _validate_parsed_package("pip", "../evil", "1.0.0", "1.0.1") is not None
+
+
+def test_validate_package_rejects_semicolon():
+    from api.webhook import _validate_parsed_package
+    assert _validate_parsed_package("pip", "requests; rm -rf /", "1.0.0", "1.0.1") is not None
+
+
+def test_validate_package_rejects_null_byte():
+    from api.webhook import _validate_parsed_package
+    assert _validate_parsed_package("npm", "lodash\x00evil", "1.0.0", "1.0.1") is not None
+
+
+def test_validate_package_accepts_normal_pypi():
+    from api.webhook import _validate_parsed_package
+    assert _validate_parsed_package("pip", "requests", "2.31.0", "2.32.0") is None
+
+
+def test_validate_package_accepts_scoped_npm():
+    from api.webhook import _validate_parsed_package
+    assert _validate_parsed_package("npm", "@typescript-eslint/parser", "6.0.0", "6.1.0") is None
+
+
+def test_validate_package_accepts_unknown_old_version():
+    from api.webhook import _validate_parsed_package
+    assert _validate_parsed_package("pip", "requests", "unknown", "2.32.0") is None

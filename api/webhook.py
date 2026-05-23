@@ -9,6 +9,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Header, HTTPException, Request
@@ -23,6 +24,30 @@ from workflows.pr_action_workflow import PRActionWorkflow
 
 _BOT_LOGINS = {"dependabot[bot]", "renovate[bot]"}
 _PR_ACTIONS = {"opened", "synchronize", "reopened"}
+
+# Allowlist patterns for package names and version strings.
+# These are strict enough to block path traversal, command injection, and
+# SSRF gadgets while allowing all real package names from PyPI and npm.
+#   PyPI: PEP 508 names — letters, digits, dots, hyphens, underscores
+#   npm:  unscoped or @scope/name — lowercase, digits, hyphens, dots, tilde
+#         (we allow mixed case for npm too since some legacy packages use it)
+#   Version: semver-ish — digits, dots, hyphens, plus, tilde, caret, letters
+_PYPI_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,213}$")
+_NPM_NAME_RE = re.compile(
+    r"^(@[A-Za-z0-9._-]+/)?[A-Za-z0-9][A-Za-z0-9._-]{0,213}$"
+)
+_VERSION_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+\-~^]{0,127}$")
+
+
+def _validate_parsed_package(ecosystem: str, package: str, old: str, new: str) -> str | None:
+    """Return an error reason string, or None if the input is valid."""
+    name_re = _PYPI_NAME_RE if ecosystem == "pip" else _NPM_NAME_RE
+    if not name_re.match(package):
+        return f"invalid package name: {package!r}"
+    for label, ver in (("old_version", old), ("new_version", new)):
+        if ver != "unknown" and not _VERSION_RE.match(ver):
+            return f"invalid {label}: {ver!r}"
+    return None
 
 _temporal_client: Client | None = None
 
@@ -79,14 +104,22 @@ async def webhook(
 
     title = payload["pull_request"]["title"]
     body_text = payload["pull_request"].get("body") or ""
-    parsed = parse_pr(title, body_text)
+    head_ref = payload["pull_request"]["head"]["ref"]
+    parsed = parse_pr(title, body_text, branch=head_ref)
     if not parsed:
         return {"status": "ignored", "reason": "could not parse package/version from PR title"}
+
+    err = _validate_parsed_package(parsed.ecosystem, parsed.package, parsed.old_version, parsed.new_version)
+    if err:
+        return {"status": "ignored", "reason": err}
 
     installation_id = payload.get("installation", {}).get("id", 0)
     repo = payload["repository"]["full_name"]
     pr_number = payload["pull_request"]["number"]
     head_sha = payload["pull_request"]["head"]["sha"]
+
+    # canonicalize_name is PyPI-specific (normalizes Requests → requests); npm package names are case-sensitive
+    package_name = canonicalize_name(parsed.package) if parsed.ecosystem == "pip" else parsed.package
 
     pr_context = PRContext(
         repo=repo,
@@ -94,7 +127,7 @@ async def webhook(
         pr_author=pr_author,
         installation_id=installation_id,
         ecosystem=parsed.ecosystem,
-        package_name=canonicalize_name(parsed.package),  # normalize: Requests == requests
+        package_name=package_name,
         old_version=parsed.old_version,
         new_version=parsed.new_version,
         head_sha=head_sha,
