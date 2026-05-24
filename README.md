@@ -182,4 +182,4 @@ For contributor docs — adding ecosystems, signals, or custom plugins — see [
 
 ---
 
-*A [Temporal Community](https://temporal.io/community) project.*
+*A [Temporal Community](https://temporal.io/community) project. Credit to [Daniel Hensby](https://github.com/dhensby) for inspiration. *
