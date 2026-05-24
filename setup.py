@@ -244,7 +244,7 @@ def collect_optional_keys() -> dict[str, str]:
         key = _ask("OpenAI API key", secret=True)
         if key:
             result["OPENAI_API_KEY"] = key
-            result["OPENAI_MODEL"] = "gpt-4o"
+            result["OPENAI_MODEL"] = "gpt-5.5-instant"
             result["CLASSIFIER"] = "openai"
     elif llm_choice == 3:
         host = _ask("Ollama host", default="http://localhost:11434")

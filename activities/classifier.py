@@ -159,7 +159,7 @@ class OpenAIClassifier:
         import httpx as _httpx
 
         api_key = os.environ.get("OPENAI_API_KEY", "")
-        model = os.environ.get("OPENAI_MODEL", "gpt-4o")
+        model = os.environ.get("OPENAI_MODEL", "gpt-5.5-instant")
         try:
             async with _httpx.AsyncClient(timeout=60.0) as client:
                 resp = await client.post(
