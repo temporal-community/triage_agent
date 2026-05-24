@@ -18,15 +18,20 @@ import respx
 from temporalio.exceptions import ApplicationError
 from temporalio.testing import ActivityEnvironment
 
+import json as _json
+
 import activities.ecosystems as ecosystems_module
 import activities.package_diff as pkg_diff_module
 from activities.ecosystems import safe_zip_extractall as _safe_zip_extractall
 from activities.ecosystems import validate_archive_url as _validate_archive_url
 from activities.models import PackageSignals, DiffSignals, ReleaseAgeSignals
 from activities.package_diff import (
+    _added_lines_have_net_calls,
     _build_diff,
+    _diff_added_lines,
     _extract_and_diff,
     _get_file_map,
+    _has_binary_content,
     _is_noise,
     compute,
 )
@@ -776,9 +781,6 @@ def test_rubygems_rakefile_is_high_signal():
 # new_dependency_count — direct dependency additions
 # ---------------------------------------------------------------------------
 
-import json as _json
-
-
 def test_build_diff_counts_new_npm_deps(tmp_path):
     old_pkg = _json.dumps({"dependencies": {"express": "^4.0.0"}, "devDependencies": {}})
     new_pkg = _json.dumps({"dependencies": {"express": "^4.0.0", "lodash": "^4.17.0", "axios": "^1.0.0"}, "devDependencies": {"jest": "^29.0.0"}})
@@ -855,13 +857,6 @@ def test_compute_returns_new_dependency_count_field():
 # ---------------------------------------------------------------------------
 # network_calls_in_lib — newly-added outbound HTTP calls in library code
 # ---------------------------------------------------------------------------
-
-from activities.package_diff import (
-    _added_lines_have_net_calls,
-    _diff_added_lines,
-    _has_binary_content,
-)
-
 
 def test_net_calls_detected_in_new_ruby_file(tmp_path):
     """A brand-new .rb file containing Net::HTTP sets network_calls_in_lib."""
@@ -979,7 +974,7 @@ def test_classifier_flags_network_calls_in_lib():
 
 def test_binary_data_flagged_for_txt_with_null_bytes(tmp_path):
     """A new .txt file containing null bytes (binary) sets binary_data_added."""
-    old = _write_files(tmp_path / "old", {})
+    _old = _write_files(tmp_path / "old", {})
     new_dir = tmp_path / "new"
     new_dir.mkdir()
     (new_dir / "lib").mkdir()
@@ -992,7 +987,7 @@ def test_binary_data_flagged_for_txt_with_null_bytes(tmp_path):
 
 def test_binary_data_flagged_for_rb_with_binary_content(tmp_path):
     """A new .rb file with >10% non-text bytes sets binary_data_added."""
-    old = _write_files(tmp_path / "old", {})
+    _old = _write_files(tmp_path / "old", {})
     new_dir = tmp_path / "new"
     new_dir.mkdir()
     # Craft binary content: mostly binary bytes
@@ -1007,7 +1002,7 @@ def test_binary_data_flagged_for_rb_with_binary_content(tmp_path):
 
 def test_binary_data_not_flagged_for_known_binary_extensions(tmp_path):
     """PNG/JPG files are expected to be binary — not flagged."""
-    old = _write_files(tmp_path / "old", {})
+    _old = _write_files(tmp_path / "old", {})
     new_dir = tmp_path / "new"
     new_dir.mkdir()
     (new_dir / "logo.png").write_bytes(b"\x89PNG\r\n\x1a\n\x00\x00binary data here" + bytes(range(100)))
@@ -1018,7 +1013,7 @@ def test_binary_data_not_flagged_for_known_binary_extensions(tmp_path):
 
 def test_binary_data_not_flagged_for_clean_text_files(tmp_path):
     """A normal text .txt file does not set binary_data_added."""
-    old = _write_files(tmp_path / "old", {})
+    _old = _write_files(tmp_path / "old", {})
     new = _write_files(tmp_path / "new", {"lib/result.txt": "This is normal text content.\n"})
     _, _, _, _, _, binary_added = _build_diff({}, new)
     assert binary_added is False

@@ -12,7 +12,11 @@ from temporalio.exceptions import ApplicationError
 
 import anthropic
 
-from activities.classifier import classify, _build_message, _rule_based
+from activities.classifier import (
+    classify,
+    _build_message,
+    _rule_based,
+)
 from activities.models import (
     PackageSignals,
     PyPISignals,
@@ -21,9 +25,6 @@ from activities.models import (
     DiffSignals,
     ReleaseAgeSignals,
     AttestationSignals,
-    ReleaseSignals,
-    VersionLineSignals,
-    MaintainerSignals,
 )
 
 
