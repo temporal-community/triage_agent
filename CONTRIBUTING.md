@@ -179,8 +179,28 @@ class DrupalProvider(RemoteEcosystemProvider):
 
 Your service must expose `POST {base_url}/{method_name}` endpoints. Each endpoint receives the method parameters as a JSON body and responds with the corresponding signal model fields as JSON. The full request/response spec is in the docstrings in `activities/ecosystems/remote.py`.
 
+### Adding custom signal activities
+
+Plugins can also contribute new signal-gathering activities. Declare them in `pyproject.toml`:
+
+```toml
+[project.entry-points."triage_agent.activities"]
+drupal_signal = "triage_agent_drupal.activities:check"
+```
+
+`check` must be decorated with `@activity.defn`. It receives `(ecosystem, package, old_version, new_version)` and must return a JSON-serialisable dict. The worker loads it automatically at startup alongside built-in activities.
+
+To invoke it, the target repo adds the activity name to `.github/triage-agent.yml`:
+
+```yaml
+extra_signal_activities:
+  - "triage_agent_drupal.activities:check"
+```
+
+Results land in `PackageSignals.custom_signals` and are surfaced to the LLM in a sandboxed `<untrusted_custom>` block — the same way package descriptions and diff content are handled. They cannot override or poison the core trusted signals.
+
 ### In both cases
 
-Once installed, `get_provider("drupal")` returns your provider automatically — no changes to this repo needed. Built-in providers take precedence over plugins with the same `ecosystem_name`, so core ecosystems cannot be shadowed.
+Once installed, `get_provider("drupal")` returns your provider and `check` is registered with the worker automatically — no changes to this repo needed. Built-in providers take precedence over plugins with the same `ecosystem_name`, so core ecosystems cannot be shadowed.
 
-Custom signal results can be stored in `PackageSignals.custom_signals` (a plain `dict`) and surfaced to the LLM classifier via the trusted JSON block, which includes the full `PackageSignals.model_dump()`.
+**Security note:** both entry point groups (`triage_agent.ecosystems` and `triage_agent.activities`) load plugin code into the same process as the core worker. This is the same trust boundary as any `pip install` dependency — the operator who deploys triage-agent is implicitly trusting the packages they install. Plugin results in `custom_signals` are rendered in the sandboxed `<untrusted_custom>` section of the LLM prompt and cannot influence the trusted signal block.
