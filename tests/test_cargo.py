@@ -1,4 +1,5 @@
 """Unit tests for the Cargo (crates.io) ecosystem provider."""
+
 from __future__ import annotations
 
 import gzip
@@ -27,6 +28,7 @@ NEW_VER = "1.0.200"
 # ---------------------------------------------------------------------------
 # Fixture helpers
 # ---------------------------------------------------------------------------
+
 
 def _crate_response(
     description: str = "A generic serialization/deserialization framework",
@@ -78,11 +80,10 @@ def _make_crate_bytes() -> bytes:
 # fetch_metadata
 # ---------------------------------------------------------------------------
 
+
 @respx.mock
 async def test_metadata_success():
-    respx.get(f"{_API}/{PACKAGE}").mock(
-        return_value=httpx.Response(200, json=_crate_response())
-    )
+    respx.get(f"{_API}/{PACKAGE}").mock(return_value=httpx.Response(200, json=_crate_response()))
     env = ActivityEnvironment()
     provider = CargoProvider()
     result = await env.run(provider.fetch_metadata, PACKAGE, OLD_VER, NEW_VER)
@@ -103,9 +104,7 @@ async def test_metadata_404_raises_non_retryable():
 
 @respx.mock
 async def test_metadata_major_bump_detected():
-    respx.get(f"{_API}/{PACKAGE}").mock(
-        return_value=httpx.Response(200, json=_crate_response())
-    )
+    respx.get(f"{_API}/{PACKAGE}").mock(return_value=httpx.Response(200, json=_crate_response()))
     env = ActivityEnvironment()
     provider = CargoProvider()
     result = await env.run(provider.fetch_metadata, PACKAGE, "1.0.0", "2.0.0")
@@ -116,11 +115,10 @@ async def test_metadata_major_bump_detected():
 # fetch_release_age
 # ---------------------------------------------------------------------------
 
+
 @respx.mock
 async def test_release_age_recent():
-    respx.get(f"{_API}/{PACKAGE}").mock(
-        return_value=httpx.Response(200, json=_crate_response())
-    )
+    respx.get(f"{_API}/{PACKAGE}").mock(return_value=httpx.Response(200, json=_crate_response()))
     env = ActivityEnvironment()
     provider = CargoProvider()
     result = await env.run(provider.fetch_release_age, PACKAGE, NEW_VER)
@@ -130,9 +128,7 @@ async def test_release_age_recent():
 
 @respx.mock
 async def test_release_age_version_not_found():
-    respx.get(f"{_API}/{PACKAGE}").mock(
-        return_value=httpx.Response(200, json=_crate_response())
-    )
+    respx.get(f"{_API}/{PACKAGE}").mock(return_value=httpx.Response(200, json=_crate_response()))
     env = ActivityEnvironment()
     provider = CargoProvider()
     result = await env.run(provider.fetch_release_age, PACKAGE, "9.9.9")
@@ -153,11 +149,10 @@ async def test_release_age_404_raises_non_retryable():
 # fetch_maintainer
 # ---------------------------------------------------------------------------
 
+
 @respx.mock
 async def test_maintainer_unchanged():
-    respx.get(f"{_API}/{PACKAGE}").mock(
-        return_value=httpx.Response(200, json=_crate_response())
-    )
+    respx.get(f"{_API}/{PACKAGE}").mock(return_value=httpx.Response(200, json=_crate_response()))
     env = ActivityEnvironment()
     provider = CargoProvider()
     result = await env.run(provider.fetch_maintainer, PACKAGE, OLD_VER, NEW_VER)
@@ -167,9 +162,10 @@ async def test_maintainer_unchanged():
 @respx.mock
 async def test_maintainer_changed():
     respx.get(f"{_API}/{PACKAGE}").mock(
-        return_value=httpx.Response(200, json=_crate_response(
-            old_publisher="original-author", new_publisher="new-publisher"
-        ))
+        return_value=httpx.Response(
+            200,
+            json=_crate_response(old_publisher="original-author", new_publisher="new-publisher"),
+        )
     )
     env = ActivityEnvironment()
     provider = CargoProvider()
@@ -193,11 +189,10 @@ async def test_maintainer_missing_published_by_returns_false():
 # get_archive_url
 # ---------------------------------------------------------------------------
 
+
 @respx.mock
 async def test_get_archive_url():
-    respx.get(f"{_API}/{PACKAGE}").mock(
-        return_value=httpx.Response(200, json=_crate_response())
-    )
+    respx.get(f"{_API}/{PACKAGE}").mock(return_value=httpx.Response(200, json=_crate_response()))
     provider = CargoProvider()
     async with httpx.AsyncClient() as client:
         result = await provider.get_archive_url(client, PACKAGE, NEW_VER)
@@ -210,9 +205,7 @@ async def test_get_archive_url():
 
 @respx.mock
 async def test_get_archive_url_version_not_found_returns_none():
-    respx.get(f"{_API}/{PACKAGE}").mock(
-        return_value=httpx.Response(200, json=_crate_response())
-    )
+    respx.get(f"{_API}/{PACKAGE}").mock(return_value=httpx.Response(200, json=_crate_response()))
     provider = CargoProvider()
     async with httpx.AsyncClient() as client:
         result = await provider.get_archive_url(client, PACKAGE, "9.9.9")
@@ -222,6 +215,7 @@ async def test_get_archive_url_version_not_found_returns_none():
 # ---------------------------------------------------------------------------
 # extract_archive
 # ---------------------------------------------------------------------------
+
 
 def test_extract_archive(tmp_path):
     provider = CargoProvider()
@@ -234,6 +228,7 @@ def test_extract_archive(tmp_path):
 # fetch_attestations
 # ---------------------------------------------------------------------------
 
+
 async def test_attestations_always_false():
     env = ActivityEnvironment()
     provider = CargoProvider()
@@ -244,6 +239,7 @@ async def test_attestations_always_false():
 # ---------------------------------------------------------------------------
 # fetch_release
 # ---------------------------------------------------------------------------
+
 
 @respx.mock
 async def test_fetch_release_no_github_repo():
@@ -268,7 +264,9 @@ async def test_fetch_release_non_200_returns_empty():
 # Ecosystem registration
 # ---------------------------------------------------------------------------
 
+
 def test_cargo_provider_auto_discovered():
     from activities.ecosystems import get_provider
+
     provider = get_provider("cargo")
     assert isinstance(provider, CargoProvider)

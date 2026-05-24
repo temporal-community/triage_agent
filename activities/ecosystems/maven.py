@@ -3,6 +3,7 @@
 Package names use Maven coordinate format: groupId:artifactId
 e.g. "com.google.guava:guava", "org.springframework.boot:spring-boot-starter"
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -18,11 +19,10 @@ from temporalio.exceptions import ApplicationError
 
 from activities.ecosystems import (
     build_release_signals,
-    fetch_github_release,
-    fetch_tag_signature,
+    fetch_vcs_release,
+    fetch_vcs_tag_signature,
     is_major,
-    parse_github_repo,
-    parse_upload_time,
+    parse_vcs_repo,
     safe_zip_extractall,
     validate_archive_url,
 )
@@ -35,7 +35,7 @@ from activities.models import (
 )
 
 _CENTRAL = "https://repo1.maven.org/maven2"
-_SEARCH   = "https://search.maven.org/solrsearch/select"
+_SEARCH = "https://search.maven.org/solrsearch/select"
 
 
 class MavenProvider:
@@ -69,9 +69,7 @@ class MavenProvider:
     # fetch_metadata
     # ------------------------------------------------------------------
 
-    async def fetch_metadata(
-        self, package: str, old_version: str, new_version: str
-    ) -> PyPISignals:
+    async def fetch_metadata(self, package: str, old_version: str, new_version: str) -> PyPISignals:
         group_id, artifact_id = self._parse(package)
         pom_url = f"{self._artifact_base(group_id, artifact_id, new_version)}.pom"
 
@@ -139,9 +137,7 @@ class MavenProvider:
         new_url = f"{self._artifact_base(group_id, artifact_id, new_version)}.pom"
 
         async with httpx.AsyncClient(timeout=15.0) as client:
-            old_resp, new_resp = await asyncio.gather(
-                client.get(old_url), client.get(new_url)
-            )
+            old_resp, new_resp = await asyncio.gather(client.get(old_url), client.get(new_url))
 
         if old_resp.status_code != 200 or new_resp.status_code != 200:
             return MaintainerSignals(maintainer_changed=False)
@@ -168,7 +164,7 @@ class MavenProvider:
         # than compiled bytecode.  Fall back to regular JAR if sources aren't published.
         for suffix, fname_suffix in (
             ("-sources.jar", f"{artifact_id}-{version}-sources.jar"),
-            (".jar",         f"{artifact_id}-{version}.jar"),
+            (".jar", f"{artifact_id}-{version}.jar"),
         ):
             url = f"{base}{suffix}"
             validate_archive_url(url)
@@ -212,10 +208,9 @@ class MavenProvider:
     # fetch_release
     # ------------------------------------------------------------------
 
-    async def fetch_release(
-        self, package: str, old_version: str, version: str
-    ) -> ReleaseSignals:
+    async def fetch_release(self, package: str, old_version: str, version: str) -> ReleaseSignals:
         import os
+
         token = os.environ.get("GITHUB_TOKEN")
         group_id, artifact_id = self._parse(package)
 
@@ -237,13 +232,18 @@ class MavenProvider:
             return ReleaseSignals()
 
         pom = _parse_pom(new_pom_resp.text)
-        owner_repo = parse_github_repo(pom.get("scm_url", ""))
-        if not owner_repo:
+        vcs = parse_vcs_repo(pom.get("scm_url", ""))
+        if not vcs:
             return ReleaseSignals()
+        platform, owner_repo = vcs
 
         # Registry publish timestamp for skew calculation
         registry_time: datetime | None = None
-        docs = search_resp.json().get("response", {}).get("docs", []) if search_resp.status_code == 200 else []
+        docs = (
+            search_resp.json().get("response", {}).get("docs", [])
+            if search_resp.status_code == 200
+            else []
+        )
         if docs:
             ts_ms = docs[0].get("timestamp")
             if ts_ms is not None:
@@ -251,9 +251,9 @@ class MavenProvider:
 
         owner, repo = owner_repo.split("/", 1)
         release, new_sig, old_sig = await asyncio.gather(
-            fetch_github_release(owner, repo, version, token),
-            fetch_tag_signature(owner, repo, version, token),
-            fetch_tag_signature(owner, repo, old_version, token),
+            fetch_vcs_release(platform, owner, repo, version, token),
+            fetch_vcs_tag_signature(platform, owner, repo, version, token),
+            fetch_vcs_tag_signature(platform, owner, repo, old_version, token),
         )
         if release:
             return build_release_signals(release, registry_time, new_sig, old_sig).model_copy(
@@ -266,6 +266,7 @@ class MavenProvider:
 # POM parsing helpers
 # ---------------------------------------------------------------------------
 
+
 def _parse_pom(xml_text: str) -> dict:
     """Extract description, SCM URL, and developer list from a Maven POM.
 
@@ -274,6 +275,7 @@ def _parse_pom(xml_text: str) -> dict:
     """
     try:
         import re
+
         clean = re.sub(r'\s+xmlns(?::\w+)?="[^"]*"', "", xml_text)
         root = ET.fromstring(clean)
 
@@ -281,15 +283,11 @@ def _parse_pom(xml_text: str) -> dict:
         if description:
             description = description.strip()[:500] or None
 
-        scm_url = (
-            root.findtext("scm/url")
-            or root.findtext("url")
-            or ""
-        ).strip()
+        scm_url = (root.findtext("scm/url") or root.findtext("url") or "").strip()
 
         developers: set[str] = set()
         for dev in root.findall(".//developer"):
-            name  = (dev.findtext("name")  or "").lower().strip()
+            name = (dev.findtext("name") or "").lower().strip()
             email = (dev.findtext("email") or "").lower().strip()
             if name:
                 developers.add(name)

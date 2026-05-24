@@ -1,13 +1,20 @@
 import pytest
 from helpers.comment_formatter import format_comment, _sanitize_reasoning
 from activities.models import (
-    PRContext, PackageSignals, Verdict,
-    PyPISignals, SocketSignals, OSVSignals, DiffSignals,
-    ReleaseAgeSignals, MaintainerSignals,
+    PRContext,
+    PackageSignals,
+    Verdict,
+    PyPISignals,
+    SocketSignals,
+    OSVSignals,
+    DiffSignals,
+    ReleaseAgeSignals,
+    MaintainerSignals,
 )
 
 
 # --- _sanitize_reasoning ---
+
 
 def test_sanitize_strips_markdown_links():
     assert _sanitize_reasoning("see [evil text](https://evil.com)") == "see evil text"
@@ -35,6 +42,7 @@ def test_sanitize_passthrough_clean():
 
 
 # --- format_comment badges ---
+
 
 @pytest.fixture
 def pr():
@@ -103,12 +111,14 @@ def test_unknown_classification_falls_back_to_upper(pr):
 
 # --- confidence formatting ---
 
+
 def test_confidence_rendered_as_percentage(pr, green_verdict):
     out = format_comment(pr, green_verdict)
     assert "**Confidence:** 95%" in out
 
 
 # --- flags section ---
+
 
 def test_no_flags_section_when_empty(pr, green_verdict):
     out = format_comment(pr, green_verdict)
@@ -130,7 +140,9 @@ def test_flags_rendered_when_present(pr):
 
 def test_yellow_many_flags_folds_tail(pr):
     flags = ["flag one", "flag two", "flag three", "flag four", "flag five"]
-    verdict = Verdict(classification="yellow", confidence=0.6, reasoning="Several issues.", flags=flags)
+    verdict = Verdict(
+        classification="yellow", confidence=0.6, reasoning="Several issues.", flags=flags
+    )
     out = format_comment(pr, verdict)
     assert "- flag one" in out
     assert "- flag two" in out
@@ -143,7 +155,9 @@ def test_yellow_many_flags_folds_tail(pr):
 
 def test_yellow_three_flags_not_folded(pr):
     flags = ["a", "b", "c"]
-    verdict = Verdict(classification="yellow", confidence=0.6, reasoning="Three issues.", flags=flags)
+    verdict = Verdict(
+        classification="yellow", confidence=0.6, reasoning="Three issues.", flags=flags
+    )
     out = format_comment(pr, verdict)
     assert "<details>" not in out
     assert "- a" in out
@@ -180,6 +194,7 @@ def test_flags_are_sanitized(pr):
 
 
 # --- signals table ---
+
 
 def test_no_signals_table_without_signals(pr, green_verdict):
     out = format_comment(pr, green_verdict)
@@ -255,11 +270,14 @@ def test_signals_diff_size_formatted(pr, green_verdict, signals):
 
 # --- URL generation ---
 
+
 def test_workflow_url_uses_env_vars(pr, green_verdict, monkeypatch):
     monkeypatch.setenv("TEMPORAL_UI_BASE_URL", "https://cloud.temporal.io")
     monkeypatch.setenv("TEMPORAL_NAMESPACE", "acme-prod")
     out = format_comment(pr, green_verdict)
-    assert "https://cloud.temporal.io/namespaces/acme-prod/workflows/triage-pip-requests-2.32.0" in out
+    assert (
+        "https://cloud.temporal.io/namespaces/acme-prod/workflows/triage-pip-requests-2.32.0" in out
+    )
 
 
 def test_workflow_url_defaults(pr, green_verdict, monkeypatch):
@@ -275,6 +293,7 @@ def test_config_url_points_to_repo(pr, green_verdict):
 
 
 # --- reasoning is sanitized in output ---
+
 
 def test_reasoning_links_stripped_in_output(pr):
     verdict = Verdict(

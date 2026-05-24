@@ -11,15 +11,21 @@ from temporalio.exceptions import ApplicationError
 
 from activities.ecosystems import (
     build_release_signals,
-    fetch_github_account_age,
-    fetch_github_release,
-    fetch_tag_signature,
+    fetch_vcs_account_age,
+    fetch_vcs_release,
+    fetch_vcs_tag_signature,
     is_major,
-    parse_github_repo,
+    parse_vcs_repo,
     parse_upload_time,
     validate_archive_url,
 )
-from activities.models import AttestationSignals, MaintainerSignals, PyPISignals, ReleaseAgeSignals, ReleaseSignals
+from activities.models import (
+    AttestationSignals,
+    MaintainerSignals,
+    PyPISignals,
+    ReleaseAgeSignals,
+    ReleaseSignals,
+)
 
 
 class NpmProvider:
@@ -32,9 +38,7 @@ class NpmProvider:
     # fetch_metadata
     # ------------------------------------------------------------------
 
-    async def fetch_metadata(
-        self, package: str, old_version: str, new_version: str
-    ) -> PyPISignals:
+    async def fetch_metadata(self, package: str, old_version: str, new_version: str) -> PyPISignals:
         async with httpx.AsyncClient(timeout=15.0) as client:
             resp = await client.get(f"https://registry.npmjs.org/{package}/{new_version}")
             if resp.status_code == 404:
@@ -145,11 +149,9 @@ class NpmProvider:
         age_days = None
         if new_pub.get("repo"):
             owner = new_pub["repo"].split("/")[0]
-            age_days = await fetch_github_account_age(owner)
+            age_days = await fetch_vcs_account_age("github", owner)
 
-        publisher_changed = (
-            old_pub is not None and old_pub.get("repo") != new_pub.get("repo")
-        )
+        publisher_changed = old_pub is not None and old_pub.get("repo") != new_pub.get("repo")
         return AttestationSignals(
             has_attestation=True,
             publisher_kind=new_pub.get("kind"),
@@ -169,6 +171,7 @@ class NpmProvider:
 
     async def fetch_release(self, package: str, old_version: str, version: str) -> ReleaseSignals:
         import os
+
         token = os.environ.get("GITHUB_TOKEN")
         async with httpx.AsyncClient(timeout=15.0) as client:
             v_resp, pkg_resp = await asyncio.gather(
@@ -191,9 +194,10 @@ class NpmProvider:
             if len(parts) == 2 and all(re.match(r"^[A-Za-z0-9_.-]+$", p) for p in parts if p):
                 source_url = "https://github.com/" + source_url
 
-        owner_repo = parse_github_repo(source_url)
-        if not owner_repo:
+        vcs = parse_vcs_repo(source_url)
+        if not vcs:
             return ReleaseSignals()
+        platform, owner_repo = vcs
 
         # Registry timestamp for skew calculation
         registry_time = None
@@ -207,9 +211,9 @@ class NpmProvider:
 
         owner, repo = owner_repo.split("/", 1)
         release, new_sig, old_sig = await asyncio.gather(
-            fetch_github_release(owner, repo, version, token),
-            fetch_tag_signature(owner, repo, version, token),
-            fetch_tag_signature(owner, repo, old_version, token),
+            fetch_vcs_release(platform, owner, repo, version, token),
+            fetch_vcs_tag_signature(platform, owner, repo, version, token),
+            fetch_vcs_tag_signature(platform, owner, repo, old_version, token),
         )
         if release:
             return build_release_signals(release, registry_time, new_sig, old_sig).model_copy(
@@ -227,6 +231,7 @@ class NpmProvider:
 # Private helpers
 # ---------------------------------------------------------------------------
 
+
 async def _fetch_weekly_downloads(client: httpx.AsyncClient, package: str) -> int | None:
     try:
         resp = await client.get(f"https://api.npmjs.org/downloads/point/last-week/{package}")
@@ -237,9 +242,7 @@ async def _fetch_weekly_downloads(client: httpx.AsyncClient, package: str) -> in
     return None
 
 
-async def _fetch_version(
-    client: httpx.AsyncClient, package: str, version: str
-) -> dict | None:
+async def _fetch_version(client: httpx.AsyncClient, package: str, version: str) -> dict | None:
     try:
         resp = await client.get(f"https://registry.npmjs.org/{package}/{version}")
         if resp.status_code == 200:
@@ -294,7 +297,7 @@ async def _fetch_npm_publisher(
                 kind = "GitHub" if "github.com" in repo_url.lower() else "unknown"
                 # Normalize "https://github.com/owner/repo" → "owner/repo"
                 if repo_url.startswith("https://github.com/"):
-                    repo_url = repo_url[len("https://github.com/"):]
+                    repo_url = repo_url[len("https://github.com/") :]
                 resolved = build_def.get("resolvedDependencies", [])
                 commit_sha = resolved[0].get("digest", {}).get("gitCommit") if resolved else None
                 return {
@@ -307,6 +310,12 @@ async def _fetch_npm_publisher(
                     ),
                 }
         # Endpoint returned 200 but no parseable provenance predicate
-        return {"kind": None, "repo": None, "source_ref": None, "source_commit_sha": None, "build_invocation_id": None}
+        return {
+            "kind": None,
+            "repo": None,
+            "source_ref": None,
+            "source_commit_sha": None,
+            "build_invocation_id": None,
+        }
     except Exception:
         return None

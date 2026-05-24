@@ -1,4 +1,5 @@
 """Shared test helpers — plain functions, not pytest fixtures."""
+
 from __future__ import annotations
 
 import io

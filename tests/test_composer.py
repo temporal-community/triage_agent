@@ -2,6 +2,7 @@
 Unit tests for the Composer (Packagist) ecosystem provider.
 HTTP calls mocked with respx; Temporal context via ActivityEnvironment.
 """
+
 from __future__ import annotations
 
 import io
@@ -22,6 +23,7 @@ _CODELOAD = "https://codeload.github.com"
 # ---------------------------------------------------------------------------
 # Packagist response helpers
 # ---------------------------------------------------------------------------
+
 
 def _pkg_response(
     vendor: str = "example",
@@ -85,12 +87,20 @@ def _two_version_pkg(
             "downloads": {"monthly": 400_000},
             "versions": {
                 "v1.0.0": {
-                    "name": f"{vendor}/{name}", "version": "v1.0.0", "time": old_time,
-                    "source": source, "authors": old_authors, "require": {},
+                    "name": f"{vendor}/{name}",
+                    "version": "v1.0.0",
+                    "time": old_time,
+                    "source": source,
+                    "authors": old_authors,
+                    "require": {},
                 },
                 "v2.0.0": {
-                    "name": f"{vendor}/{name}", "version": "v2.0.0", "time": new_time,
-                    "source": source, "authors": new_authors, "require": {},
+                    "name": f"{vendor}/{name}",
+                    "version": "v2.0.0",
+                    "time": new_time,
+                    "source": source,
+                    "authors": new_authors,
+                    "require": {},
                 },
             },
         }
@@ -100,6 +110,7 @@ def _two_version_pkg(
 # ---------------------------------------------------------------------------
 # ComposerProvider._parse
 # ---------------------------------------------------------------------------
+
 
 def test_parse_valid():
     p = ComposerProvider()
@@ -124,12 +135,13 @@ def test_find_version_bare():
 # fetch_metadata
 # ---------------------------------------------------------------------------
 
+
 @respx.mock
 async def test_fetch_metadata_success():
     respx.get(f"{_PACKAGIST}/packages/laravel/framework.json").mock(
-        return_value=httpx.Response(200, json=_pkg_response(
-            vendor="laravel", name="framework", monthly_downloads=4_000_000
-        ))
+        return_value=httpx.Response(
+            200, json=_pkg_response(vendor="laravel", name="framework", monthly_downloads=4_000_000)
+        )
     )
     env = ActivityEnvironment()
     result = await env.run(
@@ -146,9 +158,7 @@ async def test_fetch_metadata_major_bump():
         return_value=httpx.Response(200, json=_pkg_response())
     )
     env = ActivityEnvironment()
-    result = await env.run(
-        ComposerProvider().fetch_metadata, "example/mypackage", "1.9.0", "2.0.0"
-    )
+    result = await env.run(ComposerProvider().fetch_metadata, "example/mypackage", "1.9.0", "2.0.0")
     assert result.is_major_bump is True
 
 
@@ -160,22 +170,16 @@ async def test_fetch_metadata_no_downloads():
         return_value=httpx.Response(200, json=pkg)
     )
     env = ActivityEnvironment()
-    result = await env.run(
-        ComposerProvider().fetch_metadata, "example/mypackage", "1.0.0", "1.1.0"
-    )
+    result = await env.run(ComposerProvider().fetch_metadata, "example/mypackage", "1.0.0", "1.1.0")
     assert result.weekly_downloads is None
 
 
 @respx.mock
 async def test_fetch_metadata_404():
-    respx.get(f"{_PACKAGIST}/packages/ghost/package.json").mock(
-        return_value=httpx.Response(404)
-    )
+    respx.get(f"{_PACKAGIST}/packages/ghost/package.json").mock(return_value=httpx.Response(404))
     env = ActivityEnvironment()
     with pytest.raises(ApplicationError) as exc_info:
-        await env.run(
-            ComposerProvider().fetch_metadata, "ghost/package", "1.0.0", "1.1.0"
-        )
+        await env.run(ComposerProvider().fetch_metadata, "ghost/package", "1.0.0", "1.1.0")
     assert exc_info.value.non_retryable is True
 
 
@@ -183,21 +187,31 @@ async def test_fetch_metadata_404():
 # fetch_release_age
 # ---------------------------------------------------------------------------
 
+
 @respx.mock
 async def test_fetch_release_age_success():
     hours_ago = 48
     ts = time.time() - hours_ago * 3600
     from datetime import datetime, timezone
+
     dt = datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S+00:00")
 
-    pkg = _pkg_response(versions={
-        "v1.2.3": {
-            "name": "example/mypackage", "version": "v1.2.3",
-            "time": dt,
-            "source": {"type": "git", "url": "https://github.com/example/mypackage.git", "reference": "abc"},
-            "authors": [{"name": "Alice"}], "require": {},
+    pkg = _pkg_response(
+        versions={
+            "v1.2.3": {
+                "name": "example/mypackage",
+                "version": "v1.2.3",
+                "time": dt,
+                "source": {
+                    "type": "git",
+                    "url": "https://github.com/example/mypackage.git",
+                    "reference": "abc",
+                },
+                "authors": [{"name": "Alice"}],
+                "require": {},
+            }
         }
-    })
+    )
     respx.get(f"{_PACKAGIST}/packages/example/mypackage.json").mock(
         return_value=httpx.Response(200, json=pkg)
     )
@@ -230,6 +244,7 @@ async def test_fetch_release_age_api_error():
 # ---------------------------------------------------------------------------
 # fetch_maintainer
 # ---------------------------------------------------------------------------
+
 
 @respx.mock
 async def test_fetch_maintainer_unchanged():
@@ -276,6 +291,7 @@ async def test_fetch_maintainer_empty_authors():
 # fetch_attestations
 # ---------------------------------------------------------------------------
 
+
 async def test_fetch_attestations_returns_empty():
     env = ActivityEnvironment()
     result = await env.run(
@@ -287,6 +303,7 @@ async def test_fetch_attestations_returns_empty():
 # ---------------------------------------------------------------------------
 # extract_archive
 # ---------------------------------------------------------------------------
+
 
 def test_extract_archive():
     import tempfile
@@ -307,6 +324,7 @@ def test_extract_archive():
 # ---------------------------------------------------------------------------
 # get_archive_url
 # ---------------------------------------------------------------------------
+
 
 @respx.mock
 async def test_get_archive_url_vtag():
@@ -355,7 +373,9 @@ async def test_get_archive_url_bare_tag_fallback():
 async def test_get_archive_url_no_github_source():
     pkg = _pkg_response()
     # Replace source URL with a non-GitHub one
-    pkg["package"]["versions"]["v1.0.0"]["source"]["url"] = "https://bitbucket.org/example/mypackage.git"
+    pkg["package"]["versions"]["v1.0.0"]["source"]["url"] = (
+        "https://bitbucket.org/example/mypackage.git"
+    )
     respx.get(f"{_PACKAGIST}/packages/example/mypackage.json").mock(
         return_value=httpx.Response(200, json=pkg)
     )
@@ -389,8 +409,10 @@ async def test_get_archive_url_both_tags_404():
 # pr_parser — composer ecosystem detection
 # ---------------------------------------------------------------------------
 
+
 def test_pr_parser_composer_from_branch():
     from helpers.pr_parser import parse_pr
+
     result = parse_pr(
         "Bump laravel/framework from 10.0.0 to 10.1.0",
         branch="dependabot/composer/laravel/framework-10.1.0",
@@ -404,6 +426,7 @@ def test_pr_parser_composer_from_branch():
 
 def test_pr_parser_composer_symfony():
     from helpers.pr_parser import parse_pr
+
     result = parse_pr(
         "Bump symfony/console from 6.3.0 to 6.4.0",
         branch="dependabot/composer/symfony/console-6.4.0",
@@ -417,20 +440,24 @@ def test_pr_parser_composer_symfony():
 # webhook validation — composer name regex
 # ---------------------------------------------------------------------------
 
+
 def test_webhook_validates_composer_name():
     from api.webhook import _validate_parsed_package
+
     assert _validate_parsed_package("composer", "laravel/framework", "10.0.0", "10.1.0") is None
     assert _validate_parsed_package("composer", "symfony/console", "6.3.0", "6.4.0") is None
 
 
 def test_webhook_rejects_composer_no_slash():
     from api.webhook import _validate_parsed_package
+
     err = _validate_parsed_package("composer", "novendor", "1.0", "2.0")
     assert err is not None
 
 
 def test_webhook_rejects_composer_path_traversal():
     from api.webhook import _validate_parsed_package
+
     err = _validate_parsed_package("composer", "evil/../etc/passwd", "1.0", "2.0")
     assert err is not None
 
@@ -439,14 +466,17 @@ def test_webhook_rejects_composer_path_traversal():
 # version_lineage — composer
 # ---------------------------------------------------------------------------
 
+
 @respx.mock
 async def test_version_lineage_composer_stale():
     from activities.version_lineage import check as lineage_check
+
     now = time.time()
     one_year = 365 * 24 * 3600
 
     def _t(ago_secs: float) -> str:
         from datetime import datetime, timezone
+
         dt = datetime.fromtimestamp(now - ago_secs, tz=timezone.utc)
         return dt.strftime("%Y-%m-%dT%H:%M:%S+00:00")
 
@@ -471,10 +501,12 @@ async def test_version_lineage_composer_stale():
 @respx.mock
 async def test_version_lineage_composer_current():
     from activities.version_lineage import check as lineage_check
+
     now = time.time()
 
     def _t(ago_secs: float) -> str:
         from datetime import datetime, timezone
+
         dt = datetime.fromtimestamp(now - ago_secs, tz=timezone.utc)
         return dt.strftime("%Y-%m-%dT%H:%M:%S+00:00")
 
@@ -497,10 +529,12 @@ async def test_version_lineage_composer_current():
 @respx.mock
 async def test_version_lineage_composer_filters_dev_branches():
     from activities.version_lineage import check as lineage_check
+
     now = time.time()
 
     def _t(ago_secs: float) -> str:
         from datetime import datetime, timezone
+
         dt = datetime.fromtimestamp(now - ago_secs, tz=timezone.utc)
         return dt.strftime("%Y-%m-%dT%H:%M:%S+00:00")
 

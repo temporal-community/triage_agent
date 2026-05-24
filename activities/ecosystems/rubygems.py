@@ -11,14 +11,20 @@ from temporalio.exceptions import ApplicationError
 
 from activities.ecosystems import (
     build_release_signals,
-    fetch_github_release,
-    fetch_tag_signature,
+    fetch_vcs_release,
+    fetch_vcs_tag_signature,
     is_major,
-    parse_github_repo,
+    parse_vcs_repo,
     parse_upload_time,
     validate_archive_url,
 )
-from activities.models import AttestationSignals, MaintainerSignals, PyPISignals, ReleaseAgeSignals, ReleaseSignals
+from activities.models import (
+    AttestationSignals,
+    MaintainerSignals,
+    PyPISignals,
+    ReleaseAgeSignals,
+    ReleaseSignals,
+)
 
 
 class RubyGemsProvider:
@@ -31,9 +37,7 @@ class RubyGemsProvider:
     # fetch_metadata
     # ------------------------------------------------------------------
 
-    async def fetch_metadata(
-        self, package: str, old_version: str, new_version: str
-    ) -> PyPISignals:
+    async def fetch_metadata(self, package: str, old_version: str, new_version: str) -> PyPISignals:
         async with httpx.AsyncClient(timeout=15.0) as client:
             gem_resp, dl_resp = await asyncio.gather(
                 client.get(f"https://rubygems.org/api/v1/gems/{package}.json"),
@@ -159,6 +163,7 @@ class RubyGemsProvider:
 
     async def fetch_release(self, package: str, old_version: str, version: str) -> ReleaseSignals:
         import os
+
         token = os.environ.get("GITHUB_TOKEN")
         async with httpx.AsyncClient(timeout=15.0) as client:
             gem_resp, versions_resp = await asyncio.gather(
@@ -171,9 +176,10 @@ class RubyGemsProvider:
         gem_data = gem_resp.json()
 
         source_url = gem_data.get("source_code_uri") or gem_data.get("homepage_uri") or ""
-        owner_repo = parse_github_repo(source_url)
-        if not owner_repo:
+        vcs = parse_vcs_repo(source_url)
+        if not vcs:
             return ReleaseSignals()
+        platform, owner_repo = vcs
 
         # Registry timestamp for skew calculation
         registry_time = None
@@ -190,9 +196,9 @@ class RubyGemsProvider:
 
         owner, repo = owner_repo.split("/", 1)
         release, new_sig, old_sig = await asyncio.gather(
-            fetch_github_release(owner, repo, version, token),
-            fetch_tag_signature(owner, repo, version, token),
-            fetch_tag_signature(owner, repo, old_version, token),
+            fetch_vcs_release(platform, owner, repo, version, token),
+            fetch_vcs_tag_signature(platform, owner, repo, version, token),
+            fetch_vcs_tag_signature(platform, owner, repo, old_version, token),
         )
         if release:
             return build_release_signals(release, registry_time, new_sig, old_sig).model_copy(
@@ -204,9 +210,7 @@ class RubyGemsProvider:
         """Extract a RubyGems .gem file (outer tar → data.tar.gz → source tree)."""
         buf = io.BytesIO(archive_bytes)
         with tarfile.open(fileobj=buf) as outer:
-            data_member = next(
-                (m for m in outer.getmembers() if m.name == "data.tar.gz"), None
-            )
+            data_member = next((m for m in outer.getmembers() if m.name == "data.tar.gz"), None)
             if data_member is None:
                 raise ValueError("No data.tar.gz found in .gem archive")
             data_fobj = outer.extractfile(data_member)
@@ -222,6 +226,7 @@ class RubyGemsProvider:
 # Private helpers
 # ---------------------------------------------------------------------------
 
+
 def _author_set(version_data: dict) -> set[str]:
     # "authors" is a comma-separated string like "Alice, Bob"
     raw = (version_data.get("authors") or "").lower()
@@ -236,8 +241,8 @@ async def _fetch_weekly_downloads(client: httpx.AsyncClient, package: str) -> in
     Falls back to None on any error so the rest of metadata fetch is unaffected.
     """
     try:
-        to_date = date.today() - timedelta(days=1)   # yesterday (most recent complete day)
-        from_date = to_date - timedelta(days=6)       # 7 days total
+        to_date = date.today() - timedelta(days=1)  # yesterday (most recent complete day)
+        from_date = to_date - timedelta(days=6)  # 7 days total
         resp = await client.get(
             "https://rubygems.org/api/v1/downloads/search.json",
             params={

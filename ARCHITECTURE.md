@@ -78,6 +78,25 @@ Eleven activities run in parallel. Each is independently retried if its upstream
 | Repo health | [OpenSSF Scorecard](https://securityscorecards.dev) | Upstream repo's development practices: CI workflow safety, token permissions, branch protection, maintenance status |
 | Unexpected PR files | GitHub PR files API | CI scripts, Dockerfiles, or shell scripts in what should be a routine dep-bump |
 
+### Per-ecosystem signal coverage
+
+Most signals work for every ecosystem. The table below covers only the ones where support varies. Blank = not available from the upstream registry.
+
+| Ecosystem | Weekly downloads | Attestation (SLSA) | Maintainer change |
+|---|---|---|---|
+| pip | ✅ pypistats.org | ✅ PEP 740 / Sigstore | ✅ author fields |
+| npm | ✅ npm downloads API | ✅ SLSA provenance | ✅ maintainers list |
+| RubyGems | ✅ daily-stats API | — | ✅ authors field |
+| Maven | — (no public weekly API) | — | ✅ developer list |
+| NuGet | — (lifetime total only) | — | ✅ owners field |
+| Cargo | ✅ crates.io recent downloads | — | ✅ owners API |
+| Go | — (proxy exposes none) | — | — (module path is the authority; ownership changes change the path) |
+| Composer | ✅ Packagist | — | ✅ authors field |
+
+**Universal signals** (all ecosystems): OSV vulnerabilities · Socket score · Release age · Package diff · Deps.dev deprecation · OpenSSF Scorecard · Release notes (when GitHub URL is in package metadata) · Version lineage · Unexpected PR files.
+
+Attestation coverage is intentionally narrow: only PyPI (PEP 740) and npm have published signing infrastructure. RubyGems, Cargo, and others are tracked — the provider stub returns `has_attestation=False` today and will be wired up as each ecosystem ships its attestation spec.
+
 ---
 
 ## Deep dives

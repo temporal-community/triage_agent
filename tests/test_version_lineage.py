@@ -1,4 +1,5 @@
 """Tests for version lineage signal: detect patches to abandoned major version lines."""
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
@@ -11,7 +12,9 @@ from temporalio.testing import ActivityEnvironment
 from activities.ecosystems import detect_stale_version_line
 from activities.version_lineage import check as lineage_check
 from activities.models import (
-    VersionLineSignals, PackageSignals, ReleaseAgeSignals,
+    VersionLineSignals,
+    PackageSignals,
+    ReleaseAgeSignals,
 )
 
 PYPI_BASE = "https://pypi.org/pypi"
@@ -27,6 +30,7 @@ _OLD = (_NOW - timedelta(days=1000)).isoformat()
 # detect_stale_version_line — pure unit tests
 # ---------------------------------------------------------------------------
 
+
 def test_stale_when_older_major_bumped_and_newer_active():
     result = detect_stale_version_line(
         ["0.9.0", "0.9.1", "1.0.0", "1.0.1", "1.1.0"],
@@ -36,7 +40,7 @@ def test_stale_when_older_major_bumped_and_newer_active():
             "0.9.1": _NOW - timedelta(days=700),
             "1.0.0": _NOW - timedelta(days=500),
             "1.0.1": _NOW - timedelta(days=400),
-            "1.1.0": _NOW - timedelta(days=30),   # latest major recently active
+            "1.1.0": _NOW - timedelta(days=30),  # latest major recently active
         },
     )
     assert result.stale_version_line is True
@@ -121,6 +125,7 @@ def test_v_prefix_versions_parsed():
 # Activity tests — PyPI
 # ---------------------------------------------------------------------------
 
+
 def _pypi_releases_json(versions_with_dates: dict[str, str]) -> dict:
     releases = {}
     for version, ts in versions_with_dates.items():
@@ -131,12 +136,17 @@ def _pypi_releases_json(versions_with_dates: dict[str, str]) -> dict:
 @respx.mock
 async def test_pypi_stale_version_line_detected():
     respx.get(f"{PYPI_BASE}/pkg/json").mock(
-        return_value=httpx.Response(200, json=_pypi_releases_json({
-            "0.9.0": _OLD,
-            "0.9.1": _OLD,
-            "1.0.0": _RECENT,
-            "1.1.0": _RECENT,
-        }))
+        return_value=httpx.Response(
+            200,
+            json=_pypi_releases_json(
+                {
+                    "0.9.0": _OLD,
+                    "0.9.1": _OLD,
+                    "1.0.0": _RECENT,
+                    "1.1.0": _RECENT,
+                }
+            ),
+        )
     )
     env = ActivityEnvironment()
     result = await env.run(lineage_check, "pip", "pkg", "0.9.0", "0.9.2")
@@ -148,10 +158,15 @@ async def test_pypi_stale_version_line_detected():
 @respx.mock
 async def test_pypi_no_stale_line_when_patching_latest():
     respx.get(f"{PYPI_BASE}/requests/json").mock(
-        return_value=httpx.Response(200, json=_pypi_releases_json({
-            "2.31.0": _OLD,
-            "2.32.0": _RECENT,
-        }))
+        return_value=httpx.Response(
+            200,
+            json=_pypi_releases_json(
+                {
+                    "2.31.0": _OLD,
+                    "2.32.0": _RECENT,
+                }
+            ),
+        )
     )
     env = ActivityEnvironment()
     result = await env.run(lineage_check, "pip", "requests", "2.31.0", "2.32.0")
@@ -161,6 +176,7 @@ async def test_pypi_no_stale_line_when_patching_latest():
 @respx.mock
 async def test_pypi_404_raises_non_retryable():
     from temporalio.exceptions import ApplicationError
+
     respx.get(f"{PYPI_BASE}/nosuchpkg/json").mock(return_value=httpx.Response(404))
     env = ActivityEnvironment()
     with pytest.raises(ApplicationError) as exc_info:
@@ -172,6 +188,7 @@ async def test_pypi_404_raises_non_retryable():
 # Activity tests — npm
 # ---------------------------------------------------------------------------
 
+
 def _npm_pkg_json(versions_with_dates: dict[str, str]) -> dict:
     time_map = {"created": _OLD, "modified": _RECENT}
     time_map.update(versions_with_dates)
@@ -181,11 +198,16 @@ def _npm_pkg_json(versions_with_dates: dict[str, str]) -> dict:
 @respx.mock
 async def test_npm_stale_version_line_detected():
     respx.get(f"{NPM_BASE}/mypkg").mock(
-        return_value=httpx.Response(200, json=_npm_pkg_json({
-            "0.1.0": _OLD,
-            "1.0.0": _RECENT,
-            "1.1.0": _RECENT,
-        }))
+        return_value=httpx.Response(
+            200,
+            json=_npm_pkg_json(
+                {
+                    "0.1.0": _OLD,
+                    "1.0.0": _RECENT,
+                    "1.1.0": _RECENT,
+                }
+            ),
+        )
     )
     env = ActivityEnvironment()
     result = await env.run(lineage_check, "npm", "mypkg", "0.1.0", "0.1.1")
@@ -198,6 +220,7 @@ async def test_npm_stale_version_line_detected():
 # Activity tests — RubyGems
 # ---------------------------------------------------------------------------
 
+
 def _rubygems_versions_json(versions_with_dates: dict[str, str]) -> list[dict]:
     return [{"number": v, "created_at": ts} for v, ts in versions_with_dates.items()]
 
@@ -205,10 +228,15 @@ def _rubygems_versions_json(versions_with_dates: dict[str, str]) -> list[dict]:
 @respx.mock
 async def test_rubygems_stale_version_line_detected():
     respx.get(f"{RUBYGEMS_VER}/mygem.json").mock(
-        return_value=httpx.Response(200, json=_rubygems_versions_json({
-            "0.5.0": _OLD,
-            "1.0.0": _RECENT,
-        }))
+        return_value=httpx.Response(
+            200,
+            json=_rubygems_versions_json(
+                {
+                    "0.5.0": _OLD,
+                    "1.0.0": _RECENT,
+                }
+            ),
+        )
     )
     env = ActivityEnvironment()
     result = await env.run(lineage_check, "rubygems", "mygem", "0.5.0", "0.5.1")
@@ -218,6 +246,7 @@ async def test_rubygems_stale_version_line_detected():
 # ---------------------------------------------------------------------------
 # Classifier rule
 # ---------------------------------------------------------------------------
+
 
 def test_rule_based_stale_version_line_is_yellow():
     from activities.classifier import _rule_based

@@ -8,6 +8,7 @@ To add a new ecosystem:
   3. Add the branch slug to helpers/pr_parser.py's _DEPENDABOT_ECOSYSTEM_MAP
   4. Add a name-validation regex entry in api/webhook.py's _NAME_RE_BY_ECOSYSTEM
 """
+
 from __future__ import annotations
 
 import importlib
@@ -42,16 +43,14 @@ MAX_EXTRACT_BYTES = 100 * 1024 * 1024  # zip bomb guard
 class EcosystemProvider(Protocol):
     ecosystem_name: str
     osv_name: str
-    dependabot_slug: str   # Dependabot's internal branch prefix, e.g. "npm_and_yarn"
-    name_re: re.Pattern    # package name validation regex for the webhook allowlist
+    dependabot_slug: str  # Dependabot's internal branch prefix, e.g. "npm_and_yarn"
+    name_re: re.Pattern  # package name validation regex for the webhook allowlist
 
     async def fetch_metadata(
         self, package: str, old_version: str, new_version: str
     ) -> PyPISignals: ...
 
-    async def fetch_release_age(
-        self, package: str, new_version: str
-    ) -> ReleaseAgeSignals: ...
+    async def fetch_release_age(self, package: str, new_version: str) -> ReleaseAgeSignals: ...
 
     async def fetch_maintainer(
         self, package: str, old_version: str, new_version: str
@@ -88,6 +87,7 @@ def _build_provider_registry() -> dict[str, EcosystemProvider]:
     Built-in providers take precedence over plugins with the same ecosystem_name.
     """
     import activities.ecosystems as _pkg
+
     registry: dict[str, EcosystemProvider] = {}
 
     for mod_info in pkgutil.iter_modules(_pkg.__path__, prefix="activities.ecosystems."):
@@ -99,6 +99,7 @@ def _build_provider_registry() -> dict[str, EcosystemProvider]:
 
     try:
         from importlib.metadata import entry_points
+
         for ep in entry_points(group="triage_agent.ecosystems"):
             try:
                 cls = ep.load()
@@ -143,16 +144,18 @@ def get_name_re(ecosystem: str) -> re.Pattern | None:
 # Shared utilities used by multiple providers
 # ---------------------------------------------------------------------------
 
-ALLOWED_CDN_HOSTS: frozenset[str] = frozenset({
-    "files.pythonhosted.org",
-    "registry.npmjs.org",
-    "rubygems.org",
-    "repo1.maven.org",
-    "codeload.github.com",   # Composer archives — GitHub's archive CDN (no redirect)
-    "api.nuget.org",
-    "static.crates.io",
-    "proxy.golang.org",
-})
+ALLOWED_CDN_HOSTS: frozenset[str] = frozenset(
+    {
+        "files.pythonhosted.org",
+        "registry.npmjs.org",
+        "rubygems.org",
+        "repo1.maven.org",
+        "codeload.github.com",  # Composer archives — GitHub's archive CDN (no redirect)
+        "api.nuget.org",
+        "static.crates.io",
+        "proxy.golang.org",
+    }
+)
 
 
 def validate_archive_url(url: str) -> None:
@@ -177,9 +180,7 @@ def is_major(old: str, new: str) -> bool:
         return False
 
 
-_PRE_RE = _re.compile(
-    r"(a|b|rc|alpha|beta|dev|pre|preview|post)[\d]*$", _re.IGNORECASE
-)
+_PRE_RE = _re.compile(r"(a|b|rc|alpha|beta|dev|pre|preview|post)[\d]*$", _re.IGNORECASE)
 
 
 def detect_stale_version_line(
@@ -196,6 +197,7 @@ def detect_stale_version_line(
     release_dates maps version string → datetime (UTC) for the *cutoff_days* check.
     If omitted, only the version numbers are used (no recency check — more conservative).
     """
+
     def _major(v: str) -> int | None:
         part = v.lstrip("vV").split(".")[0]
         return int(part) if part.isdigit() else None
@@ -243,17 +245,44 @@ def parse_upload_time(raw: str) -> datetime:
     return dt
 
 
-_GITHUB_RE = re.compile(
-    r"github\.com[:/]([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+?)(?:\.git)?(?:[/?#]|$)"
-)
+_GITHUB_RE = re.compile(r"github\.com[:/]([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+?)(?:\.git)?(?:[/?#]|$)")
 # npm shorthand: "github:owner/repo" — explicit, unambiguous
-_GITHUB_SHORTHAND_RE = re.compile(
-    r"^github:([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+?)(?:\.git)?$"
-)
+_GITHUB_SHORTHAND_RE = re.compile(r"^github:([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+?)(?:\.git)?$")
+_GITLAB_RE = re.compile(r"gitlab\.com[:/]([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+?)(?:\.git)?(?:[/?#]|$)")
+# Captures owner/repo after any host separator
+_VCS_OWNER_REPO_RE = re.compile(r"[:/]([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+?)(?:\.git)?(?:[/?#]|$)")
+
+
+def parse_vcs_repo(url: str) -> tuple[str, str] | None:
+    """Return (platform, 'owner/repo') for a known platform URL, or None.
+
+    Detected platforms: github, gitlab (gitlab.com and GITLAB_BASE_URL self-hosted).
+    """
+    if not url:
+        return None
+    m = _GITHUB_RE.search(url)
+    if m:
+        return ("github", m.group(1))
+    m = _GITHUB_SHORTHAND_RE.match(url)
+    if m:
+        return ("github", m.group(1))
+    # Self-hosted GitLab (checked before gitlab.com to allow custom domains)
+    custom_base = os.environ.get("GITLAB_BASE_URL", "").rstrip("/")
+    if custom_base and "://" in custom_base:
+        custom_host = custom_base.split("://", 1)[1]
+        if custom_host and custom_host in url:
+            after_host = url.split(custom_host, 1)[1]
+            m = _VCS_OWNER_REPO_RE.match(after_host)
+            if m:
+                return ("gitlab", m.group(1))
+    m = _GITLAB_RE.search(url)
+    if m:
+        return ("gitlab", m.group(1))
+    return None
 
 
 def parse_github_repo(url: str) -> str | None:
-    """Extract 'owner/repo' from any GitHub URL variant, or None."""
+    """Extract 'owner/repo' from any GitHub URL variant, or None. Legacy wrapper."""
     if not url:
         return None
     m = _GITHUB_RE.search(url)
@@ -263,36 +292,80 @@ def parse_github_repo(url: str) -> str | None:
     return m.group(1) if m else None
 
 
-async def fetch_github_release(
-    owner: str, repo: str, version: str, token: str | None
+async def fetch_vcs_release(
+    platform: str, owner: str, repo: str, version: str, token: str | None
 ) -> dict | None:
-    """Return the GitHub release JSON for the given version, trying v-prefixed tag first."""
-    headers: dict[str, str] = {"Accept": "application/vnd.github+json"}
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            for tag in (f"v{version}", version):
-                resp = await client.get(
-                    f"https://api.github.com/repos/{owner}/{repo}/releases/tags/{tag}",
-                    headers=headers,
-                )
-                if resp.status_code == 200:
-                    return resp.json()
-    except Exception:  # noqa: BLE001
-        pass
+    """Return a normalised release dict for the given version, or None.
+
+    Fields are normalised to GitHub shape: created_at, published_at, body, author.login.
+    """
+    if platform == "github":
+        headers: dict[str, str] = {"Accept": "application/vnd.github+json"}
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                for tag in (f"v{version}", version):
+                    resp = await client.get(
+                        f"https://api.github.com/repos/{owner}/{repo}/releases/tags/{tag}",
+                        headers=headers,
+                    )
+                    if resp.status_code == 200:
+                        return resp.json()
+        except Exception:  # noqa: BLE001
+            pass
+        return None
+
+    if platform == "gitlab":
+        import urllib.parse as _urlparse
+
+        base_url = os.environ.get("GITLAB_BASE_URL", "https://gitlab.com").rstrip("/")
+        encoded = _urlparse.quote(f"{owner}/{repo}", safe="")
+        gl_token = token or os.environ.get("GITLAB_TOKEN")
+        headers = {}
+        if gl_token:
+            headers["Authorization"] = f"Bearer {gl_token}"
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                for tag in (f"v{version}", version):
+                    resp = await client.get(
+                        f"{base_url}/api/v4/projects/{encoded}/releases/{_urlparse.quote(tag, safe='')}",
+                        headers=headers,
+                    )
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        # Normalise GitLab release fields to GitHub shape
+                        released_at = data.get("released_at", "")
+                        return {
+                            "created_at": released_at,
+                            "published_at": released_at,
+                            "body": data.get("description", ""),
+                            "author": {"login": (data.get("author") or {}).get("username", "")},
+                        }
+        except Exception:  # noqa: BLE001
+            pass
+        return None
+
     return None
 
 
-async def fetch_tag_signature(
+# Backward-compat alias used by older callers and tests
+async def fetch_github_release(
     owner: str, repo: str, version: str, token: str | None
+) -> dict | None:
+    return await fetch_vcs_release("github", owner, repo, version, token)
+
+
+async def fetch_vcs_tag_signature(
+    platform: str, owner: str, repo: str, version: str, token: str | None
 ) -> bool | None:
     """Return True/False for verified/unverified annotated tag signature, None if absent.
 
-    Lightweight tags cannot carry a signature and always return None.
-    GitHub validates the GPG/SSH signature server-side; the `verified` field
-    reflects whether it trusts the key.
+    GitLab does not expose server-side signature verification — always returns None.
+    For GitHub, lightweight tags cannot carry a signature and also return None.
     """
+    if platform != "github":
+        return None
     headers: dict[str, str] = {"Accept": "application/vnd.github+json"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
@@ -332,13 +405,24 @@ async def fetch_tag_signature(
     return None
 
 
+# Backward-compat alias
+async def fetch_tag_signature(
+    owner: str, repo: str, version: str, token: str | None
+) -> bool | None:
+    return await fetch_vcs_tag_signature("github", owner, repo, version, token)
+
+
 def build_release_signals(
     release: dict,
     registry_time: datetime | None = None,
     tag_signature_verified: bool | None = None,
     old_tag_signature_verified: bool | None = None,
 ) -> ReleaseSignals:
-    """Convert a GitHub release API response into structured ReleaseSignals."""
+    """Convert a normalised release dict into structured ReleaseSignals.
+
+    Both GitHub and GitLab releases are pre-normalised to GitHub field names by
+    fetch_vcs_release before reaching this function.
+    """
     author_login: str = (release.get("author") or {}).get("login") or ""
     release_is_automated = "[bot]" in author_login
 
@@ -355,7 +439,9 @@ def build_release_signals(
     published_at = release.get("published_at", "")
     if created_at and published_at and created_at != published_at:
         try:
-            delta = (parse_upload_time(published_at) - parse_upload_time(created_at)).total_seconds()
+            delta = (
+                parse_upload_time(published_at) - parse_upload_time(created_at)
+            ).total_seconds()
             possible_rerelease = delta > 86_400  # drafted >24h before publishing
         except Exception:  # noqa: BLE001
             pass
@@ -363,9 +449,10 @@ def build_release_signals(
     raw_body = release.get("body") or ""
     body: str | None = None
     if raw_body:
-        body = (raw_body[:3000] + "\n[release notes truncated]") if len(raw_body) > 3000 else raw_body
+        body = (
+            (raw_body[:3000] + "\n[release notes truncated]") if len(raw_body) > 3000 else raw_body
+        )
 
-    # Signing regression: old version had a verified tag, new version doesn't
     tag_was_previously_signed = (
         old_tag_signature_verified is True and tag_signature_verified is not True
     )
@@ -382,29 +469,56 @@ def build_release_signals(
     )
 
 
-async def fetch_github_account_age(owner: str) -> int | None:
-    """Return age in days of a GitHub user/org account, or None if unavailable.
-
-    Requires GITHUB_TOKEN — skipped without one to avoid unauthenticated rate limits.
-    """
-    token = os.environ.get("GITHUB_TOKEN")
-    if not token:
+async def fetch_vcs_account_age(platform: str, owner: str) -> int | None:
+    """Return age in days of a user/org account on the given platform, or None."""
+    if platform == "github":
+        token = os.environ.get("GITHUB_TOKEN")
+        if not token:
+            return None
+        headers = {
+            "Accept": "application/vnd.github+json",
+            "Authorization": f"Bearer {token}",
+        }
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.get(f"https://api.github.com/users/{owner}", headers=headers)
+                if resp.status_code == 200:
+                    created_at = resp.json().get("created_at", "")
+                    if created_at:
+                        created = parse_upload_time(created_at)
+                        return max(0, (datetime.now(timezone.utc) - created).days)
+        except Exception:  # noqa: BLE001
+            pass
         return None
-    headers = {
-        "Accept": "application/vnd.github+json",
-        "Authorization": f"Bearer {token}",
-    }
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(f"https://api.github.com/users/{owner}", headers=headers)
-            if resp.status_code == 200:
-                created_at = resp.json().get("created_at", "")
-                if created_at:
-                    created = parse_upload_time(created_at)
-                    return max(0, (datetime.now(timezone.utc) - created).days)
-    except Exception:  # noqa: BLE001
-        pass
+
+    if platform == "gitlab":
+        token = os.environ.get("GITLAB_TOKEN")
+        if not token:
+            return None
+        base_url = os.environ.get("GITLAB_BASE_URL", "https://gitlab.com").rstrip("/")
+        headers = {"Authorization": f"Bearer {token}"}
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.get(
+                    f"{base_url}/api/v4/users",
+                    headers=headers,
+                    params={"username": owner},
+                )
+                if resp.status_code == 200 and resp.json():
+                    created_at = resp.json()[0].get("created_at", "")
+                    if created_at:
+                        created = parse_upload_time(created_at)
+                        return max(0, (datetime.now(timezone.utc) - created).days)
+        except Exception:  # noqa: BLE001
+            pass
+        return None
+
     return None
+
+
+# Backward-compat alias
+async def fetch_github_account_age(owner: str) -> int | None:
+    return await fetch_vcs_account_age("github", owner)
 
 
 def safe_zip_extractall(zf: zipfile.ZipFile, dest: Path) -> None:

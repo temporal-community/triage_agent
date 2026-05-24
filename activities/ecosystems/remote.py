@@ -21,6 +21,7 @@ own stack. The core project defines the HTTP protocol; bridge packages are ~10 l
 The remote service must expose POST endpoints at {remote_base_url}/{method_name}.
 See the docstrings on each method below for the expected request/response shapes.
 """
+
 from __future__ import annotations
 
 import io
@@ -89,24 +90,31 @@ class RemoteEcosystemProvider:
     # EcosystemProvider methods
     # ------------------------------------------------------------------
 
-    async def fetch_metadata(
-        self, package: str, old_version: str, new_version: str
-    ) -> PyPISignals:
+    async def fetch_metadata(self, package: str, old_version: str, new_version: str) -> PyPISignals:
         """POST fetch_metadata — request: {package, old_version, new_version}
         Response: PyPISignals fields (weekly_downloads, is_major_bump, package_description).
         """
-        data = await self._post("fetch_metadata", {
-            "package": package, "old_version": old_version, "new_version": new_version,
-        })
+        data = await self._post(
+            "fetch_metadata",
+            {
+                "package": package,
+                "old_version": old_version,
+                "new_version": new_version,
+            },
+        )
         return PyPISignals(**(data or {}))
 
     async def fetch_release_age(self, package: str, new_version: str) -> ReleaseAgeSignals:
         """POST fetch_release_age — request: {package, new_version}
         Response: ReleaseAgeSignals fields (release_age_hours).
         """
-        data = await self._post("fetch_release_age", {
-            "package": package, "new_version": new_version,
-        })
+        data = await self._post(
+            "fetch_release_age",
+            {
+                "package": package,
+                "new_version": new_version,
+            },
+        )
         return ReleaseAgeSignals(**(data or {}))
 
     async def fetch_maintainer(
@@ -115,9 +123,14 @@ class RemoteEcosystemProvider:
         """POST fetch_maintainer — request: {package, old_version, new_version}
         Response: MaintainerSignals fields (maintainer_changed).
         """
-        data = await self._post("fetch_maintainer", {
-            "package": package, "old_version": old_version, "new_version": new_version,
-        })
+        data = await self._post(
+            "fetch_maintainer",
+            {
+                "package": package,
+                "old_version": old_version,
+                "new_version": new_version,
+            },
+        )
         return MaintainerSignals(**(data or {}))
 
     async def get_archive_url(
@@ -152,17 +165,20 @@ class RemoteEcosystemProvider:
                 unix_mode = (member.external_attr >> 16) & 0xFFFF
                 if stat.S_ISLNK(unix_mode):
                     raise ApplicationError(
-                        f"Zip contains symlink entry: {member.filename}", non_retryable=True,
+                        f"Zip contains symlink entry: {member.filename}",
+                        non_retryable=True,
                     )
                 member_path = (dest / member.filename).resolve()
                 if not str(member_path).startswith(str(dest)):
                     raise ApplicationError(
-                        f"Zip path traversal attempt: {member.filename}", non_retryable=True,
+                        f"Zip path traversal attempt: {member.filename}",
+                        non_retryable=True,
                     )
                 total += member.file_size
                 if total > MAX_EXTRACT_BYTES:
                     raise ApplicationError(
-                        "Zip extraction size limit exceeded (possible zip bomb)", non_retryable=True,
+                        "Zip extraction size limit exceeded (possible zip bomb)",
+                        non_retryable=True,
                     )
                 zf.extract(member, dest)
 
@@ -172,17 +188,20 @@ class RemoteEcosystemProvider:
             for member in tf.getmembers():
                 if member.issym() or member.islnk():
                     raise ApplicationError(
-                        f"Tar contains symlink/hardlink entry: {member.name}", non_retryable=True,
+                        f"Tar contains symlink/hardlink entry: {member.name}",
+                        non_retryable=True,
                     )
                 member_path = (dest / member.name).resolve()
                 if not str(member_path).startswith(str(dest)):
                     raise ApplicationError(
-                        f"Tar path traversal attempt: {member.name}", non_retryable=True,
+                        f"Tar path traversal attempt: {member.name}",
+                        non_retryable=True,
                     )
                 total += member.size
                 if total > MAX_EXTRACT_BYTES:
                     raise ApplicationError(
-                        "Tar extraction size limit exceeded (possible zip bomb)", non_retryable=True,
+                        "Tar extraction size limit exceeded (possible zip bomb)",
+                        non_retryable=True,
                     )
             tf.extractall(dest, filter="data")
 
@@ -192,18 +211,26 @@ class RemoteEcosystemProvider:
         """POST fetch_attestations — request: {package, old_version, new_version}
         Response: AttestationSignals fields.
         """
-        data = await self._post("fetch_attestations", {
-            "package": package, "old_version": old_version, "new_version": new_version,
-        })
+        data = await self._post(
+            "fetch_attestations",
+            {
+                "package": package,
+                "old_version": old_version,
+                "new_version": new_version,
+            },
+        )
         return AttestationSignals(**(data or {}))
 
-    async def fetch_release(
-        self, package: str, old_version: str, version: str
-    ) -> ReleaseSignals:
+    async def fetch_release(self, package: str, old_version: str, version: str) -> ReleaseSignals:
         """POST fetch_release — request: {package, old_version, version}
         Response: ReleaseSignals fields.
         """
-        data = await self._post("fetch_release", {
-            "package": package, "old_version": old_version, "version": version,
-        })
+        data = await self._post(
+            "fetch_release",
+            {
+                "package": package,
+                "old_version": old_version,
+                "version": version,
+            },
+        )
         return ReleaseSignals(**(data or {}))

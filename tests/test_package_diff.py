@@ -4,6 +4,7 @@ Tests for activities/package_diff.py.
 HTTP is mocked with respx. In-memory tar.gz archives are built with tarfile +
 io.BytesIO. ActivityEnvironment provides the Temporal activity context.
 """
+
 from __future__ import annotations
 
 import httpx
@@ -45,14 +46,10 @@ def _mock_pypi_and_archive(
     new_sdist_url = f"https://files.pythonhosted.org/{package}-{new_version}.tar.gz"
 
     respx.get(f"{PYPI_BASE}/{package}/{old_version}/json").mock(
-        return_value=httpx.Response(
-            200, json=_pypi_json(package, old_version, old_sdist_url)
-        )
+        return_value=httpx.Response(200, json=_pypi_json(package, old_version, old_sdist_url))
     )
     respx.get(f"{PYPI_BASE}/{package}/{new_version}/json").mock(
-        return_value=httpx.Response(
-            200, json=_pypi_json(package, new_version, new_sdist_url)
-        )
+        return_value=httpx.Response(200, json=_pypi_json(package, new_version, new_sdist_url))
     )
     respx.get(old_sdist_url).mock(
         return_value=httpx.Response(
@@ -71,6 +68,7 @@ def _mock_pypi_and_archive(
 # ---------------------------------------------------------------------------
 # Test 1: basic diff — one changed file, one new file
 # ---------------------------------------------------------------------------
+
 
 @respx.mock
 async def test_basic_diff_changed_and_new_file():
@@ -98,6 +96,7 @@ async def test_basic_diff_changed_and_new_file():
 # Test 2: no sdist available (PyPI returns empty urls list)
 # ---------------------------------------------------------------------------
 
+
 @respx.mock
 async def test_no_sdist_available_returns_graceful_stub():
     respx.get(f"{PYPI_BASE}/nosrc/1.0.0/json").mock(
@@ -117,6 +116,7 @@ async def test_no_sdist_available_returns_graceful_stub():
 # ---------------------------------------------------------------------------
 # Test 3: high-signal file (setup.py) changed → appears in correct section
 # ---------------------------------------------------------------------------
+
 
 @respx.mock
 async def test_high_signal_setup_py_changed():
@@ -145,6 +145,7 @@ async def test_high_signal_setup_py_changed():
 # ---------------------------------------------------------------------------
 # Test 4: new file added → appears in NEW FILES section
 # ---------------------------------------------------------------------------
+
 
 @respx.mock
 async def test_new_file_appears_in_new_files_section():

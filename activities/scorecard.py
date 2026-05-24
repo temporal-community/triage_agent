@@ -1,4 +1,5 @@
 """Activity: fetch OpenSSF Scorecard data for the package's upstream repo."""
+
 from urllib.parse import quote
 
 import httpx
@@ -6,7 +7,13 @@ from temporalio import activity
 
 from activities.models import ScorecardSignals
 
-_ECOSYSTEM_MAP = {"pip": "pypi", "npm": "npm", "rubygems": "rubygems", "maven": "maven", "nuget": "nuget"}
+_ECOSYSTEM_MAP = {
+    "pip": "pypi",
+    "npm": "npm",
+    "rubygems": "rubygems",
+    "maven": "maven",
+    "nuget": "nuget",
+}
 
 _SCORECARD_CHECKS = {
     "Maintained": "scorecard_maintained",
@@ -17,27 +24,31 @@ _SCORECARD_CHECKS = {
 }
 
 
-def _find_github_repo(data: dict) -> str | None:
-    """Extract 'owner/repo' from a deps.dev version response."""
+def _find_vcs_repo(data: dict) -> tuple[str, str] | None:
+    """Extract (platform, 'owner/repo') from a deps.dev version response, or None.
+
+    Scorecard API only supports GitHub; non-GitHub repos return None for graceful degradation.
+    """
+    from activities.ecosystems import parse_vcs_repo
+
     for entry in data.get("relatedProjects", []):
         project_id = entry.get("projectKey", {}).get("id", "")
         if project_id.startswith("github.com/"):
-            return project_id[len("github.com/"):]
+            return ("github", project_id[len("github.com/") :])
 
     for link in data.get("links", []):
         url = link.get("url", "")
-        if "github.com/" in url:
-            # Extract owner/repo from URL like https://github.com/owner/repo
-            after = url.split("github.com/", 1)[1]
-            parts = after.strip("/").split("/")
-            if len(parts) >= 2:
-                return f"{parts[0]}/{parts[1]}"
+        parsed = parse_vcs_repo(url)
+        if parsed:
+            return parsed
 
     return None
 
 
 @activity.defn(name="activities.scorecard.fetch")
-async def fetch(ecosystem: str, package: str, old_version: str, new_version: str) -> ScorecardSignals:
+async def fetch(
+    ecosystem: str, package: str, old_version: str, new_version: str
+) -> ScorecardSignals:
     system = _ECOSYSTEM_MAP.get(ecosystem)
     if system is None:
         return ScorecardSignals()
@@ -53,11 +64,12 @@ async def fetch(ecosystem: str, package: str, old_version: str, new_version: str
             if deps_resp.status_code != 200:
                 return ScorecardSignals()
 
-            repo = _find_github_repo(deps_resp.json())
-            if repo is None:
+            vcs = _find_vcs_repo(deps_resp.json())
+            if vcs is None or vcs[0] != "github":
                 return ScorecardSignals()
+            repo = vcs[1]
 
-            # Step B — query OpenSSF Scorecard
+            # Step B — query OpenSSF Scorecard (GitHub-only API)
             sc_resp = await client.get(
                 f"https://api.securityscorecards.dev/projects/github.com/{repo}",
                 headers={"Accept": "application/json"},

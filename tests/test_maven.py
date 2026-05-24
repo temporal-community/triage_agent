@@ -2,6 +2,7 @@
 Unit tests for the Maven ecosystem provider.
 HTTP calls mocked with respx; Temporal activity context via ActivityEnvironment.
 """
+
 from __future__ import annotations
 
 import io
@@ -69,6 +70,7 @@ _POM_NO_SCM = """<?xml version="1.0" encoding="UTF-8"?>
 # _parse_pom
 # ---------------------------------------------------------------------------
 
+
 def test_parse_pom_description_and_scm():
     result = _parse_pom(_SIMPLE_POM)
     assert result["description"] == "A simple example library."
@@ -97,6 +99,7 @@ def test_parse_pom_malformed_xml():
 # MavenProvider._parse
 # ---------------------------------------------------------------------------
 
+
 def test_parse_valid_coordinate():
     p = MavenProvider()
     g, a = p._parse("com.google.guava:guava")
@@ -119,6 +122,7 @@ def test_group_path():
 # fetch_metadata
 # ---------------------------------------------------------------------------
 
+
 @respx.mock
 async def test_fetch_metadata_success():
     pom_url = f"{_CENTRAL}/com/example/mylib/1.2.3/mylib-1.2.3.pom"
@@ -126,9 +130,7 @@ async def test_fetch_metadata_success():
 
     env = ActivityEnvironment()
     provider = MavenProvider()
-    result = await env.run(
-        provider.fetch_metadata, "com.example:mylib", "1.0.0", "1.2.3"
-    )
+    result = await env.run(provider.fetch_metadata, "com.example:mylib", "1.0.0", "1.2.3")
     assert result.package_description == "A simple example library."
     assert result.is_major_bump is False
     assert result.weekly_downloads is None  # no public API
@@ -141,9 +143,7 @@ async def test_fetch_metadata_major_bump():
 
     env = ActivityEnvironment()
     provider = MavenProvider()
-    result = await env.run(
-        provider.fetch_metadata, "com.example:mylib", "1.9.0", "2.0.0"
-    )
+    result = await env.run(provider.fetch_metadata, "com.example:mylib", "1.9.0", "2.0.0")
     assert result.is_major_bump is True
 
 
@@ -163,15 +163,15 @@ async def test_fetch_metadata_404():
 # fetch_release_age
 # ---------------------------------------------------------------------------
 
+
 @respx.mock
 async def test_fetch_release_age_success():
     import time
+
     # 48 hours ago in ms
     ts_ms = int((time.time() - 48 * 3600) * 1000)
     respx.get(_SEARCH).mock(
-        return_value=httpx.Response(200, json={
-            "response": {"docs": [{"timestamp": ts_ms}]}
-        })
+        return_value=httpx.Response(200, json={"response": {"docs": [{"timestamp": ts_ms}]}})
     )
 
     env = ActivityEnvironment()
@@ -183,9 +183,7 @@ async def test_fetch_release_age_success():
 
 @respx.mock
 async def test_fetch_release_age_no_docs():
-    respx.get(_SEARCH).mock(
-        return_value=httpx.Response(200, json={"response": {"docs": []}})
-    )
+    respx.get(_SEARCH).mock(return_value=httpx.Response(200, json={"response": {"docs": []}}))
 
     env = ActivityEnvironment()
     provider = MavenProvider()
@@ -207,6 +205,7 @@ async def test_fetch_release_age_api_error():
 # fetch_maintainer
 # ---------------------------------------------------------------------------
 
+
 @respx.mock
 async def test_fetch_maintainer_unchanged():
     old_url = f"{_CENTRAL}/com/example/mylib/1.0.0/mylib-1.0.0.pom"
@@ -216,9 +215,7 @@ async def test_fetch_maintainer_unchanged():
 
     env = ActivityEnvironment()
     provider = MavenProvider()
-    result = await env.run(
-        provider.fetch_maintainer, "com.example:mylib", "1.0.0", "1.2.3"
-    )
+    result = await env.run(provider.fetch_maintainer, "com.example:mylib", "1.0.0", "1.2.3")
     assert result.maintainer_changed is False
 
 
@@ -231,9 +228,7 @@ async def test_fetch_maintainer_new_developer():
 
     env = ActivityEnvironment()
     provider = MavenProvider()
-    result = await env.run(
-        provider.fetch_maintainer, "com.example:mylib", "1.0.0", "2.0.0"
-    )
+    result = await env.run(provider.fetch_maintainer, "com.example:mylib", "1.0.0", "2.0.0")
     assert result.maintainer_changed is True
 
 
@@ -246,9 +241,7 @@ async def test_fetch_maintainer_fetch_failure():
 
     env = ActivityEnvironment()
     provider = MavenProvider()
-    result = await env.run(
-        provider.fetch_maintainer, "com.example:mylib", "1.0.0", "2.0.0"
-    )
+    result = await env.run(provider.fetch_maintainer, "com.example:mylib", "1.0.0", "2.0.0")
     assert result.maintainer_changed is False
 
 
@@ -256,12 +249,11 @@ async def test_fetch_maintainer_fetch_failure():
 # fetch_attestations
 # ---------------------------------------------------------------------------
 
+
 async def test_fetch_attestations_returns_empty():
     env = ActivityEnvironment()
     provider = MavenProvider()
-    result = await env.run(
-        provider.fetch_attestations, "com.example:mylib", "1.0.0", "1.2.3"
-    )
+    result = await env.run(provider.fetch_attestations, "com.example:mylib", "1.0.0", "1.2.3")
     assert result.has_attestation is False
 
 
@@ -269,9 +261,11 @@ async def test_fetch_attestations_returns_empty():
 # extract_archive
 # ---------------------------------------------------------------------------
 
+
 def test_extract_archive_jar():
     """JAR is a ZIP — extract_archive should unpack it."""
     import tempfile
+
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
         zf.writestr("com/example/Hello.java", "public class Hello {}")
@@ -282,6 +276,7 @@ def test_extract_archive_jar():
     with tempfile.TemporaryDirectory() as dest:
         provider.extract_archive(jar_bytes, "mylib-1.2.3-sources.jar", dest)
         from pathlib import Path
+
         assert (Path(dest) / "pom.xml").exists()
         assert (Path(dest) / "com/example/Hello.java").exists()
 
@@ -289,6 +284,7 @@ def test_extract_archive_jar():
 # ---------------------------------------------------------------------------
 # get_archive_url — prefers sources JAR
 # ---------------------------------------------------------------------------
+
 
 @respx.mock
 async def test_get_archive_url_prefers_sources():
@@ -346,8 +342,10 @@ async def test_get_archive_url_none_when_both_missing():
 # pr_parser — maven coordinate handling
 # ---------------------------------------------------------------------------
 
+
 def test_pr_parser_maven_coordinate():
     from helpers.pr_parser import parse_pr
+
     result = parse_pr(
         "Bump com.google.guava:guava from 31.0-jre to 33.0-jre",
         branch="dependabot/maven/com.google.guava-guava-33.0-jre",
@@ -361,6 +359,7 @@ def test_pr_parser_maven_coordinate():
 
 def test_pr_parser_maven_ecosystem_from_branch():
     from helpers.pr_parser import parse_pr
+
     result = parse_pr(
         "Bump org.springframework.boot:spring-boot-starter from 3.1.0 to 3.2.0",
         branch="dependabot/maven/org.springframework.boot-spring-boot-starter-3.2.0",
@@ -373,19 +372,25 @@ def test_pr_parser_maven_ecosystem_from_branch():
 # webhook validation — maven name regex
 # ---------------------------------------------------------------------------
 
+
 def test_webhook_validates_maven_name():
     from api.webhook import _validate_parsed_package
-    assert _validate_parsed_package("maven", "com.google.guava:guava", "31.0-jre", "33.0-jre") is None
+
+    assert (
+        _validate_parsed_package("maven", "com.google.guava:guava", "31.0-jre", "33.0-jre") is None
+    )
 
 
 def test_webhook_rejects_maven_name_without_colon():
     from api.webhook import _validate_parsed_package
+
     err = _validate_parsed_package("maven", "com.google.guava", "1.0", "2.0")
     assert err is not None
 
 
 def test_webhook_rejects_maven_name_with_injection():
     from api.webhook import _validate_parsed_package
+
     err = _validate_parsed_package("maven", "com.evil:../../../etc/passwd", "1.0", "2.0")
     assert err is not None
 
@@ -394,22 +399,27 @@ def test_webhook_rejects_maven_name_with_injection():
 # version_lineage — maven
 # ---------------------------------------------------------------------------
 
+
 @respx.mock
 async def test_version_lineage_maven_stale():
     from activities.version_lineage import check as lineage_check
     import time
+
     now_ms = int(time.time() * 1000)
     one_year_ms = 365 * 24 * 3600 * 1000
     respx.get(_SEARCH).mock(
-        return_value=httpx.Response(200, json={
-            "response": {
-                "docs": [
-                    {"v": "0.9.0", "timestamp": now_ms - 3 * one_year_ms},
-                    {"v": "0.8.0", "timestamp": now_ms - 4 * one_year_ms},
-                    {"v": "1.0.0", "timestamp": now_ms - one_year_ms // 2},
-                ]
-            }
-        })
+        return_value=httpx.Response(
+            200,
+            json={
+                "response": {
+                    "docs": [
+                        {"v": "0.9.0", "timestamp": now_ms - 3 * one_year_ms},
+                        {"v": "0.8.0", "timestamp": now_ms - 4 * one_year_ms},
+                        {"v": "1.0.0", "timestamp": now_ms - one_year_ms // 2},
+                    ]
+                }
+            },
+        )
     )
     env = ActivityEnvironment()
     result = await env.run(lineage_check, "maven", "com.example:mylib", "0.8.0", "0.9.0")
@@ -422,17 +432,21 @@ async def test_version_lineage_maven_stale():
 async def test_version_lineage_maven_current():
     from activities.version_lineage import check as lineage_check
     import time
+
     now_ms = int(time.time() * 1000)
     one_year_ms = 365 * 24 * 3600 * 1000
     respx.get(_SEARCH).mock(
-        return_value=httpx.Response(200, json={
-            "response": {
-                "docs": [
-                    {"v": "1.2.3", "timestamp": now_ms - 3600_000},
-                    {"v": "1.2.2", "timestamp": now_ms - one_year_ms},
-                ]
-            }
-        })
+        return_value=httpx.Response(
+            200,
+            json={
+                "response": {
+                    "docs": [
+                        {"v": "1.2.3", "timestamp": now_ms - 3600_000},
+                        {"v": "1.2.2", "timestamp": now_ms - one_year_ms},
+                    ]
+                }
+            },
+        )
     )
     env = ActivityEnvironment()
     result = await env.run(lineage_check, "maven", "com.example:mylib", "1.2.2", "1.2.3")
@@ -443,16 +457,20 @@ async def test_version_lineage_maven_current():
 async def test_version_lineage_maven_filters_snapshots():
     from activities.version_lineage import check as lineage_check
     import time
+
     now_ms = int(time.time() * 1000)
     respx.get(_SEARCH).mock(
-        return_value=httpx.Response(200, json={
-            "response": {
-                "docs": [
-                    {"v": "2.0.0-SNAPSHOT", "timestamp": now_ms},
-                    {"v": "1.0.0", "timestamp": now_ms - 3600_000},
-                ]
-            }
-        })
+        return_value=httpx.Response(
+            200,
+            json={
+                "response": {
+                    "docs": [
+                        {"v": "2.0.0-SNAPSHOT", "timestamp": now_ms},
+                        {"v": "1.0.0", "timestamp": now_ms - 3600_000},
+                    ]
+                }
+            },
+        )
     )
     env = ActivityEnvironment()
     result = await env.run(lineage_check, "maven", "com.example:mylib", "0.9.0", "1.0.0")

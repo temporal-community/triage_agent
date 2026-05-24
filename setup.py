@@ -8,9 +8,9 @@ and prints the repo config snippet to paste into your target repo.
 Usage:
     uv run python setup.py
 """
+
 from __future__ import annotations
 
-import os
 import secrets
 import shutil
 import subprocess
@@ -26,11 +26,11 @@ ENV_EXAMPLE = HERE / ".env.example"
 # Helpers
 # ---------------------------------------------------------------------------
 
-BOLD  = "\033[1m"
+BOLD = "\033[1m"
 GREEN = "\033[32m"
 YELLOW = "\033[33m"
-RED   = "\033[31m"
-CYAN  = "\033[36m"
+RED = "\033[31m"
+CYAN = "\033[36m"
 RESET = "\033[0m"
 
 
@@ -59,6 +59,7 @@ def _ask(prompt: str, default: str = "", secret: bool = False) -> str:
     try:
         if secret:
             import getpass
+
             value = getpass.getpass(display)
         else:
             value = input(display)
@@ -96,11 +97,14 @@ def _run_silent(cmd: list[str]) -> bool:
 # Steps
 # ---------------------------------------------------------------------------
 
+
 def check_prerequisites() -> bool:
     _h("Checking prerequisites")
     ok = True
     ok &= _check_cmd("uv", "install from https://docs.astral.sh/uv/")
-    ok &= _check_cmd("temporal", "install from https://docs.temporal.io/cli  (brew install temporal)")
+    ok &= _check_cmd(
+        "temporal", "install from https://docs.temporal.io/cli  (brew install temporal)"
+    )
     if not ok:
         print()
         _err("Please install missing tools and re-run setup.py")
@@ -118,7 +122,8 @@ def install_dependencies() -> None:
 def collect_github_credentials() -> dict[str, str]:
     """Returns a dict of env key → value for GitHub credentials."""
     _h("GitHub credentials")
-    print(textwrap.dedent("""
+    print(
+        textwrap.dedent("""
   The Scout needs GitHub access to read PR files and post comments.
   There are two options:
 
@@ -128,7 +133,8 @@ def collect_github_credentials() -> dict[str, str]:
 
     2. GitHub App — required for production use across multiple repos
        Gives per-repo permissions, no broad PAT exposure.
-    """))
+    """)
+    )
 
     use_app = _ask_yn("Set up a GitHub App instead of a PAT?", default=False)
 
@@ -142,7 +148,8 @@ def collect_github_credentials() -> dict[str, str]:
         }
 
     # GitHub App flow
-    print(textwrap.dedent("""
+    print(
+        textwrap.dedent("""
   Creating a GitHub App:
 
   1. Go to: https://github.com/settings/apps/new
@@ -168,7 +175,8 @@ def collect_github_credentials() -> dict[str, str]:
      "Generate a private key" and save the .pem file.
 
   7. Install the App on your repos (or "All repositories").
-    """))
+    """)
+    )
 
     webhook_secret = secrets.token_hex(32)
     print(f"  {BOLD}Generated webhook secret (copy this into the GitHub App form):{RESET}")
@@ -191,10 +199,12 @@ def collect_github_credentials() -> dict[str, str]:
 
 def collect_optional_keys() -> dict[str, str]:
     _h("Optional API keys")
-    print(textwrap.dedent("""
+    print(
+        textwrap.dedent("""
   These are optional. The Scout works without them — you'll just get
   fewer signals and rule-based classification instead of Claude.
-    """))
+    """)
+    )
 
     result: dict[str, str] = {}
 
@@ -254,12 +264,14 @@ def write_env(values: dict[str, str]) -> None:
 
 def print_repo_config() -> None:
     _h("Repo config snippet")
-    print(textwrap.dedent("""
+    print(
+        textwrap.dedent("""
   Add this file to any repo where you want the Scout to do more than comment.
   (Without it, the Scout posts comments but never auto-merges or blocks.)
 
   Create .github/triage-agent.yml:
-    """))
+    """)
+    )
     snippet = textwrap.dedent("""\
     # .github/triage-agent.yml
     # Remove or comment out any section you don't want.
@@ -311,7 +323,8 @@ def print_next_steps(used_app: bool) -> None:
        c. Click "Add webhook". GitHub will send a ping — a ✓ means it's wired.
     """)
 
-    print(textwrap.dedent(f"""
+    print(
+        textwrap.dedent("""
   1. Start Temporal (in a separate terminal):
        temporal server start-dev
 
@@ -330,12 +343,15 @@ def print_next_steps(used_app: bool) -> None:
        uv run uvicorn api.webhook:app --port 8080
        ngrok http 8080   # note the https:// URL it prints
 
-    """) + webhook_registration)
+    """)
+        + webhook_registration
+    )
 
 
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
 
 def main() -> None:
     print(f"\n{BOLD}Dependabot Supply Chain Scout — setup{RESET}")

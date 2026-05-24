@@ -1,0 +1,163 @@
+"""
+ConfigProvider protocol — abstracts where triage configuration comes from.
+
+Default routing is by platform:
+  github  → GitHubConfigProvider reads .github/triage-agent.yml via GitHub API
+  gitlab  → GitLabConfigProvider reads .gitlab/triage-agent.yml via GitLab Files API
+
+Override for all platforms via TRIAGE_CONFIG_PROVIDER=env (reads TRIAGE_CONFIG_* vars).
+"""
+
+from __future__ import annotations
+
+import os
+from typing import Protocol
+
+from activities.models import PRContext, RepoConfig
+
+
+class ConfigProvider(Protocol):
+    """Returns the triage configuration for a given PR's repository."""
+
+    async def fetch(self, pr: PRContext) -> RepoConfig: ...
+
+
+class GitHubConfigProvider:
+    """Reads .github/triage-agent.yml from the target repo via GitHub Contents API."""
+
+    async def fetch(self, pr: PRContext) -> RepoConfig:
+        import base64
+
+        import httpx
+        import yaml
+        from temporalio import activity
+        from temporalio.exceptions import ApplicationError
+
+        url = f"https://api.github.com/repos/{pr.repo}/contents/.github/triage-agent.yml"
+        headers = {"Accept": "application/vnd.github+json"}
+
+        if token := os.environ.get("GITHUB_TOKEN"):
+            headers["Authorization"] = f"Bearer {token}"
+        elif pr.installation_id:
+            from helpers.github_app import get_installation_token
+
+            token = await get_installation_token(pr.installation_id)
+            headers["Authorization"] = f"Bearer {token}"
+
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(url, headers=headers)
+
+        if resp.status_code == 404:
+            activity.logger.info(
+                f"No .github/triage-agent.yml in {pr.repo} — "
+                "using observe-only defaults (comment on every PR, no auto-merge, no review requests, no blocking)"
+            )
+            return RepoConfig()
+
+        if resp.status_code == 401:
+            raise ApplicationError("GitHub auth failed fetching repo config", non_retryable=True)
+
+        resp.raise_for_status()
+        content_b64 = resp.json()["content"].replace("\n", "")
+        raw = base64.b64decode(content_b64).decode("utf-8")
+        data = yaml.safe_load(raw) or {}
+        known = {k: v for k, v in data.items() if k in RepoConfig.model_fields}
+        config = RepoConfig(**known)
+        activity.logger.info(f"Loaded .github/triage-agent.yml from {pr.repo}: {config}")
+        return config
+
+
+class EnvConfigProvider:
+    """Reads per-repo triage config from environment variables.
+
+    Useful for GitLab/Gitea platforms and for testing without GitHub API calls.
+    All vars are optional; omitted keys use RepoConfig defaults.
+
+    TRIAGE_CONFIG_AUTO_MERGE=true
+    TRIAGE_CONFIG_REVIEWERS=alice,bob
+    TRIAGE_CONFIG_MIN_RELEASE_AGE_HOURS=48
+    TRIAGE_CONFIG_AUTO_MERGE_CLASSIFICATIONS=green
+    TRIAGE_CONFIG_BLOCK_CLASSIFICATIONS=red
+    TRIAGE_CONFIG_MAX_NEW_DEPENDENCIES=5
+    """
+
+    async def fetch(self, pr: PRContext) -> RepoConfig:
+        def _bool(key: str) -> bool | None:
+            v = os.environ.get(key)
+            return v.lower() in ("1", "true", "yes") if v is not None else None
+
+        def _list(key: str) -> list[str] | None:
+            v = os.environ.get(key)
+            return [x.strip() for x in v.split(",") if x.strip()] if v is not None else None
+
+        def _int(key: str) -> int | None:
+            v = os.environ.get(key)
+            try:
+                return int(v) if v is not None else None
+            except ValueError:
+                return None
+
+        kwargs: dict = {}
+        if (v := _bool("TRIAGE_CONFIG_AUTO_MERGE")) is not None:
+            kwargs["auto_merge_enabled"] = v
+        if (v := _list("TRIAGE_CONFIG_REVIEWERS")) is not None:
+            kwargs["reviewers"] = v
+        if (v := _int("TRIAGE_CONFIG_MIN_RELEASE_AGE_HOURS")) is not None:
+            kwargs["min_release_age_hours"] = v
+        if (v := _list("TRIAGE_CONFIG_AUTO_MERGE_CLASSIFICATIONS")) is not None:
+            kwargs["auto_merge_classifications"] = v
+        if (v := _list("TRIAGE_CONFIG_BLOCK_CLASSIFICATIONS")) is not None:
+            kwargs["block_classifications"] = v
+        if (v := _int("TRIAGE_CONFIG_MAX_NEW_DEPENDENCIES")) is not None:
+            kwargs["max_new_dependencies"] = v
+        return RepoConfig(**kwargs)
+
+
+class GitLabConfigProvider:
+    """Reads .gitlab/triage-agent.yml from the target repo via GitLab Files API."""
+
+    async def fetch(self, pr: PRContext) -> RepoConfig:
+        from urllib.parse import quote
+
+        import httpx
+        import yaml
+        from temporalio import activity
+        from temporalio.exceptions import ApplicationError
+
+        base_url = os.environ.get("GITLAB_BASE_URL", "https://gitlab.com").rstrip("/")
+        encoded_path = quote(pr.repo, safe="")
+        file_path = quote(".gitlab/triage-agent.yml", safe="")
+        url = f"{base_url}/api/v4/projects/{encoded_path}/repository/files/{file_path}/raw"
+
+        headers: dict = {}
+        if token := os.environ.get("GITLAB_TOKEN"):
+            headers["Authorization"] = f"Bearer {token}"
+
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(url, headers=headers, params={"ref": "HEAD"})
+
+        if resp.status_code == 404:
+            activity.logger.info(
+                f"No .gitlab/triage-agent.yml in {pr.repo} — using observe-only defaults"
+            )
+            return RepoConfig()
+
+        if resp.status_code == 401:
+            raise ApplicationError("GitLab auth failed fetching repo config", non_retryable=True)
+
+        resp.raise_for_status()
+        data = yaml.safe_load(resp.text) or {}
+        known = {k: v for k, v in data.items() if k in RepoConfig.model_fields}
+        config = RepoConfig(**known)
+        activity.logger.info(f"Loaded .gitlab/triage-agent.yml from {pr.repo}: {config}")
+        return config
+
+
+def get_config_provider(platform: str = "github") -> ConfigProvider:
+    """Return the active ConfigProvider. TRIAGE_CONFIG_PROVIDER=env overrides platform routing."""
+    name = os.environ.get("TRIAGE_CONFIG_PROVIDER", "").lower()
+    if name == "env":
+        return EnvConfigProvider()
+    if platform == "gitlab":
+        return GitLabConfigProvider()
+    return GitHubConfigProvider()

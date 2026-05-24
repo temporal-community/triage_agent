@@ -1,4 +1,5 @@
 """Activity: fetch deprecation status from deps.dev (https://api.deps.dev)."""
+
 from urllib.parse import quote
 
 import httpx
@@ -6,7 +7,13 @@ from temporalio import activity
 
 from activities.models import DepsDevSignals
 
-_ECOSYSTEM_MAP = {"pip": "pypi", "npm": "npm", "rubygems": "rubygems", "maven": "maven", "nuget": "nuget"}
+_ECOSYSTEM_MAP = {
+    "pip": "pypi",
+    "npm": "npm",
+    "rubygems": "rubygems",
+    "maven": "maven",
+    "nuget": "nuget",
+}
 
 
 @activity.defn(name="activities.depsdev.fetch")

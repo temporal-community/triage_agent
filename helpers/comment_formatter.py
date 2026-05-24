@@ -2,6 +2,14 @@ import os
 import re
 from activities.models import PRContext, PackageSignals, Verdict
 
+
+def _config_url(pr: PRContext) -> str:
+    if pr.platform == "gitlab":
+        base = os.environ.get("GITLAB_BASE_URL", "https://gitlab.com").rstrip("/")
+        return f"{base}/{pr.repo}/-/blob/HEAD/.gitlab/triage-agent.yml"
+    return f"https://github.com/{pr.repo}/blob/HEAD/.github/triage-agent.yml"
+
+
 _MAX_REASONING_LEN = 500
 
 
@@ -15,6 +23,7 @@ def _sanitize_reasoning(text: str) -> str:
     if len(text) > _MAX_REASONING_LEN:
         text = text[:_MAX_REASONING_LEN] + "…"
     return text
+
 
 _BADGE = {
     "green": "🟢 GREEN",
@@ -33,7 +42,7 @@ def format_comment(pr: PRContext, verdict: Verdict, signals: PackageSignals | No
     ns = os.environ.get("TEMPORAL_NAMESPACE", "default")
     wf_id = f"triage-{pr.ecosystem}-{pr.package_name}-{pr.new_version}"
     wf_url = f"{ui_base}/namespaces/{ns}/workflows/{wf_id}"
-    config_url = f"https://github.com/{pr.repo}/blob/HEAD/.github/triage-agent.yml"
+    config_url = _config_url(pr)
 
     lines = [
         f"## Dependabot Triage Agent — {badge}",
@@ -68,9 +77,15 @@ def format_comment(pr: PRContext, verdict: Verdict, signals: PackageSignals | No
         lines += [
             "| Signal | Value |",
             "|--------|-------|",
-            f"| Release age | {signals.age.release_age_hours:.0f}h |" if signals.age.release_age_hours is not None else "| Release age | unknown |",
-            f"| Weekly downloads | {signals.pypi.weekly_downloads:,} |" if signals.pypi.weekly_downloads else "| Weekly downloads | unknown |",
-            f"| Socket score | {signals.socket.socket_score}/100 |" if signals.socket.socket_score is not None else "| Socket score | unavailable |",
+            f"| Release age | {signals.age.release_age_hours:.0f}h |"
+            if signals.age.release_age_hours is not None
+            else "| Release age | unknown |",
+            f"| Weekly downloads | {signals.pypi.weekly_downloads:,} |"
+            if signals.pypi.weekly_downloads
+            else "| Weekly downloads | unknown |",
+            f"| Socket score | {signals.socket.socket_score}/100 |"
+            if signals.socket.socket_score is not None
+            else "| Socket score | unavailable |",
             f"| CVEs | {len(signals.osv.osv_vulnerabilities)} |",
             f"| Maintainer changed | {'yes' if signals.maintainer.maintainer_changed else 'no'} |",
             f"| Major bump | {'yes' if signals.pypi.is_major_bump else 'no'} |",

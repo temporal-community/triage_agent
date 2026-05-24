@@ -55,7 +55,7 @@ class PRActionWorkflow:
         )
 
         config: RepoConfig = await workflow.execute_activity(
-            "activities.repo_config.fetch", pr, result_type=RepoConfig, **opts
+            "activities.platform.fetch_repo_config", pr, result_type=RepoConfig, **opts
         )
 
         # Cross-repo dedup: multiple repos seeing the same bump share one PackageTriageWorkflow.
@@ -80,14 +80,20 @@ class PRActionWorkflow:
         verdict, pr_files = await asyncio.gather(
             workflow.execute_child_workflow(
                 PackageTriageWorkflow.run,
-                args=[pr.ecosystem, pr.package_name, pr.old_version, pr.new_version, config.extra_signal_activities],
+                args=[
+                    pr.ecosystem,
+                    pr.package_name,
+                    pr.old_version,
+                    pr.new_version,
+                    config.extra_signal_activities,
+                ],
                 id=f"triage-{pr.ecosystem}-{pr.package_name}-{pr.new_version}-{date_key}{extra_key}",
                 parent_close_policy=ParentClosePolicy.ABANDON,
                 execution_timeout=timedelta(minutes=15),
                 result_type=Verdict,
             ),
             workflow.execute_activity(
-                "activities.github.check_pr_files",
+                "activities.platform.check_pr_files",
                 pr,
                 result_type=PRFilesSignals,
                 **opts,
@@ -118,40 +124,44 @@ class PRActionWorkflow:
             and verdict.release_age_hours is not None
             and verdict.release_age_hours < config.min_release_age_hours
         ):
-            verdict = verdict.model_copy(update={
-                "classification": "yellow",
-                "flags": verdict.flags + [
-                    f"release too fresh: {verdict.release_age_hours:.0f}h "
-                    f"< {config.min_release_age_hours}h minimum for this repo"
-                ],
-            })
+            verdict = verdict.model_copy(
+                update={
+                    "classification": "yellow",
+                    "flags": verdict.flags
+                    + [
+                        f"release too fresh: {verdict.release_age_hours:.0f}h "
+                        f"< {config.min_release_age_hours}h minimum for this repo"
+                    ],
+                }
+            )
 
         if (
             verdict.classification == "green"
             and verdict.new_dependency_count >= config.max_new_dependencies
         ):
-            verdict = verdict.model_copy(update={
-                "classification": "yellow",
-                "flags": verdict.flags + [
-                    f"{verdict.new_dependency_count} new direct dependencies added "
-                    f"(max_new_dependencies: {config.max_new_dependencies} for this repo)"
-                ],
-            })
+            verdict = verdict.model_copy(
+                update={
+                    "classification": "yellow",
+                    "flags": verdict.flags
+                    + [
+                        f"{verdict.new_dependency_count} new direct dependencies added "
+                        f"(max_new_dependencies: {config.max_new_dependencies} for this repo)"
+                    ],
+                }
+            )
 
-        await workflow.execute_activity(
-            "activities.github.comment", args=[pr, verdict], **opts
-        )
+        await workflow.execute_activity("activities.platform.comment", args=[pr, verdict], **opts)
 
         if verdict.classification in config.block_classifications:
             await workflow.execute_activity(
-                "activities.github.label", args=[pr, "supply-chain-suspicious"], **opts
+                "activities.platform.label", args=[pr, "supply-chain-suspicious"], **opts
             )
             reason = (
                 f"Triage agent classified this as **{verdict.classification.upper()}**. "
                 f"Reason: {', '.join(verdict.flags) or verdict.reasoning[:200]}"
             )
             await workflow.execute_activity(
-                "activities.github.close_pr", args=[pr, reason, True], **opts
+                "activities.platform.close_pr", args=[pr, reason, True], **opts
             )
             return f"blocked-{verdict.classification}"
 
@@ -160,12 +170,12 @@ class PRActionWorkflow:
             and verdict.classification in config.auto_merge_classifications
             and verdict.confidence >= config.auto_merge_min_confidence
         ):
-            await workflow.execute_activity("activities.github.merge_pr", args=[pr], **opts)
+            await workflow.execute_activity("activities.platform.merge_pr", args=[pr], **opts)
             return "auto-merged"
 
         if config.reviewers:
             await workflow.execute_activity(
-                "activities.github.request_review", args=[pr, config.reviewers], **opts
+                "activities.platform.request_review", args=[pr, config.reviewers], **opts
             )
 
             # Wait for a decision from an authorized reviewer (max 7 days).
@@ -190,9 +200,7 @@ class PRActionWorkflow:
                 self._approver = ""
 
             if self._human_decision == "approve":
-                await workflow.execute_activity(
-                    "activities.github.merge_pr", args=[pr], **opts
-                )
+                await workflow.execute_activity("activities.platform.merge_pr", args=[pr], **opts)
                 return "human-approved-merged"
             return "human-rejected"
 

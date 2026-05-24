@@ -8,6 +8,7 @@ Usage:
         --old-version 2.31.0 \\
         --new-version 2.32.0
 """
+
 import argparse
 import asyncio
 import os
@@ -53,7 +54,9 @@ async def main() -> None:
     # Show which mode we're running in
     has_anthropic = bool(os.environ.get("ANTHROPIC_API_KEY"))
     has_github = bool(os.environ.get("GITHUB_TOKEN"))
-    classifier_mode = "LLM (claude-sonnet-4-6)" if has_anthropic else "rule-based (no ANTHROPIC_API_KEY)"
+    classifier_mode = (
+        "LLM (claude-sonnet-4-6)" if has_anthropic else "rule-based (no ANTHROPIC_API_KEY)"
+    )
     github_mode = "real GitHub API" if has_github else "dry-run (no GITHUB_TOKEN)"
     print(f"  classifier : {classifier_mode}")
     print(f"  github     : {github_mode}")

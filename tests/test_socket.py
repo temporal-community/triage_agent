@@ -11,11 +11,13 @@ PURL_URL = "https://api.socket.dev/v0/purl"
 
 def _socket_response(depscore: float, alerts: list[dict]) -> dict:
     return {
-        "packages": [{
-            "purl": "pkg:pypi/requests@2.32.0",
-            "score": {"depscore": depscore},
-            "alerts": alerts,
-        }]
+        "packages": [
+            {
+                "purl": "pkg:pypi/requests@2.32.0",
+                "score": {"depscore": depscore},
+                "alerts": alerts,
+            }
+        ]
     }
 
 
@@ -30,14 +32,31 @@ async def test_no_api_key_returns_empty(monkeypatch):
 @respx.mock
 async def test_score_and_alerts_parsed(monkeypatch):
     monkeypatch.setenv("SOCKET_API_KEY", "test-key")
-    respx.post(PURL_URL).mock(return_value=httpx.Response(200, json=_socket_response(
-        depscore=0.72,
-        alerts=[
-            {"severity": "high", "type": "install-scripts", "message": "Runs code at install time"},
-            {"severity": "critical", "type": "obfuscated-code", "message": "Base64-encoded payload"},
-            {"severity": "low", "type": "env-vars", "message": "Reads environment variables"},
-        ],
-    )))
+    respx.post(PURL_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json=_socket_response(
+                depscore=0.72,
+                alerts=[
+                    {
+                        "severity": "high",
+                        "type": "install-scripts",
+                        "message": "Runs code at install time",
+                    },
+                    {
+                        "severity": "critical",
+                        "type": "obfuscated-code",
+                        "message": "Base64-encoded payload",
+                    },
+                    {
+                        "severity": "low",
+                        "type": "env-vars",
+                        "message": "Reads environment variables",
+                    },
+                ],
+            ),
+        )
+    )
     env = ActivityEnvironment()
     result = await env.run(score, "pip", "requests", "2.31.0", "2.32.0")
     assert result.socket_score == 72
@@ -51,9 +70,9 @@ async def test_score_and_alerts_parsed(monkeypatch):
 @respx.mock
 async def test_score_converted_to_0_100(monkeypatch):
     monkeypatch.setenv("SOCKET_API_KEY", "test-key")
-    respx.post(PURL_URL).mock(return_value=httpx.Response(200, json=_socket_response(
-        depscore=0.856, alerts=[]
-    )))
+    respx.post(PURL_URL).mock(
+        return_value=httpx.Response(200, json=_socket_response(depscore=0.856, alerts=[]))
+    )
     env = ActivityEnvironment()
     result = await env.run(score, "pip", "requests", "2.31.0", "2.32.0")
     assert result.socket_score == 86  # round(0.856 * 100)
@@ -91,10 +110,13 @@ async def test_empty_packages_list_returns_empty(monkeypatch):
 @respx.mock
 async def test_purl_uses_correct_ecosystem(monkeypatch):
     monkeypatch.setenv("SOCKET_API_KEY", "test-key")
-    route = respx.post(PURL_URL).mock(return_value=httpx.Response(200, json=_socket_response(0.9, [])))
+    route = respx.post(PURL_URL).mock(
+        return_value=httpx.Response(200, json=_socket_response(0.9, []))
+    )
     env = ActivityEnvironment()
     await env.run(score, "npm", "express", "4.18.1", "4.18.2")
     import json
+
     body = json.loads(route.calls[0].request.content)
     assert body["components"][0]["purl"] == "pkg:npm/express@4.18.2"
 

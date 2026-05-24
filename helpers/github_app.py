@@ -5,6 +5,7 @@ Generates short-lived App JWTs and exchanges them for installation access
 tokens (scoped to one installation, valid 1 hour). Tokens are cached and
 refreshed automatically when within 5 minutes of expiry.
 """
+
 import os
 import time
 from datetime import datetime

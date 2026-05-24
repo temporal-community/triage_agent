@@ -3,6 +3,7 @@
 Module paths use reverse-DNS format: e.g. "github.com/gorilla/mux", "golang.org/x/net"
 Major versions beyond v1 are encoded in the path: "github.com/foo/bar/v2"
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -16,21 +17,27 @@ from temporalio.exceptions import ApplicationError
 
 from activities.ecosystems import (
     build_release_signals,
-    fetch_github_release,
-    fetch_tag_signature,
+    fetch_vcs_release,
+    fetch_vcs_tag_signature,
     is_major,
-    parse_github_repo,
+    parse_vcs_repo,
     parse_upload_time,
     validate_archive_url,
 )
-from activities.models import AttestationSignals, MaintainerSignals, PyPISignals, ReleaseAgeSignals, ReleaseSignals
+from activities.models import (
+    AttestationSignals,
+    MaintainerSignals,
+    PyPISignals,
+    ReleaseAgeSignals,
+    ReleaseSignals,
+)
 
 _PROXY = "https://proxy.golang.org"
 
 
 def _escape(module: str) -> str:
     """Encode uppercase letters per GOPROXY protocol: 'A' → '!a'."""
-    return re.sub(r'[A-Z]', lambda m: '!' + m.group().lower(), module)
+    return re.sub(r"[A-Z]", lambda m: "!" + m.group().lower(), module)
 
 
 class GoModulesProvider:
@@ -43,14 +50,10 @@ class GoModulesProvider:
     # fetch_metadata
     # ------------------------------------------------------------------
 
-    async def fetch_metadata(
-        self, package: str, old_version: str, new_version: str
-    ) -> PyPISignals:
+    async def fetch_metadata(self, package: str, old_version: str, new_version: str) -> PyPISignals:
         # Go proxy has no download counts or description API; only version info.
         async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.get(
-                f"{_PROXY}/{_escape(package)}/@v/{new_version}.info"
-            )
+            resp = await client.get(f"{_PROXY}/{_escape(package)}/@v/{new_version}.info")
             if resp.status_code in (404, 410):
                 raise ApplicationError(
                     f"{package}@{new_version} not found on Go proxy",
@@ -71,9 +74,7 @@ class GoModulesProvider:
 
     async def fetch_release_age(self, package: str, new_version: str) -> ReleaseAgeSignals:
         async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.get(
-                f"{_PROXY}/{_escape(package)}/@v/{new_version}.info"
-            )
+            resp = await client.get(f"{_PROXY}/{_escape(package)}/@v/{new_version}.info")
             if resp.status_code in (404, 410):
                 raise ApplicationError(
                     f"{package}@{new_version} not found on Go proxy",
@@ -140,6 +141,7 @@ class GoModulesProvider:
 
     async def fetch_release(self, package: str, old_version: str, version: str) -> ReleaseSignals:
         import os
+
         token = os.environ.get("GITHUB_TOKEN")
 
         # The .info Origin.URL field gives the canonical VCS repo URL.
@@ -154,9 +156,10 @@ class GoModulesProvider:
 
         data = new_info.json()
         source_url = (data.get("Origin") or {}).get("URL") or ""
-        owner_repo = parse_github_repo(source_url)
-        if not owner_repo:
+        vcs = parse_vcs_repo(source_url)
+        if not vcs:
             return ReleaseSignals()
+        platform, owner_repo = vcs
 
         registry_time = None
         raw = data.get("Time", "")
@@ -168,9 +171,9 @@ class GoModulesProvider:
 
         owner, repo = owner_repo.split("/", 1)
         release, new_sig, old_sig = await asyncio.gather(
-            fetch_github_release(owner, repo, version, token),
-            fetch_tag_signature(owner, repo, version, token),
-            fetch_tag_signature(owner, repo, old_version, token),
+            fetch_vcs_release(platform, owner, repo, version, token),
+            fetch_vcs_tag_signature(platform, owner, repo, version, token),
+            fetch_vcs_tag_signature(platform, owner, repo, old_version, token),
         )
         if release:
             return build_release_signals(release, registry_time, new_sig, old_sig).model_copy(

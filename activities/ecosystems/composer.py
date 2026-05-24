@@ -2,6 +2,7 @@
 
 Package names use vendor/package format: e.g. "laravel/framework", "symfony/console"
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -16,10 +17,11 @@ from temporalio.exceptions import ApplicationError
 
 from activities.ecosystems import (
     build_release_signals,
-    fetch_github_release,
-    fetch_tag_signature,
+    fetch_vcs_release,
+    fetch_vcs_tag_signature,
     is_major,
     parse_github_repo,
+    parse_vcs_repo,
     parse_upload_time,
     safe_zip_extractall,
     validate_archive_url,
@@ -33,7 +35,7 @@ from activities.models import (
 )
 
 _PACKAGIST = "https://packagist.org"
-_CODELOAD  = "https://codeload.github.com"
+_CODELOAD = "https://codeload.github.com"
 
 
 class ComposerProvider:
@@ -64,9 +66,7 @@ class ComposerProvider:
     # fetch_metadata
     # ------------------------------------------------------------------
 
-    async def fetch_metadata(
-        self, package: str, old_version: str, new_version: str
-    ) -> PyPISignals:
+    async def fetch_metadata(self, package: str, old_version: str, new_version: str) -> PyPISignals:
         vendor, name = self._parse(package)
         async with httpx.AsyncClient(timeout=15.0) as client:
             resp = await client.get(f"{_PACKAGIST}/packages/{vendor}/{name}.json")
@@ -221,10 +221,9 @@ class ComposerProvider:
     # fetch_release
     # ------------------------------------------------------------------
 
-    async def fetch_release(
-        self, package: str, old_version: str, version: str
-    ) -> ReleaseSignals:
+    async def fetch_release(self, package: str, old_version: str, version: str) -> ReleaseSignals:
         import os
+
         token = os.environ.get("GITHUB_TOKEN")
         vendor, name = self._parse(package)
 
@@ -247,15 +246,16 @@ class ComposerProvider:
                 pass
 
         source_url = version_data.get("source", {}).get("url", "")
-        owner_repo = parse_github_repo(source_url)
-        if not owner_repo:
+        vcs = parse_vcs_repo(source_url)
+        if not vcs:
             return ReleaseSignals()
+        platform, owner_repo = vcs
 
         owner, repo = owner_repo.split("/", 1)
         release, new_sig, old_sig = await asyncio.gather(
-            fetch_github_release(owner, repo, version, token),
-            fetch_tag_signature(owner, repo, version, token),
-            fetch_tag_signature(owner, repo, old_version, token),
+            fetch_vcs_release(platform, owner, repo, version, token),
+            fetch_vcs_tag_signature(platform, owner, repo, version, token),
+            fetch_vcs_tag_signature(platform, owner, repo, old_version, token),
         )
         if release:
             return build_release_signals(release, registry_time, new_sig, old_sig).model_copy(

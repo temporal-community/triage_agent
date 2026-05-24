@@ -21,21 +21,27 @@ logger = logging.getLogger(__name__)
 
 def _check_config() -> None:
     """Warn at startup about missing or suspicious configuration."""
-    if not os.environ.get("GITHUB_WEBHOOK_SECRET"):
+    has_github_secret = os.environ.get("GITHUB_WEBHOOK_SECRET")
+    has_gitlab_secret = os.environ.get("GITLAB_WEBHOOK_SECRET")
+    if not has_github_secret and not has_gitlab_secret:
         logger.warning(
-            "GITHUB_WEBHOOK_SECRET is not set — the webhook server will reject all requests. "
+            "Neither GITHUB_WEBHOOK_SECRET nor GITLAB_WEBHOOK_SECRET is set — "
+            "the webhook server will reject all requests. "
             "This is fine if you're testing with start_workflow directly."
         )
     has_github = os.environ.get("GITHUB_TOKEN") or os.environ.get("GITHUB_APP_ID")
-    if not has_github:
+    has_gitlab = os.environ.get("GITLAB_TOKEN")
+    if not has_github and not has_gitlab:
         logger.warning(
-            "No GitHub credentials (GITHUB_TOKEN or GITHUB_APP_ID). "
+            "No platform credentials (GITHUB_TOKEN, GITHUB_APP_ID, or GITLAB_TOKEN). "
             "The worker will run but cannot post PR comments or take actions."
         )
     if not os.environ.get("ANTHROPIC_API_KEY"):
         logger.info("ANTHROPIC_API_KEY not set — using rule-based classifier (no LLM).")
     if not os.environ.get("SOCKET_API_KEY"):
-        logger.info("SOCKET_API_KEY not set — Socket.dev supply-chain score signal will be skipped.")
+        logger.info(
+            "SOCKET_API_KEY not set — Socket.dev supply-chain score signal will be skipped."
+        )
 
 
 def _discover_activities() -> list:
@@ -100,7 +106,9 @@ async def main() -> None:
     address = os.environ.get("TEMPORAL_ADDRESS", "localhost:7233")
     namespace = os.environ.get("TEMPORAL_NAMESPACE", "default")
     task_queue = os.environ.get("TEMPORAL_TASK_QUEUE", "dependency-triage")
-    client = await Client.connect(address, namespace=namespace, data_converter=pydantic_data_converter)
+    client = await Client.connect(
+        address, namespace=namespace, data_converter=pydantic_data_converter
+    )
     worker = Worker(
         client,
         task_queue=task_queue,
@@ -109,7 +117,9 @@ async def main() -> None:
     )
     logger.info(
         "Worker started — task_queue=%s temporal=%s activities=%d",
-        task_queue, address, len(ACTIVITIES),
+        task_queue,
+        address,
+        len(ACTIVITIES),
     )
     await worker.run()
 

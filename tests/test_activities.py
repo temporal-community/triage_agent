@@ -2,6 +2,7 @@
 Unit tests for signal activities. HTTP calls are mocked with respx.
 Each test uses ActivityEnvironment to provide the Temporal activity context.
 """
+
 import json
 from datetime import datetime, timezone, timedelta
 
@@ -37,13 +38,16 @@ def _pypi_response(package: str, version: str, upload_time: str = "2025-01-01T00
             "maintainer_email": "",
         },
         # upload_time_iso_8601 includes the "Z" timezone suffix; upload_time is naive (no suffix).
-        "urls": [{"upload_time_iso_8601": upload_time, "upload_time": upload_time.removesuffix("Z")}],
+        "urls": [
+            {"upload_time_iso_8601": upload_time, "upload_time": upload_time.removesuffix("Z")}
+        ],
     }
 
 
 # ---------------------------------------------------------------------------
 # pypi_metadata
 # ---------------------------------------------------------------------------
+
 
 @respx.mock
 async def test_pypi_metadata_fetch_success():
@@ -77,9 +81,7 @@ async def test_pypi_metadata_major_bump():
 
 @respx.mock
 async def test_pypi_metadata_404_raises_non_retryable():
-    respx.get(f"{PYPI_BASE}/nonexistent/1.0.0/json").mock(
-        return_value=httpx.Response(404)
-    )
+    respx.get(f"{PYPI_BASE}/nonexistent/1.0.0/json").mock(return_value=httpx.Response(404))
 
     env = ActivityEnvironment()
     with pytest.raises(ApplicationError) as exc_info:
@@ -92,9 +94,7 @@ async def test_pypi_metadata_pypistats_failure_returns_none():
     respx.get(f"{PYPI_BASE}/requests/2.32.0/json").mock(
         return_value=httpx.Response(200, json=_pypi_response("requests", "2.32.0"))
     )
-    respx.get(f"{PYPISTATS_BASE}/requests/recent").mock(
-        return_value=httpx.Response(500)
-    )
+    respx.get(f"{PYPISTATS_BASE}/requests/recent").mock(return_value=httpx.Response(500))
 
     env = ActivityEnvironment()
     result = await env.run(metadata_fetch, "pip", "requests", "2.31.0", "2.32.0")
@@ -105,11 +105,10 @@ async def test_pypi_metadata_pypistats_failure_returns_none():
 # osv
 # ---------------------------------------------------------------------------
 
+
 @respx.mock
 async def test_osv_no_vulns():
-    respx.post(OSV_URL).mock(
-        return_value=httpx.Response(200, json={"vulns": []})
-    )
+    respx.post(OSV_URL).mock(return_value=httpx.Response(200, json={"vulns": []}))
 
     env = ActivityEnvironment()
     result = await env.run(osv_check, "pip", "requests", "2.31.0", "2.32.0")
@@ -119,12 +118,15 @@ async def test_osv_no_vulns():
 @respx.mock
 async def test_osv_with_cves():
     respx.post(OSV_URL).mock(
-        return_value=httpx.Response(200, json={
-            "vulns": [
-                {"id": "GHSA-xxxx-yyyy-zzzz", "aliases": ["CVE-2024-12345"]},
-                {"id": "GHSA-aaaa-bbbb-cccc", "aliases": []},
-            ]
-        })
+        return_value=httpx.Response(
+            200,
+            json={
+                "vulns": [
+                    {"id": "GHSA-xxxx-yyyy-zzzz", "aliases": ["CVE-2024-12345"]},
+                    {"id": "GHSA-aaaa-bbbb-cccc", "aliases": []},
+                ]
+            },
+        )
     )
 
     env = ActivityEnvironment()
@@ -135,9 +137,7 @@ async def test_osv_with_cves():
 
 @respx.mock
 async def test_osv_passes_correct_ecosystem():
-    route = respx.post(OSV_URL).mock(
-        return_value=httpx.Response(200, json={})
-    )
+    route = respx.post(OSV_URL).mock(return_value=httpx.Response(200, json={}))
 
     env = ActivityEnvironment()
     await env.run(osv_check, "pip", "requests", "2.31.0", "2.32.0")
@@ -149,6 +149,7 @@ async def test_osv_passes_correct_ecosystem():
 # ---------------------------------------------------------------------------
 # release_age
 # ---------------------------------------------------------------------------
+
 
 @respx.mock
 async def test_release_age_recent():
@@ -177,6 +178,7 @@ async def test_release_age_old():
 # ---------------------------------------------------------------------------
 # maintainer
 # ---------------------------------------------------------------------------
+
 
 @respx.mock
 async def test_maintainer_no_change():
@@ -210,7 +212,9 @@ async def test_maintainer_changed():
 async def test_maintainer_fetch_error_returns_no_change():
     # Network error on one version → _fetch_info returns None → default False
     respx.get(f"{PYPI_BASE}/errpkg/1.0.0/json").mock(side_effect=httpx.ConnectError("timeout"))
-    respx.get(f"{PYPI_BASE}/errpkg/2.0.0/json").mock(return_value=httpx.Response(200, json=_pypi_response("errpkg", "2.0.0")))
+    respx.get(f"{PYPI_BASE}/errpkg/2.0.0/json").mock(
+        return_value=httpx.Response(200, json=_pypi_response("errpkg", "2.0.0"))
+    )
     env = ActivityEnvironment()
     result = await env.run(maintainer_history, "pip", "errpkg", "1.0.0", "2.0.0")
     assert result.maintainer_changed is False
@@ -219,6 +223,7 @@ async def test_maintainer_fetch_error_returns_no_change():
 # ---------------------------------------------------------------------------
 # pypi_metadata — exception and non-semver edge cases
 # ---------------------------------------------------------------------------
+
 
 @respx.mock
 async def test_pypi_metadata_pypistats_network_error_returns_none():
@@ -235,12 +240,14 @@ async def test_pypi_metadata_pypistats_network_error_returns_none():
 
 def test_pypi_is_major_non_semver_returns_false():
     from activities.ecosystems import is_major
+
     assert is_major("not-a-version", "also-not") is False
     assert is_major("", "") is False
 
 
 def test_is_major_equal_versions_returns_false():
     from activities.ecosystems import is_major
+
     assert is_major("2.0.0", "2.0.0") is False
     assert is_major("v1.0.0", "v1.0.0") is False
 
@@ -248,6 +255,7 @@ def test_is_major_equal_versions_returns_false():
 # ---------------------------------------------------------------------------
 # release_age — 404, empty urls, missing timestamp, naive datetime
 # ---------------------------------------------------------------------------
+
 
 @respx.mock
 async def test_release_age_404_raises_non_retryable():
@@ -280,9 +288,11 @@ async def test_release_age_missing_timestamp_returns_none():
 
 def test_release_age_naive_datetime_gets_utc():
     from activities.ecosystems import parse_upload_time
+
     # No Z and no +00:00 → naive datetime → should be treated as UTC
     dt = parse_upload_time("2024-06-01T12:00:00")
     from datetime import timezone
+
     assert dt.tzinfo is not None
     assert dt.tzinfo == timezone.utc
 
@@ -298,11 +308,14 @@ NPM_DOWNLOADS_BASE = "https://api.npmjs.org/downloads/point/last-week"
 @respx.mock
 async def test_npm_metadata_fetch_success():
     respx.get(f"{NPM_BASE}/lodash/4.17.21").mock(
-        return_value=httpx.Response(200, json={
-            "name": "lodash",
-            "version": "4.17.21",
-            "description": "Lodash modular utilities.",
-        })
+        return_value=httpx.Response(
+            200,
+            json={
+                "name": "lodash",
+                "version": "4.17.21",
+                "description": "Lodash modular utilities.",
+            },
+        )
     )
     respx.get(f"{NPM_DOWNLOADS_BASE}/lodash").mock(
         return_value=httpx.Response(200, json={"downloads": 30_000_000})
@@ -333,6 +346,7 @@ async def test_npm_metadata_major_bump():
 @respx.mock
 async def test_npm_metadata_404_raises_non_retryable():
     from temporalio.exceptions import ApplicationError
+
     respx.get(f"{NPM_BASE}/nonexistent/1.0.0").mock(return_value=httpx.Response(404))
 
     env = ActivityEnvironment()
@@ -385,6 +399,7 @@ async def test_pypi_metadata_long_summary_truncated():
 # npm paths — release_age
 # ---------------------------------------------------------------------------
 
+
 @respx.mock
 async def test_npm_release_age_success():
     recent = (datetime.now(timezone.utc) - timedelta(hours=6)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
@@ -410,9 +425,7 @@ async def test_npm_release_age_404_raises_non_retryable():
 
 @respx.mock
 async def test_npm_release_age_missing_version_returns_none():
-    respx.get(f"{NPM_BASE}/lodash").mock(
-        return_value=httpx.Response(200, json={"time": {}})
-    )
+    respx.get(f"{NPM_BASE}/lodash").mock(return_value=httpx.Response(200, json={"time": {}}))
 
     env = ActivityEnvironment()
     result = await env.run(release_age_check, "npm", "lodash", "4.17.20", "4.17.21")
@@ -422,6 +435,7 @@ async def test_npm_release_age_missing_version_returns_none():
 # ---------------------------------------------------------------------------
 # npm paths — maintainer
 # ---------------------------------------------------------------------------
+
 
 def _npm_version_response(maintainers: list[dict]) -> dict:
     return {"name": "pkg", "maintainers": maintainers}
@@ -484,22 +498,34 @@ RUBYGEMS_DL_SEARCH = "https://rubygems.org/api/v1/downloads/search.json"
 @respx.mock
 async def test_rubygems_metadata_fetch_success():
     respx.get(f"{RUBYGEMS_API}/rails.json").mock(
-        return_value=httpx.Response(200, json={
-            "info": "Full-stack web framework.",
-            "downloads": 500_000_000,
-        })
+        return_value=httpx.Response(
+            200,
+            json={
+                "info": "Full-stack web framework.",
+                "downloads": 500_000_000,
+            },
+        )
     )
     respx.get(RUBYGEMS_DL_SEARCH).mock(
-        return_value=httpx.Response(200, json={"rubygems": {
-            "2024-01-01": 10_000, "2024-01-02": 12_000, "2024-01-03": 11_000,
-            "2024-01-04": 13_000, "2024-01-05": 9_000, "2024-01-06": 8_000,
-            "2024-01-07": 11_000,
-        }})
+        return_value=httpx.Response(
+            200,
+            json={
+                "rubygems": {
+                    "2024-01-01": 10_000,
+                    "2024-01-02": 12_000,
+                    "2024-01-03": 11_000,
+                    "2024-01-04": 13_000,
+                    "2024-01-05": 9_000,
+                    "2024-01-06": 8_000,
+                    "2024-01-07": 11_000,
+                }
+            },
+        )
     )
 
     env = ActivityEnvironment()
     result = await env.run(metadata_fetch, "rubygems", "rails", "7.0.0", "7.1.0")
-    assert result.weekly_downloads == 74_000   # sum of 7 days, not total lifetime
+    assert result.weekly_downloads == 74_000  # sum of 7 days, not total lifetime
     assert result.package_description == "Full-stack web framework."
     assert result.is_major_bump is False
 
@@ -564,10 +590,13 @@ RUBYGEMS_VERSIONS_API = "https://rubygems.org/api/v1/versions"
 async def test_rubygems_release_age_success():
     recent = (datetime.now(timezone.utc) - timedelta(hours=6)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
     respx.get(f"{RUBYGEMS_VERSIONS_API}/rails.json").mock(
-        return_value=httpx.Response(200, json=[
-            {"number": "7.1.0", "created_at": recent},
-            {"number": "7.0.0", "created_at": "2023-01-01T00:00:00.000Z"},
-        ])
+        return_value=httpx.Response(
+            200,
+            json=[
+                {"number": "7.1.0", "created_at": recent},
+                {"number": "7.0.0", "created_at": "2023-01-01T00:00:00.000Z"},
+            ],
+        )
     )
 
     env = ActivityEnvironment()
@@ -589,9 +618,12 @@ async def test_rubygems_release_age_404_raises_non_retryable():
 @respx.mock
 async def test_rubygems_release_age_version_not_in_list_returns_none():
     respx.get(f"{RUBYGEMS_VERSIONS_API}/rails.json").mock(
-        return_value=httpx.Response(200, json=[
-            {"number": "7.0.0", "created_at": "2023-01-01T00:00:00.000Z"},
-        ])
+        return_value=httpx.Response(
+            200,
+            json=[
+                {"number": "7.0.0", "created_at": "2023-01-01T00:00:00.000Z"},
+            ],
+        )
     )
 
     env = ActivityEnvironment()
@@ -602,9 +634,12 @@ async def test_rubygems_release_age_version_not_in_list_returns_none():
 @respx.mock
 async def test_rubygems_release_age_missing_created_at_returns_none():
     respx.get(f"{RUBYGEMS_VERSIONS_API}/rails.json").mock(
-        return_value=httpx.Response(200, json=[
-            {"number": "7.1.0"},  # no created_at
-        ])
+        return_value=httpx.Response(
+            200,
+            json=[
+                {"number": "7.1.0"},  # no created_at
+            ],
+        )
     )
 
     env = ActivityEnvironment()
@@ -620,10 +655,13 @@ async def test_rubygems_release_age_missing_created_at_returns_none():
 @respx.mock
 async def test_rubygems_maintainer_no_change():
     respx.get(f"{RUBYGEMS_VERSIONS_API}/rails.json").mock(
-        return_value=httpx.Response(200, json=[
-            {"number": "7.0.0", "authors": "DHH, Eileen"},
-            {"number": "7.1.0", "authors": "DHH, Eileen"},
-        ])
+        return_value=httpx.Response(
+            200,
+            json=[
+                {"number": "7.0.0", "authors": "DHH, Eileen"},
+                {"number": "7.1.0", "authors": "DHH, Eileen"},
+            ],
+        )
     )
 
     env = ActivityEnvironment()
@@ -634,10 +672,13 @@ async def test_rubygems_maintainer_no_change():
 @respx.mock
 async def test_rubygems_maintainer_new_author_detected():
     respx.get(f"{RUBYGEMS_VERSIONS_API}/rails.json").mock(
-        return_value=httpx.Response(200, json=[
-            {"number": "7.0.0", "authors": "DHH"},
-            {"number": "7.1.0", "authors": "DHH, NewContributor"},
-        ])
+        return_value=httpx.Response(
+            200,
+            json=[
+                {"number": "7.0.0", "authors": "DHH"},
+                {"number": "7.1.0", "authors": "DHH, NewContributor"},
+            ],
+        )
     )
 
     env = ActivityEnvironment()
@@ -648,10 +689,13 @@ async def test_rubygems_maintainer_new_author_detected():
 @respx.mock
 async def test_rubygems_maintainer_version_not_found_returns_no_change():
     respx.get(f"{RUBYGEMS_VERSIONS_API}/rails.json").mock(
-        return_value=httpx.Response(200, json=[
-            {"number": "7.0.0", "authors": "DHH"},
-            # 7.1.0 missing from list
-        ])
+        return_value=httpx.Response(
+            200,
+            json=[
+                {"number": "7.0.0", "authors": "DHH"},
+                # 7.1.0 missing from list
+            ],
+        )
     )
 
     env = ActivityEnvironment()
@@ -661,9 +705,7 @@ async def test_rubygems_maintainer_version_not_found_returns_no_change():
 
 @respx.mock
 async def test_rubygems_maintainer_http_error_returns_no_change():
-    respx.get(f"{RUBYGEMS_VERSIONS_API}/rails.json").mock(
-        return_value=httpx.Response(503)
-    )
+    respx.get(f"{RUBYGEMS_VERSIONS_API}/rails.json").mock(return_value=httpx.Response(503))
 
     env = ActivityEnvironment()
     result = await env.run(maintainer_history, "rubygems", "rails", "7.0.0", "7.1.0")
@@ -672,9 +714,7 @@ async def test_rubygems_maintainer_http_error_returns_no_change():
 
 @respx.mock
 async def test_rubygems_maintainer_network_exception_returns_no_change():
-    respx.get(f"{RUBYGEMS_VERSIONS_API}/rails.json").mock(
-        side_effect=httpx.ConnectError("timeout")
-    )
+    respx.get(f"{RUBYGEMS_VERSIONS_API}/rails.json").mock(side_effect=httpx.ConnectError("timeout"))
 
     env = ActivityEnvironment()
     result = await env.run(maintainer_history, "rubygems", "rails", "7.0.0", "7.1.0")

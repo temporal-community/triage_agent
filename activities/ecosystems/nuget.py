@@ -3,6 +3,7 @@
 Package IDs are case-insensitive; all API URL paths use the lower-cased ID.
 Names use flat {id} format: e.g. "Newtonsoft.Json", "Microsoft.Extensions.Logging"
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -17,10 +18,10 @@ from temporalio.exceptions import ApplicationError
 
 from activities.ecosystems import (
     build_release_signals,
-    fetch_github_release,
-    fetch_tag_signature,
+    fetch_vcs_release,
+    fetch_vcs_tag_signature,
     is_major,
-    parse_github_repo,
+    parse_vcs_repo,
     parse_upload_time,
     safe_zip_extractall,
     validate_archive_url,
@@ -33,8 +34,8 @@ from activities.models import (
     ReleaseSignals,
 )
 
-_NUGET_REG    = "https://api.nuget.org/v3/registration5"
-_NUGET_FLAT   = "https://api.nuget.org/v3-flatcontainer"
+_NUGET_REG = "https://api.nuget.org/v3/registration5"
+_NUGET_FLAT = "https://api.nuget.org/v3-flatcontainer"
 _NUGET_SEARCH = "https://azuresearch-usnc.nuget.org/query"
 
 
@@ -48,9 +49,7 @@ class NuGetProvider:
     # fetch_metadata
     # ------------------------------------------------------------------
 
-    async def fetch_metadata(
-        self, package: str, old_version: str, new_version: str
-    ) -> PyPISignals:
+    async def fetch_metadata(self, package: str, old_version: str, new_version: str) -> PyPISignals:
         id_lower = package.lower()
         async with httpx.AsyncClient(timeout=15.0) as client:
             reg_resp, search_resp = await asyncio.gather(
@@ -157,10 +156,9 @@ class NuGetProvider:
     # fetch_release
     # ------------------------------------------------------------------
 
-    async def fetch_release(
-        self, package: str, old_version: str, version: str
-    ) -> ReleaseSignals:
+    async def fetch_release(self, package: str, old_version: str, version: str) -> ReleaseSignals:
         import os
+
         token = os.environ.get("GITHUB_TOKEN")
         catalog = await _fetch_catalog_entry(package, version)
         if not catalog:
@@ -175,15 +173,16 @@ class NuGetProvider:
                 pass
 
         project_url = catalog.get("projectUrl") or ""
-        owner_repo = parse_github_repo(project_url)
-        if not owner_repo:
+        vcs = parse_vcs_repo(project_url)
+        if not vcs:
             return ReleaseSignals()
+        platform, owner_repo = vcs
 
         owner, repo = owner_repo.split("/", 1)
         release, new_sig, old_sig = await asyncio.gather(
-            fetch_github_release(owner, repo, version, token),
-            fetch_tag_signature(owner, repo, version, token),
-            fetch_tag_signature(owner, repo, old_version, token),
+            fetch_vcs_release(platform, owner, repo, version, token),
+            fetch_vcs_tag_signature(platform, owner, repo, version, token),
+            fetch_vcs_tag_signature(platform, owner, repo, old_version, token),
         )
         if release:
             return build_release_signals(release, registry_time, new_sig, old_sig).model_copy(
@@ -195,6 +194,7 @@ class NuGetProvider:
 # ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------
+
 
 def _parse_owners(raw: str | list) -> set[str]:
     """NuGet owners field may be a comma-separated string or a list."""

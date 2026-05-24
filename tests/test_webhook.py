@@ -4,6 +4,7 @@ Tests for the FastAPI webhook receiver.
 Uses httpx.AsyncClient with ASGITransport so tests run in-process.
 The Temporal client is mocked so no real Temporal server is needed.
 """
+
 import hashlib
 import hmac
 import json
@@ -21,11 +22,13 @@ TEST_PR_NUMBER = 42
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _sign(body: bytes, secret: str = TEST_SECRET) -> str:
     return "sha256=" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
 
 
 TEST_HEAD_SHA = "abc123def456abc123def456abc123def456abc1"  # 40-char hex SHA-1
+
 
 def _dependabot_payload(
     action: str = "opened",
@@ -63,9 +66,11 @@ async def client(monkeypatch):
     mock_tc.start_workflow = AsyncMock(return_value=MagicMock(id="wf-id"))
 
     import api.webhook as webhook_module
+
     monkeypatch.setattr(webhook_module, "_temporal_client", mock_tc)
 
     from api.webhook import app
+
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac, mock_tc
@@ -74,6 +79,7 @@ async def client(monkeypatch):
 # ---------------------------------------------------------------------------
 # Happy paths
 # ---------------------------------------------------------------------------
+
 
 async def test_dependabot_pr_starts_workflow(client):
     ac, mock_tc = client
@@ -141,13 +147,17 @@ async def test_pr_context_fields_correct(client):
 # Signature verification
 # ---------------------------------------------------------------------------
 
+
 async def test_invalid_signature_returns_401(client):
     ac, _ = client
     body = _dependabot_payload()
     resp = await ac.post(
         "/webhook",
         content=body,
-        headers={"X-Hub-Signature-256": _sign(body, "wrong-secret"), "X-GitHub-Event": "pull_request"},
+        headers={
+            "X-Hub-Signature-256": _sign(body, "wrong-secret"),
+            "X-GitHub-Event": "pull_request",
+        },
     )
     assert resp.status_code == 401
 
@@ -166,6 +176,7 @@ async def test_missing_signature_header_returns_422(client):
 # ---------------------------------------------------------------------------
 # Filtering — all should return 200 "ignored"
 # ---------------------------------------------------------------------------
+
 
 async def test_non_pr_event_ignored(client):
     ac, mock_tc = client
@@ -219,6 +230,7 @@ async def test_unparseable_title_ignored(client):
 # Health check
 # ---------------------------------------------------------------------------
 
+
 async def test_healthz(client):
     ac, _ = client
     resp = await ac.get("/healthz")
@@ -229,6 +241,7 @@ async def test_healthz(client):
 # ---------------------------------------------------------------------------
 # Input validation — package name / version
 # ---------------------------------------------------------------------------
+
 
 async def test_path_traversal_in_package_name_ignored(client):
     ac, mock_tc = client
@@ -272,37 +285,44 @@ async def test_valid_scoped_npm_package_accepted(client):
 
 def test_validate_package_rejects_path_traversal():
     from api.webhook import _validate_parsed_package
+
     assert _validate_parsed_package("pip", "../evil", "1.0.0", "1.0.1") is not None
 
 
 def test_validate_package_rejects_semicolon():
     from api.webhook import _validate_parsed_package
+
     assert _validate_parsed_package("pip", "requests; rm -rf /", "1.0.0", "1.0.1") is not None
 
 
 def test_validate_package_rejects_null_byte():
     from api.webhook import _validate_parsed_package
+
     assert _validate_parsed_package("npm", "lodash\x00evil", "1.0.0", "1.0.1") is not None
 
 
 def test_validate_package_accepts_normal_pypi():
     from api.webhook import _validate_parsed_package
+
     assert _validate_parsed_package("pip", "requests", "2.31.0", "2.32.0") is None
 
 
 def test_validate_package_accepts_scoped_npm():
     from api.webhook import _validate_parsed_package
+
     assert _validate_parsed_package("npm", "@typescript-eslint/parser", "6.0.0", "6.1.0") is None
 
 
 def test_validate_package_accepts_unknown_old_version():
     from api.webhook import _validate_parsed_package
+
     assert _validate_parsed_package("pip", "requests", "unknown", "2.32.0") is None
 
 
 # ---------------------------------------------------------------------------
 # pull_request_review handling
 # ---------------------------------------------------------------------------
+
 
 def _review_payload(
     state: str = "approved",
@@ -333,8 +353,9 @@ async def test_approved_review_signals_workflow(client):
     assert resp.json()["status"] == "signalled"
     assert resp.json()["decision"] == "approve"
     mock_handle.signal.assert_called_once()
-    _, reviewer_arg = mock_handle.signal.call_args[0][1:]
-    assert reviewer_arg == "alice"
+    # signal is called as: handle.signal(func, args=[decision, reviewer])
+    signal_args = mock_handle.signal.call_args.kwargs.get("args", [])
+    assert signal_args[1] == "alice"
 
 
 async def test_changes_requested_review_signals_reject(client):
@@ -398,3 +419,50 @@ async def test_review_bad_signature_rejected(client):
         headers={"X-Hub-Signature-256": "sha256=badhash", "X-GitHub-Event": "pull_request_review"},
     )
     assert resp.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# BotParser registry
+# ---------------------------------------------------------------------------
+
+
+def test_get_bot_parser_returns_dependabot_parser():
+    from helpers.bot_parsers import get_bot_parser, DependabotParser
+
+    parser = get_bot_parser("dependabot[bot]")
+    assert isinstance(parser, DependabotParser)
+
+
+def test_get_bot_parser_returns_renovate_parser():
+    from helpers.bot_parsers import get_bot_parser, RenovateParser
+
+    parser = get_bot_parser("renovate[bot]")
+    assert isinstance(parser, RenovateParser)
+
+
+def test_get_bot_parser_returns_none_for_humans():
+    from helpers.bot_parsers import get_bot_parser
+
+    assert get_bot_parser("octocat") is None
+
+
+def test_get_bot_logins_includes_builtins():
+    from helpers.bot_parsers import get_bot_logins
+
+    logins = get_bot_logins()
+    assert "dependabot[bot]" in logins
+    assert "renovate[bot]" in logins
+
+
+def test_register_custom_bot_parser():
+    from helpers.bot_parsers import register_bot_parser, get_bot_parser
+    from helpers.pr_parser import ParsedPR
+
+    class PyUpParser:
+        bot_logins: frozenset = frozenset({"pyup-bot"})
+
+        def parse(self, title: str, body: str, branch: str) -> ParsedPR | None:
+            return None  # stub
+
+    register_bot_parser(PyUpParser())
+    assert get_bot_parser("pyup-bot") is not None

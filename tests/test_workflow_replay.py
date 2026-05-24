@@ -9,6 +9,7 @@ introduced — the kind of bug that corrupts live workflow state mid-execution.
 To regenerate fixtures after an intentional workflow change:
     uv run python tests/generate_fixtures.py
 """
+
 import json
 from pathlib import Path
 

@@ -14,7 +14,9 @@ _INCLUDE_SEVERITIES = {"critical", "high"}
 async def score(ecosystem: str, package: str, old_version: str, new_version: str) -> SocketSignals:
     api_key = os.environ.get("SOCKET_API_KEY")
     if not api_key:
-        activity.logger.info("No SOCKET_API_KEY — skipping Socket score (treated as yellow indicator)")
+        activity.logger.info(
+            "No SOCKET_API_KEY — skipping Socket score (treated as yellow indicator)"
+        )
         return SocketSignals(socket_score=None, socket_alerts=[])
 
     ecosystem_slug = _ECOSYSTEM_MAP.get(ecosystem, "pypi")

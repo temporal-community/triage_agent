@@ -11,17 +11,25 @@ from temporalio.exceptions import ApplicationError
 
 from activities.ecosystems import (
     build_release_signals,
-    fetch_github_release,
-    fetch_tag_signature,
+    fetch_vcs_release,
+    fetch_vcs_tag_signature,
     is_major,
-    parse_github_repo,
+    parse_vcs_repo,
     parse_upload_time,
     validate_archive_url,
 )
-from activities.models import AttestationSignals, MaintainerSignals, PyPISignals, ReleaseAgeSignals, ReleaseSignals
+from activities.models import (
+    AttestationSignals,
+    MaintainerSignals,
+    PyPISignals,
+    ReleaseAgeSignals,
+    ReleaseSignals,
+)
 
 # crates.io requires a descriptive User-Agent per their crawling policy.
-_HEADERS = {"User-Agent": "dependabot-supply-chain-scout/1.0 (security scanner; https://github.com/temporal-community/dependabot-supply-chain-scout)"}
+_HEADERS = {
+    "User-Agent": "dependabot-supply-chain-scout/1.0 (security scanner; https://github.com/temporal-community/dependabot-supply-chain-scout)"
+}
 _API_BASE = "https://crates.io/api/v1"
 
 
@@ -35,9 +43,7 @@ class CargoProvider:
     # fetch_metadata
     # ------------------------------------------------------------------
 
-    async def fetch_metadata(
-        self, package: str, old_version: str, new_version: str
-    ) -> PyPISignals:
+    async def fetch_metadata(self, package: str, old_version: str, new_version: str) -> PyPISignals:
         async with httpx.AsyncClient(timeout=15.0, headers=_HEADERS) as client:
             resp = await client.get(f"{_API_BASE}/crates/{package}")
             if resp.status_code == 404:
@@ -170,6 +176,7 @@ class CargoProvider:
 
     async def fetch_release(self, package: str, old_version: str, version: str) -> ReleaseSignals:
         import os
+
         token = os.environ.get("GITHUB_TOKEN")
         async with httpx.AsyncClient(timeout=15.0, headers=_HEADERS) as client:
             resp = await client.get(f"{_API_BASE}/crates/{package}")
@@ -180,9 +187,10 @@ class CargoProvider:
         crate = data.get("crate", {})
 
         source_url = crate.get("repository") or ""
-        owner_repo = parse_github_repo(source_url)
-        if not owner_repo:
+        vcs = parse_vcs_repo(source_url)
+        if not vcs:
             return ReleaseSignals()
+        platform, owner_repo = vcs
 
         registry_time = None
         for v in data.get("versions", []):
@@ -197,9 +205,9 @@ class CargoProvider:
 
         owner, repo = owner_repo.split("/", 1)
         release, new_sig, old_sig = await asyncio.gather(
-            fetch_github_release(owner, repo, version, token),
-            fetch_tag_signature(owner, repo, version, token),
-            fetch_tag_signature(owner, repo, old_version, token),
+            fetch_vcs_release(platform, owner, repo, version, token),
+            fetch_vcs_tag_signature(platform, owner, repo, version, token),
+            fetch_vcs_tag_signature(platform, owner, repo, old_version, token),
         )
         if release:
             return build_release_signals(release, registry_time, new_sig, old_sig).model_copy(

@@ -1,4 +1,5 @@
 """Unit tests for the Go Modules ecosystem provider."""
+
 from __future__ import annotations
 
 import io
@@ -28,6 +29,7 @@ _ESCAPED = _escape(MODULE)
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _info(version: str, ts: str = _NEW_TS, repo: str = "https://github.com/gorilla/mux") -> dict:
     return {
         "Version": version,
@@ -48,6 +50,7 @@ def _make_zip(module: str, version: str) -> bytes:
 # _escape
 # ---------------------------------------------------------------------------
 
+
 def test_escape_lowercase_unchanged():
     assert _escape("github.com/gorilla/mux") == "github.com/gorilla/mux"
 
@@ -59,6 +62,7 @@ def test_escape_uppercase_encoded():
 # ---------------------------------------------------------------------------
 # fetch_metadata
 # ---------------------------------------------------------------------------
+
 
 @respx.mock
 async def test_metadata_success():
@@ -84,9 +88,7 @@ async def test_metadata_major_bump():
 
 @respx.mock
 async def test_metadata_404_raises_non_retryable():
-    respx.get(f"{_PROXY}/{_ESCAPED}/@v/{NEW_VER}.info").mock(
-        return_value=httpx.Response(404)
-    )
+    respx.get(f"{_PROXY}/{_ESCAPED}/@v/{NEW_VER}.info").mock(return_value=httpx.Response(404))
     env = ActivityEnvironment()
     with pytest.raises(ApplicationError) as exc_info:
         await env.run(GoModulesProvider().fetch_metadata, MODULE, OLD_VER, NEW_VER)
@@ -95,9 +97,7 @@ async def test_metadata_404_raises_non_retryable():
 
 @respx.mock
 async def test_metadata_410_raises_non_retryable():
-    respx.get(f"{_PROXY}/{_ESCAPED}/@v/{NEW_VER}.info").mock(
-        return_value=httpx.Response(410)
-    )
+    respx.get(f"{_PROXY}/{_ESCAPED}/@v/{NEW_VER}.info").mock(return_value=httpx.Response(410))
     env = ActivityEnvironment()
     with pytest.raises(ApplicationError) as exc_info:
         await env.run(GoModulesProvider().fetch_metadata, MODULE, OLD_VER, NEW_VER)
@@ -107,6 +107,7 @@ async def test_metadata_410_raises_non_retryable():
 # ---------------------------------------------------------------------------
 # fetch_release_age
 # ---------------------------------------------------------------------------
+
 
 @respx.mock
 async def test_release_age_recent():
@@ -133,6 +134,7 @@ async def test_release_age_missing_time():
 # fetch_maintainer
 # ---------------------------------------------------------------------------
 
+
 async def test_maintainer_always_false():
     env = ActivityEnvironment()
     result = await env.run(GoModulesProvider().fetch_maintainer, MODULE, OLD_VER, NEW_VER)
@@ -142,6 +144,7 @@ async def test_maintainer_always_false():
 # ---------------------------------------------------------------------------
 # get_archive_url
 # ---------------------------------------------------------------------------
+
 
 async def test_get_archive_url():
     provider = GoModulesProvider()
@@ -158,6 +161,7 @@ async def test_get_archive_url():
 # extract_archive
 # ---------------------------------------------------------------------------
 
+
 def test_extract_archive(tmp_path):
     provider = GoModulesProvider()
     zip_bytes = _make_zip(MODULE, NEW_VER)
@@ -169,6 +173,7 @@ def test_extract_archive(tmp_path):
 # fetch_attestations
 # ---------------------------------------------------------------------------
 
+
 async def test_attestations_always_false():
     env = ActivityEnvironment()
     result = await env.run(GoModulesProvider().fetch_attestations, MODULE, OLD_VER, NEW_VER)
@@ -178,6 +183,7 @@ async def test_attestations_always_false():
 # ---------------------------------------------------------------------------
 # fetch_release
 # ---------------------------------------------------------------------------
+
 
 @respx.mock
 async def test_fetch_release_no_origin_url():
@@ -194,9 +200,7 @@ async def test_fetch_release_no_origin_url():
 
 @respx.mock
 async def test_fetch_release_non_200_returns_empty():
-    respx.get(f"{_PROXY}/{_ESCAPED}/@v/{NEW_VER}.info").mock(
-        return_value=httpx.Response(500)
-    )
+    respx.get(f"{_PROXY}/{_ESCAPED}/@v/{NEW_VER}.info").mock(return_value=httpx.Response(500))
     respx.get(f"{_PROXY}/{_ESCAPED}/@v/{OLD_VER}.info").mock(
         return_value=httpx.Response(200, json=_info(OLD_VER, ts=_OLD_TS))
     )
@@ -209,21 +213,28 @@ async def test_fetch_release_non_200_returns_empty():
 # name_re
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("name", [
-    "github.com/gorilla/mux",
-    "golang.org/x/net",
-    "k8s.io/client-go",
-    "github.com/foo/bar/v2",
-])
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "github.com/gorilla/mux",
+        "golang.org/x/net",
+        "k8s.io/client-go",
+        "github.com/foo/bar/v2",
+    ],
+)
 def test_name_re_valid(name):
     assert GoModulesProvider.name_re.match(name)
 
 
-@pytest.mark.parametrize("name", [
-    "../../etc/passwd",
-    "github.com/../evil",
-    "",
-])
+@pytest.mark.parametrize(
+    "name",
+    [
+        "../../etc/passwd",
+        "github.com/../evil",
+        "",
+    ],
+)
 def test_name_re_rejects_invalid(name):
     assert not GoModulesProvider.name_re.match(name)
 
@@ -232,11 +243,14 @@ def test_name_re_rejects_invalid(name):
 # Ecosystem registration
 # ---------------------------------------------------------------------------
 
+
 def test_go_provider_auto_discovered():
     from activities.ecosystems import get_provider
+
     assert isinstance(get_provider("go"), GoModulesProvider)
 
 
 def test_dependabot_slug_map_includes_go():
     from activities.ecosystems import get_dependabot_slug_map
+
     assert get_dependabot_slug_map().get("go_modules") == "go"

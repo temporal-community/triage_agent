@@ -3,6 +3,7 @@ Activity: compute a security-focused diff between two package versions.
 Downloads both archives, extracts them, and returns a DiffSignals model.
 Archive format and CDN host are fully delegated to the ecosystem provider.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -30,9 +31,25 @@ from activities.models import DiffSignals
 MAX_DOWNLOAD_BYTES = 20 * 1024 * 1024  # 20 MB
 MAX_DIFF_BYTES = 100 * 1024  # 100 KB
 
-NOISE_DIRS = {".dist-info", "__pycache__", ".egg-info", "node_modules", ".nyc_output", "coverage", "META-INF"}
+NOISE_DIRS = {
+    ".dist-info",
+    "__pycache__",
+    ".egg-info",
+    "node_modules",
+    ".nyc_output",
+    "coverage",
+    "META-INF",
+}
 NOISE_SUFFIXES = {".pyc", ".pyo", ".rbc"}  # .rbc = Ruby bytecode cache
-NOISE_FILENAMES = {"RECORD", "WHEEL", "METADATA", "INSTALLER", "package-lock.json", "yarn.lock", "npm-shrinkwrap.json"}
+NOISE_FILENAMES = {
+    "RECORD",
+    "WHEEL",
+    "METADATA",
+    "INSTALLER",
+    "package-lock.json",
+    "yarn.lock",
+    "npm-shrinkwrap.json",
+}
 
 HIGH_SIGNAL_NAMES = {
     "setup.py",
@@ -53,11 +70,11 @@ HIGH_SIGNAL_SUFFIXES = {".pth", ".gemspec"}
 
 # Subset of HIGH_SIGNAL_NAMES that execute code on install — changes are an explicit red/yellow flag.
 INSTALL_HOOK_NAMES = {
-    "setup.py",       # pip: customises build/install steps
-    "install.js",     # npm: install lifecycle script
-    "postinstall.js", # npm: postinstall hook
+    "setup.py",  # pip: customises build/install steps
+    "install.js",  # npm: install lifecycle script
+    "postinstall.js",  # npm: postinstall hook
     "preinstall.js",  # npm: preinstall hook
-    "extconf.rb",     # rubygems: C-extension build script
+    "extconf.rb",  # rubygems: C-extension build script
 }
 # Keys in package.json scripts{} that run during install.
 NPM_INSTALL_SCRIPTS = {"install", "preinstall", "postinstall", "prepare"}
@@ -65,21 +82,48 @@ NPM_INSTALL_SCRIPTS = {"install", "preinstall", "postinstall", "prepare"}
 # Files that execute code on load / are impossible to text-diff safely.
 # A new or modified file with any of these extensions is an automatic RED signal.
 DANGEROUS_BINARY_SUFFIXES = {
-    ".so", ".pyd", ".dll",       # native compiled extensions — execute arbitrary code
-    ".node",                     # Node.js native add-ons — execute arbitrary native code
-    ".pkl", ".pickle",            # deserializes and executes arbitrary Python objects
-    ".bundle",                   # Ruby native C extensions (macOS .dylib-like)
+    ".so",
+    ".pyd",
+    ".dll",  # native compiled extensions — execute arbitrary code
+    ".node",  # Node.js native add-ons — execute arbitrary native code
+    ".pkl",
+    ".pickle",  # deserializes and executes arbitrary Python objects
+    ".bundle",  # Ruby native C extensions (macOS .dylib-like)
 }
 
 # Extensions that are legitimately binary and don't need content inspection.
 # Files with these extensions are skipped for the binary_data_added check.
 _EXPECTED_BINARY_EXTENSIONS = DANGEROUS_BINARY_SUFFIXES | {
-    ".png", ".jpg", ".jpeg", ".gif", ".ico", ".webp", ".bmp", ".tiff",
-    ".woff", ".woff2", ".ttf", ".eot", ".otf",
-    ".zip", ".tar", ".gz", ".bz2", ".xz",
-    ".pdf", ".db", ".sqlite", ".sqlite3",
-    ".mp3", ".mp4", ".wav", ".avi", ".mov",
-    ".exe", ".bin", ".dat",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".ico",
+    ".webp",
+    ".bmp",
+    ".tiff",
+    ".woff",
+    ".woff2",
+    ".ttf",
+    ".eot",
+    ".otf",
+    ".zip",
+    ".tar",
+    ".gz",
+    ".bz2",
+    ".xz",
+    ".pdf",
+    ".db",
+    ".sqlite",
+    ".sqlite3",
+    ".mp3",
+    ".mp4",
+    ".wav",
+    ".avi",
+    ".mov",
+    ".exe",
+    ".bin",
+    ".dat",
 }
 
 # Per-extension regex patterns for outbound network calls.
@@ -88,38 +132,57 @@ _NET_CALL_PATTERNS: dict[str, list[re.Pattern[str]]] = {
     ext: [re.compile(p) for p in patterns]
     for ext, patterns in {
         ".rb": [
-            r"Net::HTTP\b", r"URI\.open\b", r"open-uri",
-            r"Faraday\b", r"HTTParty\b", r"RestClient\b",
-            r"Excon\b", r"Typhoeus\b",
+            r"Net::HTTP\b",
+            r"URI\.open\b",
+            r"open-uri",
+            r"Faraday\b",
+            r"HTTParty\b",
+            r"RestClient\b",
+            r"Excon\b",
+            r"Typhoeus\b",
             r"\bHTTP\.(get|post|head|put|delete|patch)\b",
         ],
         ".py": [
             r"\brequests\.(get|post|put|delete|head|patch|request)\s*\(",
-            r"\burllib\.request\b", r"\burlopen\s*\(",
+            r"\burllib\.request\b",
+            r"\burlopen\s*\(",
             r"\bhttpx\.(get|post|put|delete|head|patch|request|AsyncClient|Client)\b",
             r"\baiohttp\.(ClientSession|request)\b",
             r"\bhttp\.client\.(HTTPConnection|HTTPSConnection)\b",
         ],
         ".js": [
-            r"\bfetch\s*\(", r"\baxios\.(get|post|put|delete|request|create)\b",
-            r"\bhttps?\.(request|get)\s*\(", r"\bXMLHttpRequest\b",
-            r"\bgot\s*[\.(]", r"\bsuperagent\b", r"\bnode-fetch\b",
+            r"\bfetch\s*\(",
+            r"\baxios\.(get|post|put|delete|request|create)\b",
+            r"\bhttps?\.(request|get)\s*\(",
+            r"\bXMLHttpRequest\b",
+            r"\bgot\s*[\.(]",
+            r"\bsuperagent\b",
+            r"\bnode-fetch\b",
         ],
         ".ts": [
-            r"\bfetch\s*\(", r"\baxios\.(get|post|put|delete|request|create)\b",
-            r"\bhttps?\.(request|get)\s*\(", r"\bXMLHttpRequest\b",
+            r"\bfetch\s*\(",
+            r"\baxios\.(get|post|put|delete|request|create)\b",
+            r"\bhttps?\.(request|get)\s*\(",
+            r"\bXMLHttpRequest\b",
         ],
         ".mjs": [
-            r"\bfetch\s*\(", r"\baxios\b", r"\bhttps?\.(request|get)\s*\(",
+            r"\bfetch\s*\(",
+            r"\baxios\b",
+            r"\bhttps?\.(request|get)\s*\(",
         ],
         ".php": [
-            r"\bcurl_exec\s*\(", r"\bcurl_init\s*\(",
+            r"\bcurl_exec\s*\(",
+            r"\bcurl_init\s*\(",
             r"\bfile_get_contents\s*\(\s*['\"]https?://",
-            r"\bGuzzleHttp\\", r"\\Http\\Client\b",
+            r"\bGuzzleHttp\\",
+            r"\\Http\\Client\b",
         ],
         ".java": [
-            r"\bHttpClient\b", r"\bHttpURLConnection\b", r"\bOkHttpClient\b",
-            r"\bRestTemplate\b", r"\bWebClient\b",
+            r"\bHttpClient\b",
+            r"\bHttpURLConnection\b",
+            r"\bOkHttpClient\b",
+            r"\bRestTemplate\b",
+            r"\bWebClient\b",
         ],
     }.items()
 }
@@ -129,11 +192,10 @@ _NET_CALL_PATTERNS: dict[str, list[re.Pattern[str]]] = {
 # Activity entry point
 # ---------------------------------------------------------------------------
 
+
 @activity.defn(name="activities.package_diff.compute")
 async def compute(ecosystem: str, package: str, old_version: str, new_version: str) -> DiffSignals:
-    activity.logger.info(
-        f"Computing package diff for {package} {old_version} -> {new_version}"
-    )
+    activity.logger.info(f"Computing package diff for {package} {old_version} -> {new_version}")
 
     provider = get_provider(ecosystem)
 
@@ -163,10 +225,15 @@ async def compute(ecosystem: str, package: str, old_version: str, new_version: s
 
     # Extraction and diff are CPU/blocking I/O — run in a thread.
     activity.heartbeat("extracting and diffing")
-    diff_summary, install_script_added, install_script_changed, new_dep_count, net_calls, binary_data = (
-        await asyncio.to_thread(
-            _extract_and_diff, old_bytes, old_filename, new_bytes, new_filename, provider
-        )
+    (
+        diff_summary,
+        install_script_added,
+        install_script_changed,
+        new_dep_count,
+        net_calls,
+        binary_data,
+    ) = await asyncio.to_thread(
+        _extract_and_diff, old_bytes, old_filename, new_bytes, new_filename, provider
     )
 
     return DiffSignals(
@@ -183,6 +250,7 @@ async def compute(ecosystem: str, package: str, old_version: str, new_version: s
 # ---------------------------------------------------------------------------
 # HTTP helpers
 # ---------------------------------------------------------------------------
+
 
 async def _download(
     client: httpx.AsyncClient,
@@ -226,7 +294,7 @@ async def _download(
 def _verify_integrity(data: bytes, integrity: str, url: str) -> None:
     """Verify data against a SHA-256 hex digest or a SHA-512 SRI string."""
     if integrity.startswith("sha512-"):
-        expected_bytes = base64.b64decode(integrity[len("sha512-"):])
+        expected_bytes = base64.b64decode(integrity[len("sha512-") :])
         actual_bytes = hashlib.sha512(data).digest()
         if not hmac.compare_digest(actual_bytes, expected_bytes):
             raise ApplicationError(
@@ -247,6 +315,7 @@ def _verify_integrity(data: bytes, integrity: str, url: str) -> None:
 # ---------------------------------------------------------------------------
 # Synchronous extraction + diff (runs in asyncio.to_thread)
 # ---------------------------------------------------------------------------
+
 
 def _extract_and_diff(
     old_bytes: bytes,
@@ -317,17 +386,22 @@ def _get_file_map(base_dir: str) -> dict[str, Path]:
     return result
 
 
-_REQUIREMENTS_NAMES = frozenset({
-    "requirements.txt", "requirements-dev.txt", "requirements-test.txt",
-    "requirements-prod.txt", "requirements-base.txt",
-})
+_REQUIREMENTS_NAMES = frozenset(
+    {
+        "requirements.txt",
+        "requirements-dev.txt",
+        "requirements-test.txt",
+        "requirements-prod.txt",
+        "requirements-base.txt",
+    }
+)
 
 
 def _build_diff(
     old_map: dict[str, Path], new_map: dict[str, Path]
 ) -> tuple[str, bool, bool, int, bool, bool]:
     """Return (diff_text, install_script_added, install_script_changed,
-               new_dependency_count, network_calls_in_lib, binary_data_added)."""
+    new_dependency_count, network_calls_in_lib, binary_data_added)."""
     old_keys = set(old_map)
     new_keys = set(new_map)
 
@@ -442,7 +516,14 @@ def _build_diff(
         sections.append("=== CHANGED (other) ===\n" + ", ".join(other_changed))
 
     if not sections:
-        return "[no significant changes detected]", install_script_added, install_script_changed, new_dependency_count, network_calls_in_lib, binary_data_added
+        return (
+            "[no significant changes detected]",
+            install_script_added,
+            install_script_changed,
+            new_dependency_count,
+            network_calls_in_lib,
+            binary_data_added,
+        )
 
     result = "\n\n".join(sections)
 
@@ -451,7 +532,14 @@ def _build_diff(
         truncated = result.encode()[:MAX_DIFF_BYTES].decode(errors="replace")
         result = truncated + f"\n[diff truncated at 100KB — {total_bytes} bytes total]"
 
-    return result, install_script_added, install_script_changed, new_dependency_count, network_calls_in_lib, binary_data_added
+    return (
+        result,
+        install_script_added,
+        install_script_changed,
+        new_dependency_count,
+        network_calls_in_lib,
+        binary_data_added,
+    )
 
 
 def _has_binary_content(path: Path, sample_size: int = 8192) -> bool:
@@ -500,8 +588,12 @@ def _added_lines_have_net_calls(lines: list[str], ext: str) -> bool:
 def _npm_install_scripts_added(old_path: Path, new_path: Path) -> bool:
     """Return True if new install-lifecycle script keys appear in package.json scripts field."""
     try:
-        old_scripts = set(json.loads(old_path.read_text(errors="replace")).get("scripts", {}).keys())
-        new_scripts = set(json.loads(new_path.read_text(errors="replace")).get("scripts", {}).keys())
+        old_scripts = set(
+            json.loads(old_path.read_text(errors="replace")).get("scripts", {}).keys()
+        )
+        new_scripts = set(
+            json.loads(new_path.read_text(errors="replace")).get("scripts", {}).keys()
+        )
         return bool((new_scripts - old_scripts) & NPM_INSTALL_SCRIPTS)
     except Exception:  # noqa: BLE001
         return False
@@ -512,8 +604,12 @@ def _count_new_npm_deps(old_path: Path, new_path: Path) -> int:
     try:
         old_data = json.loads(old_path.read_text(errors="replace"))
         new_data = json.loads(new_path.read_text(errors="replace"))
-        old_deps: set[str] = set(old_data.get("dependencies", {})) | set(old_data.get("devDependencies", {}))
-        new_deps: set[str] = set(new_data.get("dependencies", {})) | set(new_data.get("devDependencies", {}))
+        old_deps: set[str] = set(old_data.get("dependencies", {})) | set(
+            old_data.get("devDependencies", {})
+        )
+        new_deps: set[str] = set(new_data.get("dependencies", {})) | set(
+            new_data.get("devDependencies", {})
+        )
         return len(new_deps - old_deps)
     except Exception:  # noqa: BLE001
         return 0
@@ -526,6 +622,7 @@ _REQUIREMENT_RE = __import__("re").compile(
 
 def _count_new_pip_deps(old_path: Path, new_path: Path) -> int:
     """Return net new dependency lines added to requirements.txt-style files."""
+
     def _parse_reqs(text: str) -> set[str]:
         names: set[str] = set()
         for line in text.splitlines():

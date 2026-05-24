@@ -5,8 +5,9 @@ import pytest
 import respx
 from temporalio.testing import ActivityEnvironment
 
+from activities.platform_activities import fetch_repo_config as fetch
 from activities.models import PRContext, RepoConfig
-from activities.repo_config import fetch
+from helpers.config_provider import EnvConfigProvider
 
 GITHUB_CONTENTS_URL = "https://api.github.com/repos/owner/repo/contents/.github/triage-agent.yml"
 
@@ -91,6 +92,7 @@ async def test_pat_sent_in_auth_header(monkeypatch):
 @respx.mock
 async def test_401_raises_non_retryable(monkeypatch):
     from temporalio.exceptions import ApplicationError
+
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
     respx.get(GITHUB_CONTENTS_URL).mock(return_value=httpx.Response(401))
     env = ActivityEnvironment()
@@ -103,13 +105,61 @@ async def test_401_raises_non_retryable(monkeypatch):
 async def test_github_app_token_used_when_installation_id_set(monkeypatch):
     """When no PAT is set and installation_id is non-zero, auth via GitHub App token."""
     from unittest.mock import AsyncMock, patch
+
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
 
     app_pr = PR.model_copy(update={"installation_id": 99999})
     route = respx.get(GITHUB_CONTENTS_URL).mock(return_value=httpx.Response(404))
 
-    with patch("helpers.github_app.get_installation_token", new=AsyncMock(return_value="app_token_xyz")):
+    with patch(
+        "helpers.github_app.get_installation_token", new=AsyncMock(return_value="app_token_xyz")
+    ):
         env = ActivityEnvironment()
         await env.run(fetch, app_pr)
 
     assert route.calls[0].request.headers["Authorization"] == "Bearer app_token_xyz"
+
+
+# ---------------------------------------------------------------------------
+# EnvConfigProvider
+# ---------------------------------------------------------------------------
+
+
+async def test_env_provider_defaults_when_no_vars_set(monkeypatch):
+    for key in [
+        "TRIAGE_CONFIG_AUTO_MERGE",
+        "TRIAGE_CONFIG_REVIEWERS",
+        "TRIAGE_CONFIG_MIN_RELEASE_AGE_HOURS",
+        "TRIAGE_CONFIG_BLOCK_CLASSIFICATIONS",
+        "TRIAGE_CONFIG_AUTO_MERGE_CLASSIFICATIONS",
+        "TRIAGE_CONFIG_MAX_NEW_DEPENDENCIES",
+    ]:
+        monkeypatch.delenv(key, raising=False)
+    result = await EnvConfigProvider().fetch(PR)
+    assert result == RepoConfig()
+
+
+async def test_env_provider_reads_auto_merge(monkeypatch):
+    monkeypatch.setenv("TRIAGE_CONFIG_AUTO_MERGE", "true")
+    result = await EnvConfigProvider().fetch(PR)
+    assert result.auto_merge_enabled is True
+
+
+async def test_env_provider_reads_reviewers(monkeypatch):
+    monkeypatch.setenv("TRIAGE_CONFIG_REVIEWERS", "alice, bob")
+    result = await EnvConfigProvider().fetch(PR)
+    assert result.reviewers == ["alice", "bob"]
+
+
+async def test_env_provider_reads_min_age(monkeypatch):
+    monkeypatch.setenv("TRIAGE_CONFIG_MIN_RELEASE_AGE_HOURS", "48")
+    result = await EnvConfigProvider().fetch(PR)
+    assert result.min_release_age_hours == 48
+
+
+async def test_env_provider_selected_via_env_var(monkeypatch):
+    monkeypatch.setenv("TRIAGE_CONFIG_PROVIDER", "env")
+    monkeypatch.setenv("TRIAGE_CONFIG_AUTO_MERGE", "true")
+    env = ActivityEnvironment()
+    result = await env.run(fetch, PR)
+    assert result.auto_merge_enabled is True

@@ -2,24 +2,39 @@ import pytest
 from helpers.pr_parser import parse_pr
 
 
-@pytest.mark.parametrize("title,pkg,old,new,ecosystem", [
-    (
-        "Bump requests from 2.31.0 to 2.32.0",
-        "requests", "2.31.0", "2.32.0", "pip",
-    ),
-    (
-        "Bump requests from 2.31.0 to 2.32.0 in /foundations/hello_world",
-        "requests", "2.31.0", "2.32.0", "pip",
-    ),
-    (
-        "build(deps): bump litellm from 1.30.1 to 1.30.2",
-        "litellm", "1.30.1", "1.30.2", "pip",
-    ),
-    (
-        "Bump actions/checkout from 3 to 4",
-        "actions/checkout", "3", "4", "pip",  # no branch → defaults to pip
-    ),
-])
+@pytest.mark.parametrize(
+    "title,pkg,old,new,ecosystem",
+    [
+        (
+            "Bump requests from 2.31.0 to 2.32.0",
+            "requests",
+            "2.31.0",
+            "2.32.0",
+            "pip",
+        ),
+        (
+            "Bump requests from 2.31.0 to 2.32.0 in /foundations/hello_world",
+            "requests",
+            "2.31.0",
+            "2.32.0",
+            "pip",
+        ),
+        (
+            "build(deps): bump litellm from 1.30.1 to 1.30.2",
+            "litellm",
+            "1.30.1",
+            "1.30.2",
+            "pip",
+        ),
+        (
+            "Bump actions/checkout from 3 to 4",
+            "actions/checkout",
+            "3",
+            "4",
+            "pip",  # no branch → defaults to pip
+        ),
+    ],
+)
 def test_dependabot_titles(title, pkg, old, new, ecosystem):
     result = parse_pr(title)
     assert result is not None
@@ -29,11 +44,14 @@ def test_dependabot_titles(title, pkg, old, new, ecosystem):
     assert result.ecosystem == ecosystem
 
 
-@pytest.mark.parametrize("title,pkg,new", [
-    ("Update dependency requests to v2.32.0", "requests", "2.32.0"),
-    ("chore(deps): update dependency litellm to 1.30.2", "litellm", "1.30.2"),
-    ("Update dependency numpy to v2.0.0", "numpy", "2.0.0"),
-])
+@pytest.mark.parametrize(
+    "title,pkg,new",
+    [
+        ("Update dependency requests to v2.32.0", "requests", "2.32.0"),
+        ("chore(deps): update dependency litellm to 1.30.2", "litellm", "1.30.2"),
+        ("Update dependency numpy to v2.0.0", "numpy", "2.0.0"),
+    ],
+)
 def test_renovate_titles(title, pkg, new):
     result = parse_pr(title)
     assert result is not None
@@ -65,6 +83,7 @@ def test_renovate_uses_unknown_when_body_has_no_match():
 # ---------------------------------------------------------------------------
 # npm ecosystem detection
 # ---------------------------------------------------------------------------
+
 
 def test_dependabot_npm_branch_detected():
     result = parse_pr(
@@ -130,3 +149,53 @@ def test_dependabot_cargo_detected():
     )
     assert result is not None
     assert result.ecosystem == "cargo"
+
+
+# ---------------------------------------------------------------------------
+# Renovate branch-based ecosystem detection
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "branch,expected_ecosystem",
+    [
+        ("renovate/npm-lodash-4.x", "npm"),
+        ("renovate/node-express-5.x", "npm"),
+        ("renovate/python-requests-2.x", "pip"),
+        ("renovate/pypi-boto3-1.x", "pip"),
+        ("renovate/ruby-rails-8.x", "rubygems"),
+        ("renovate/bundler-devise-4.x", "rubygems"),
+        ("renovate/gem-nokogiri-1.x", "rubygems"),
+        ("renovate/cargo-serde-1.x", "cargo"),
+        ("renovate/golang-github.com-gorilla-mux-1.x", "go"),
+        ("renovate/gomod-rsc-quote-1.x", "go"),
+        ("renovate/maven-com.example-1.x", "maven"),
+        ("renovate/gradle-junit-4.x", "maven"),
+        ("renovate/nuget-Newtonsoft.Json-13.x", "nuget"),
+        ("renovate/composer-symfony-7.x", "composer"),
+    ],
+)
+def test_renovate_branch_ecosystem_detected(branch, expected_ecosystem):
+    title = "Update dependency requests to v2.32.0"
+    result = parse_pr(title, branch=branch)
+    assert result is not None
+    assert result.ecosystem == expected_ecosystem
+
+
+def test_renovate_unknown_branch_prefix_falls_back_to_pip():
+    result = parse_pr(
+        "Update dependency some-pkg to v1.2.0",
+        branch="renovate/some-unknown-1.x",
+    )
+    assert result is not None
+    assert result.ecosystem == "pip"
+
+
+def test_renovate_branch_npm_with_scoped_package():
+    result = parse_pr(
+        "Update dependency @typescript-eslint/parser to v6.1.0",
+        branch="renovate/npm-typescript-eslint-parser-6.x",
+    )
+    assert result is not None
+    assert result.ecosystem == "npm"
+    assert result.package == "@typescript-eslint/parser"

@@ -14,13 +14,43 @@ Renovate title examples:
 
 Ecosystem detection (in priority order):
   1. Dependabot branch name  — dependabot/npm_and_yarn/... → npm, dependabot/pip/... → pip
-  2. Scoped package name     — @org/pkg is always npm
-  3. Default                 — pip
+  2. Renovate branch name    — renovate/npm-..., renovate/python-..., renovate/cargo-..., etc.
+  3. Scoped package name     — @org/pkg is always npm
+  4. Default                 — pip
 """
+
 import re
 from dataclasses import dataclass
 
 from activities.ecosystems import get_dependabot_slug_map
+
+# Renovate embeds manager/datasource names in branch prefixes when users customize
+# branchName templates (e.g. renovate/npm-lodash-4.x, renovate/python-requests-2.x).
+# Maps the segment prefix (before the first "-") to our ecosystem name.
+_RENOVATE_SLUG_MAP: dict[str, str] = {
+    # npm / JavaScript
+    "npm": "npm",
+    "node": "npm",
+    # Python
+    "pypi": "pip",
+    "python": "pip",
+    # Ruby
+    "bundler": "rubygems",
+    "gem": "rubygems",
+    "ruby": "rubygems",
+    # JVM
+    "maven": "maven",
+    "gradle": "maven",
+    # Rust
+    "cargo": "cargo",
+    # Go
+    "golang": "go",
+    "gomod": "go",
+    # .NET
+    "nuget": "nuget",
+    # PHP
+    "composer": "composer",
+}
 
 
 @dataclass
@@ -83,6 +113,14 @@ def _detect_ecosystem(package: str, branch: str) -> str:
             slug_map = get_dependabot_slug_map()
             if slug in slug_map:
                 return slug_map[slug]
+
+    # Renovate branch names sometimes encode the manager/datasource as a prefix:
+    # renovate/{manager}-{package}-{version}.x  (e.g. renovate/npm-lodash-4.x)
+    elif branch.startswith("renovate/"):
+        seg = branch[len("renovate/") :]
+        prefix = seg.split("-")[0]
+        if prefix in _RENOVATE_SLUG_MAP:
+            return _RENOVATE_SLUG_MAP[prefix]
 
     # Scoped npm packages are unambiguous regardless of bot
     if package.startswith("@"):

@@ -2,6 +2,7 @@
 Tests for helpers/github_app.py — JWT generation and installation token caching.
 Uses a real RSA key generated for tests (no GitHub connection needed for JWT tests).
 """
+
 import time
 from datetime import datetime, timezone, timedelta
 from unittest.mock import patch
@@ -47,9 +48,7 @@ HdUkplILAneqOG13wNFc2j0aQEXJOcFiFv5M01WTcxAGV2IXos5deoUfoYyK0Kci
 
 
 def _token_response(token: str = "ghs_test_token", hours_valid: int = 1) -> dict:
-    exp = (datetime.now(timezone.utc) + timedelta(hours=hours_valid)).strftime(
-        "%Y-%m-%dT%H:%M:%SZ"
-    )
+    exp = (datetime.now(timezone.utc) + timedelta(hours=hours_valid)).strftime("%Y-%m-%dT%H:%M:%SZ")
     return {"token": token, "expires_at": exp}
 
 
@@ -70,6 +69,7 @@ def set_app_env(monkeypatch):
 # ---------------------------------------------------------------------------
 # Token fetching
 # ---------------------------------------------------------------------------
+
 
 @respx.mock
 async def test_fetches_token_on_cache_miss():
@@ -96,9 +96,7 @@ async def test_refreshes_token_near_expiry():
     expires_soon = time.time() + 120
     app_module._token_cache[12345] = ("ghs_old", expires_soon)
 
-    respx.post(INSTALL_URL).mock(
-        return_value=httpx.Response(200, json=_token_response("ghs_new"))
-    )
+    respx.post(INSTALL_URL).mock(return_value=httpx.Response(200, json=_token_response("ghs_new")))
     token = await get_installation_token(12345)
     assert token == "ghs_new"
 
@@ -106,6 +104,7 @@ async def test_refreshes_token_near_expiry():
 # ---------------------------------------------------------------------------
 # Error handling
 # ---------------------------------------------------------------------------
+
 
 @respx.mock
 async def test_401_raises_non_retryable():
@@ -127,10 +126,12 @@ async def test_404_raises_non_retryable():
 # Private key loading
 # ---------------------------------------------------------------------------
 
+
 def test_private_key_from_env_var(monkeypatch, tmp_path):
     monkeypatch.setenv("GITHUB_APP_PRIVATE_KEY", TEST_PRIVATE_KEY)
     monkeypatch.delenv("GITHUB_APP_PRIVATE_KEY_PATH", raising=False)
     from helpers.github_app import _load_private_key
+
     key = _load_private_key()
     assert "BEGIN RSA PRIVATE KEY" in key
 
@@ -141,6 +142,7 @@ def test_private_key_from_file(monkeypatch, tmp_path):
     monkeypatch.setenv("GITHUB_APP_PRIVATE_KEY_PATH", str(key_file))
     monkeypatch.delenv("GITHUB_APP_PRIVATE_KEY", raising=False)
     from helpers.github_app import _load_private_key
+
     key = _load_private_key()
     assert "BEGIN RSA PRIVATE KEY" in key
 
@@ -151,12 +153,14 @@ def test_private_key_literal_newlines(monkeypatch):
     monkeypatch.setenv("GITHUB_APP_PRIVATE_KEY", encoded)
     monkeypatch.delenv("GITHUB_APP_PRIVATE_KEY_PATH", raising=False)
     from helpers.github_app import _load_private_key
+
     key = _load_private_key()
     assert "\n" in key  # literal \n were expanded
 
 
 def test_missing_key_raises():
     from helpers.github_app import _load_private_key
+
     with patch.dict("os.environ", {}, clear=True):
         with pytest.raises(ValueError, match="not configured"):
             _load_private_key()

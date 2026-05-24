@@ -6,6 +6,7 @@ older major line while a newer stable major is actively maintained. A package
 receiving 0.x patches years after 1.x stabilised is a weak supply-chain signal on
 its own, but strengthens any concurrent anomalies.
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -19,7 +20,9 @@ from activities.models import VersionLineSignals
 
 
 @activity.defn(name="activities.version_lineage.check")
-async def check(ecosystem: str, package: str, old_version: str, new_version: str) -> VersionLineSignals:
+async def check(
+    ecosystem: str, package: str, old_version: str, new_version: str
+) -> VersionLineSignals:
     try:
         if ecosystem == "pip":
             return await _check_pypi(package, new_version)
@@ -44,7 +47,9 @@ async def _check_pypi(package: str, new_version: str) -> VersionLineSignals:
     async with httpx.AsyncClient(timeout=15.0) as client:
         resp = await client.get(f"https://pypi.org/pypi/{package}/json")
     if resp.status_code == 404:
-        raise ApplicationError(f"{package} not found on PyPI", type="PackageNotFound", non_retryable=True)
+        raise ApplicationError(
+            f"{package} not found on PyPI", type="PackageNotFound", non_retryable=True
+        )
     resp.raise_for_status()
     data = resp.json()
 
@@ -60,7 +65,9 @@ async def _check_pypi(package: str, new_version: str) -> VersionLineSignals:
                 except Exception:  # noqa: BLE001
                     pass
 
-    return detect_stale_version_line(list(releases.keys()), new_version, release_dates=release_dates)
+    return detect_stale_version_line(
+        list(releases.keys()), new_version, release_dates=release_dates
+    )
 
 
 async def _check_npm(package: str, new_version: str) -> VersionLineSignals:
@@ -70,7 +77,9 @@ async def _check_npm(package: str, new_version: str) -> VersionLineSignals:
             headers={"Accept": "application/json"},
         )
     if resp.status_code == 404:
-        raise ApplicationError(f"{package} not found on npm", type="PackageNotFound", non_retryable=True)
+        raise ApplicationError(
+            f"{package} not found on npm", type="PackageNotFound", non_retryable=True
+        )
     resp.raise_for_status()
     data = resp.json()
 
@@ -96,7 +105,9 @@ async def _check_composer(package: str, new_version: str) -> VersionLineSignals:
     async with httpx.AsyncClient(timeout=15.0) as client:
         resp = await client.get(f"https://packagist.org/packages/{vendor}/{name}.json")
     if resp.status_code == 404:
-        raise ApplicationError(f"{package} not found on Packagist", type="PackageNotFound", non_retryable=True)
+        raise ApplicationError(
+            f"{package} not found on Packagist", type="PackageNotFound", non_retryable=True
+        )
     if resp.status_code != 200:
         return VersionLineSignals()
 
@@ -166,7 +177,9 @@ async def _check_nuget(package: str, new_version: str) -> VersionLineSignals:
     async with httpx.AsyncClient(timeout=15.0) as client:
         resp = await client.get(f"https://api.nuget.org/v3-flatcontainer/{id_lower}/index.json")
     if resp.status_code == 404:
-        raise ApplicationError(f"{package} not found on NuGet", type="PackageNotFound", non_retryable=True)
+        raise ApplicationError(
+            f"{package} not found on NuGet", type="PackageNotFound", non_retryable=True
+        )
     if resp.status_code != 200:
         return VersionLineSignals()
     versions: list[str] = resp.json().get("versions", [])
@@ -177,7 +190,9 @@ async def _check_rubygems(package: str, new_version: str) -> VersionLineSignals:
     async with httpx.AsyncClient(timeout=15.0) as client:
         resp = await client.get(f"https://rubygems.org/api/v1/versions/{package}.json")
     if resp.status_code == 404:
-        raise ApplicationError(f"{package} not found on RubyGems", type="PackageNotFound", non_retryable=True)
+        raise ApplicationError(
+            f"{package} not found on RubyGems", type="PackageNotFound", non_retryable=True
+        )
     resp.raise_for_status()
     versions_data: list[dict] = resp.json()
 

@@ -7,6 +7,7 @@ Run once to (re)generate committed JSON fixtures:
 The resulting files in tests/fixtures/ are committed and consumed by
 tests/test_workflow_replay.py to verify workflow determinism.
 """
+
 import asyncio
 import json
 from pathlib import Path
@@ -60,6 +61,7 @@ def _pypi(is_major: bool = False):
     @activity.defn(name="activities.pypi_metadata.fetch")
     async def fetch(*_):
         return PyPISignals(weekly_downloads=5_000_000, is_major_bump=is_major)
+
     return fetch
 
 
@@ -67,6 +69,7 @@ def _socket():
     @activity.defn(name="activities.socket.score")
     async def score(*_):
         return SocketSignals(socket_score=80, socket_alerts=[])
+
     return score
 
 
@@ -74,6 +77,7 @@ def _osv(has_cve: bool = False):
     @activity.defn(name="activities.osv.check")
     async def check(*_):
         return OSVSignals(osv_vulnerabilities=["CVE-2024-9999"] if has_cve else [])
+
     return check
 
 
@@ -81,6 +85,7 @@ def _diff():
     @activity.defn(name="activities.package_diff.compute")
     async def compute(*_):
         return DiffSignals(diff_summary="Minor doc changes.", diff_size_bytes=256)
+
     return compute
 
 
@@ -88,6 +93,7 @@ def _maintainer(changed: bool = False):
     @activity.defn(name="activities.maintainer.history")
     async def history(*_):
         return MaintainerSignals(maintainer_changed=changed)
+
     return history
 
 
@@ -95,6 +101,7 @@ def _release_age(hours: float = 720.0):
     @activity.defn(name="activities.release_age.check")
     async def check(*_):
         return ReleaseAgeSignals(release_age_hours=hours)
+
     return check
 
 
@@ -106,6 +113,7 @@ def _attestation(has_attestation: bool = True, publisher_repo: str = "psf/reques
             publisher_kind="GitHub" if has_attestation else None,
             publisher_repo=publisher_repo if has_attestation else None,
         )
+
     return check
 
 
@@ -113,6 +121,7 @@ def _release_notes():
     @activity.defn(name="activities.release_notes.check")
     async def check(*_):
         return ReleaseSignals(github_release_exists=True, release_is_automated=True)
+
     return check
 
 
@@ -126,50 +135,63 @@ def _classifier(classification: str):
             flags=[],
             release_age_hours=720.0,
         )
+
     return classify
 
 
 def _repo_config(config: RepoConfig):
-    @activity.defn(name="activities.repo_config.fetch")
-    async def fetch(*_):
+    @activity.defn(name="activities.platform.fetch_repo_config")
+    async def fetch_repo_config(*_):
         return config
-    return fetch
+
+    return fetch_repo_config
 
 
 def _comment():
-    @activity.defn(name="activities.github.comment")
-    async def comment(*_): pass
+    @activity.defn(name="activities.platform.comment")
+    async def comment(*_):
+        pass
+
     return comment
 
 
 def _merge():
-    @activity.defn(name="activities.github.merge_pr")
-    async def merge_pr(*_): pass
+    @activity.defn(name="activities.platform.merge_pr")
+    async def merge_pr(*_):
+        pass
+
     return merge_pr
 
 
 def _review():
-    @activity.defn(name="activities.github.request_review")
-    async def request_review(*_): pass
+    @activity.defn(name="activities.platform.request_review")
+    async def request_review(*_):
+        pass
+
     return request_review
 
 
 def _label():
-    @activity.defn(name="activities.github.label")
-    async def label(*_): pass
+    @activity.defn(name="activities.platform.label")
+    async def label(*_):
+        pass
+
     return label
 
 
 def _close_pr():
-    @activity.defn(name="activities.github.close_pr")
-    async def close_pr(*_): pass
+    @activity.defn(name="activities.platform.close_pr")
+    async def close_pr(*_):
+        pass
+
     return close_pr
 
 
 def _check_pr_files(unexpected: list[str] | None = None):
-    @activity.defn(name="activities.github.check_pr_files")
+    @activity.defn(name="activities.platform.check_pr_files")
     async def check_pr_files(*_):
         return PRFilesSignals(unexpected_files=unexpected or [])
+
     return check_pr_files
 
 
@@ -177,6 +199,7 @@ def _version_lineage():
     @activity.defn(name="activities.version_lineage.check")
     async def check(*_):
         return VersionLineSignals()
+
     return check
 
 
@@ -184,6 +207,7 @@ def _depsdev():
     @activity.defn(name="activities.depsdev.fetch")
     async def fetch(*_):
         return DepsDevSignals()
+
     return fetch
 
 
@@ -191,6 +215,7 @@ def _scorecard():
     @activity.defn(name="activities.scorecard.fetch")
     async def fetch(*_):
         return ScorecardSignals()
+
     return fetch
 
 
@@ -240,10 +265,24 @@ async def _run_scenario(
     human_signal: str | None,
 ) -> None:
     acts = [
-        _pypi(), _socket(), _osv(), _diff(), _maintainer(), _release_age(),
-        _attestation(), _release_notes(), _version_lineage(), _depsdev(), _scorecard(),
+        _pypi(),
+        _socket(),
+        _osv(),
+        _diff(),
+        _maintainer(),
+        _release_age(),
+        _attestation(),
+        _release_notes(),
+        _version_lineage(),
+        _depsdev(),
+        _scorecard(),
         _classifier(classification),
-        _repo_config(config), _comment(), _merge(), _review(), _label(), _close_pr(),
+        _repo_config(config),
+        _comment(),
+        _merge(),
+        _review(),
+        _label(),
+        _close_pr(),
         _check_pr_files(),
     ]
     async with Worker(

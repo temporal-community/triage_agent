@@ -1,7 +1,7 @@
 """Tests for activities/release_notes.py — GitHub release signal checks."""
+
 from __future__ import annotations
 
-from datetime import datetime, timezone, timedelta
 
 import httpx
 import pytest
@@ -11,7 +11,9 @@ from temporalio.testing import ActivityEnvironment
 from activities.ecosystems import parse_github_repo
 from activities.release_notes import check as release_check
 from activities.models import (
-    ReleaseSignals, PackageSignals, ReleaseAgeSignals,
+    ReleaseSignals,
+    PackageSignals,
+    ReleaseAgeSignals,
 )
 
 PYPI_BASE = "https://pypi.org/pypi"
@@ -25,24 +27,28 @@ GH_API = "https://api.github.com/repos"
 # parse_github_repo — pure unit tests
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("url,expected", [
-    ("https://github.com/psf/requests", "psf/requests"),
-    ("https://github.com/psf/requests.git", "psf/requests"),
-    ("git+https://github.com/lodash/lodash.git", "lodash/lodash"),
-    ("git://github.com/owner/repo.git", "owner/repo"),
-    ("git@github.com:owner/repo.git", "owner/repo"),
-    ("https://github.com/owner/repo/issues", "owner/repo"),
-    ("https://github.com/nicowillis/better.js", "nicowillis/better.js"),
-    # npm shorthands
-    ("github:owner/repo", "owner/repo"),
-    ("github:owner/repo.git", "owner/repo"),
-    # non-GitHub
-    ("https://gitlab.com/owner/repo", None),
-    ("bitbucket:owner/repo", None),
-    ("gitlab:owner/repo", None),
-    ("", None),
-    ("https://example.com/not-github", None),
-])
+
+@pytest.mark.parametrize(
+    "url,expected",
+    [
+        ("https://github.com/psf/requests", "psf/requests"),
+        ("https://github.com/psf/requests.git", "psf/requests"),
+        ("git+https://github.com/lodash/lodash.git", "lodash/lodash"),
+        ("git://github.com/owner/repo.git", "owner/repo"),
+        ("git@github.com:owner/repo.git", "owner/repo"),
+        ("https://github.com/owner/repo/issues", "owner/repo"),
+        ("https://github.com/nicowillis/better.js", "nicowillis/better.js"),
+        # npm shorthands
+        ("github:owner/repo", "owner/repo"),
+        ("github:owner/repo.git", "owner/repo"),
+        # non-GitHub
+        ("https://gitlab.com/owner/repo", None),
+        ("bitbucket:owner/repo", None),
+        ("gitlab:owner/repo", None),
+        ("", None),
+        ("https://example.com/not-github", None),
+    ],
+)
 def test_parse_github_repo(url, expected):
     assert parse_github_repo(url) == expected
 
@@ -50,6 +56,7 @@ def test_parse_github_repo(url, expected):
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _pypi_json(package: str, version: str, source_url: str = "https://github.com/test/pkg") -> dict:
     return {
@@ -59,7 +66,12 @@ def _pypi_json(package: str, version: str, source_url: str = "https://github.com
             "project_urls": {"Source Code": source_url},
             "home_page": source_url,
         },
-        "urls": [{"upload_time_iso_8601": "2024-01-10T12:00:00+00:00", "filename": f"{package}-{version}.tar.gz"}],
+        "urls": [
+            {
+                "upload_time_iso_8601": "2024-01-10T12:00:00+00:00",
+                "filename": f"{package}-{version}.tar.gz",
+            }
+        ],
     }
 
 
@@ -82,10 +94,13 @@ def _gh_release(
 # PyPI — fetch_release
 # ---------------------------------------------------------------------------
 
+
 @respx.mock
 async def test_pypi_release_success():
     respx.get(f"{PYPI_BASE}/requests/2.32.0/json").mock(
-        return_value=httpx.Response(200, json=_pypi_json("requests", "2.32.0", "https://github.com/psf/requests"))
+        return_value=httpx.Response(
+            200, json=_pypi_json("requests", "2.32.0", "https://github.com/psf/requests")
+        )
     )
     respx.get(f"{GH_API}/psf/requests/releases/tags/v2.32.0").mock(
         return_value=httpx.Response(200, json=_gh_release(body="Minor bug fixes."))
@@ -119,10 +134,13 @@ async def test_pypi_release_human_author():
 async def test_pypi_no_source_url():
     """Package with no GitHub URL in project_urls → github_release_exists=False."""
     respx.get(f"{PYPI_BASE}/mypkg/1.1.0/json").mock(
-        return_value=httpx.Response(200, json={
-            "info": {"name": "mypkg", "version": "1.1.0", "project_urls": {}, "home_page": ""},
-            "urls": [],
-        })
+        return_value=httpx.Response(
+            200,
+            json={
+                "info": {"name": "mypkg", "version": "1.1.0", "project_urls": {}, "home_page": ""},
+                "urls": [],
+            },
+        )
     )
 
     env = ActivityEnvironment()
@@ -133,7 +151,9 @@ async def test_pypi_no_source_url():
 @respx.mock
 async def test_pypi_non_github_source_url():
     respx.get(f"{PYPI_BASE}/mypkg/1.1.0/json").mock(
-        return_value=httpx.Response(200, json=_pypi_json("mypkg", "1.1.0", "https://gitlab.com/owner/repo"))
+        return_value=httpx.Response(
+            200, json=_pypi_json("mypkg", "1.1.0", "https://gitlab.com/owner/repo")
+        )
     )
 
     env = ActivityEnvironment()
@@ -158,7 +178,9 @@ async def test_pypi_release_not_found_on_github():
 @respx.mock
 async def test_pypi_metadata_repo_populated_with_release():
     respx.get(f"{PYPI_BASE}/requests/2.32.0/json").mock(
-        return_value=httpx.Response(200, json=_pypi_json("requests", "2.32.0", "https://github.com/psf/requests"))
+        return_value=httpx.Response(
+            200, json=_pypi_json("requests", "2.32.0", "https://github.com/psf/requests")
+        )
     )
     respx.get(f"{GH_API}/psf/requests/releases/tags/v2.32.0").mock(
         return_value=httpx.Response(200, json=_gh_release())
@@ -173,7 +195,9 @@ async def test_pypi_metadata_repo_populated_with_release():
 async def test_pypi_metadata_repo_populated_without_release():
     """metadata_repo should be set even when no GitHub release exists."""
     respx.get(f"{PYPI_BASE}/pkg/1.1.0/json").mock(
-        return_value=httpx.Response(200, json=_pypi_json("pkg", "1.1.0", "https://github.com/owner/pkg"))
+        return_value=httpx.Response(
+            200, json=_pypi_json("pkg", "1.1.0", "https://github.com/owner/pkg")
+        )
     )
     respx.get(f"{GH_API}/owner/pkg/releases/tags/v1.1.0").mock(return_value=httpx.Response(404))
     respx.get(f"{GH_API}/owner/pkg/releases/tags/1.1.0").mock(return_value=httpx.Response(404))
@@ -187,10 +211,13 @@ async def test_pypi_metadata_repo_populated_without_release():
 @respx.mock
 async def test_pypi_metadata_repo_none_when_no_github_url():
     respx.get(f"{PYPI_BASE}/mypkg/1.1.0/json").mock(
-        return_value=httpx.Response(200, json={
-            "info": {"name": "mypkg", "version": "1.1.0", "project_urls": {}, "home_page": ""},
-            "urls": [],
-        })
+        return_value=httpx.Response(
+            200,
+            json={
+                "info": {"name": "mypkg", "version": "1.1.0", "project_urls": {}, "home_page": ""},
+                "urls": [],
+            },
+        )
     )
 
     env = ActivityEnvironment()
@@ -211,12 +238,16 @@ async def test_pypi_registry_404():
 # npm — fetch_release
 # ---------------------------------------------------------------------------
 
+
 @respx.mock
 async def test_npm_release_success():
     respx.get(f"{NPM_BASE}/lodash/4.17.21").mock(
-        return_value=httpx.Response(200, json={
-            "repository": {"type": "git", "url": "git+https://github.com/lodash/lodash.git"},
-        })
+        return_value=httpx.Response(
+            200,
+            json={
+                "repository": {"type": "git", "url": "git+https://github.com/lodash/lodash.git"},
+            },
+        )
     )
     respx.get(f"{NPM_BASE}/lodash").mock(
         return_value=httpx.Response(200, json={"time": {"4.17.21": "2024-01-10T12:00:00Z"}})
@@ -236,9 +267,7 @@ async def test_npm_release_no_repository_field():
     respx.get(f"{NPM_BASE}/mypkg/1.1.0").mock(
         return_value=httpx.Response(200, json={"name": "mypkg", "version": "1.1.0"})
     )
-    respx.get(f"{NPM_BASE}/mypkg").mock(
-        return_value=httpx.Response(200, json={"time": {}})
-    )
+    respx.get(f"{NPM_BASE}/mypkg").mock(return_value=httpx.Response(200, json={"time": {}}))
 
     env = ActivityEnvironment()
     result = await env.run(release_check, "npm", "mypkg", "1.0.0", "1.1.0")
@@ -285,17 +314,24 @@ async def test_npm_release_bare_owner_repo_shorthand():
 # RubyGems — fetch_release
 # ---------------------------------------------------------------------------
 
+
 @respx.mock
 async def test_rubygems_release_success():
     respx.get(f"{RUBYGEMS_GEM}/rails.json").mock(
-        return_value=httpx.Response(200, json={
-            "source_code_uri": "https://github.com/rails/rails",
-        })
+        return_value=httpx.Response(
+            200,
+            json={
+                "source_code_uri": "https://github.com/rails/rails",
+            },
+        )
     )
     respx.get(f"{RUBYGEMS_VER}/rails.json").mock(
-        return_value=httpx.Response(200, json=[
-            {"number": "7.1.0", "created_at": "2024-01-10T12:00:00.000Z"},
-        ])
+        return_value=httpx.Response(
+            200,
+            json=[
+                {"number": "7.1.0", "created_at": "2024-01-10T12:00:00.000Z"},
+            ],
+        )
     )
     respx.get(f"{GH_API}/rails/rails/releases/tags/v7.1.0").mock(
         return_value=httpx.Response(200, json=_gh_release())
@@ -310,17 +346,29 @@ async def test_rubygems_release_success():
 # Timestamp alignment
 # ---------------------------------------------------------------------------
 
+
 @respx.mock
 async def test_release_timestamp_skew_calculated():
     """Registry publish at T; GitHub release at T+3h → skew = 180 minutes."""
     respx.get(f"{PYPI_BASE}/pkg/1.1.0/json").mock(
-        return_value=httpx.Response(200, json={
-            "info": {"project_urls": {"Source Code": "https://github.com/test/pkg"}, "home_page": ""},
-            "urls": [{"upload_time_iso_8601": "2024-01-10T12:00:00+00:00"}],
-        })
+        return_value=httpx.Response(
+            200,
+            json={
+                "info": {
+                    "project_urls": {"Source Code": "https://github.com/test/pkg"},
+                    "home_page": "",
+                },
+                "urls": [{"upload_time_iso_8601": "2024-01-10T12:00:00+00:00"}],
+            },
+        )
     )
     respx.get(f"{GH_API}/test/pkg/releases/tags/v1.1.0").mock(
-        return_value=httpx.Response(200, json=_gh_release(created_at="2024-01-10T15:00:00Z", published_at="2024-01-10T15:00:00Z"))
+        return_value=httpx.Response(
+            200,
+            json=_gh_release(
+                created_at="2024-01-10T15:00:00Z", published_at="2024-01-10T15:00:00Z"
+            ),
+        )
     )
 
     env = ActivityEnvironment()
@@ -336,10 +384,13 @@ async def test_release_possible_rerelease():
         return_value=httpx.Response(200, json=_pypi_json("pkg", "1.1.0"))
     )
     respx.get(f"{GH_API}/test/pkg/releases/tags/v1.1.0").mock(
-        return_value=httpx.Response(200, json=_gh_release(
-            created_at="2024-01-08T12:00:00Z",
-            published_at="2024-01-10T12:00:00Z",
-        ))
+        return_value=httpx.Response(
+            200,
+            json=_gh_release(
+                created_at="2024-01-08T12:00:00Z",
+                published_at="2024-01-10T12:00:00Z",
+            ),
+        )
     )
 
     env = ActivityEnvironment()
@@ -353,10 +404,13 @@ async def test_release_not_possible_rerelease_when_same_timestamps():
         return_value=httpx.Response(200, json=_pypi_json("pkg", "1.1.0"))
     )
     respx.get(f"{GH_API}/test/pkg/releases/tags/v1.1.0").mock(
-        return_value=httpx.Response(200, json=_gh_release(
-            created_at="2024-01-10T12:00:00Z",
-            published_at="2024-01-10T12:00:00Z",
-        ))
+        return_value=httpx.Response(
+            200,
+            json=_gh_release(
+                created_at="2024-01-10T12:00:00Z",
+                published_at="2024-01-10T12:00:00Z",
+            ),
+        )
     )
 
     env = ActivityEnvironment()
@@ -367,6 +421,7 @@ async def test_release_not_possible_rerelease_when_same_timestamps():
 # ---------------------------------------------------------------------------
 # Release notes truncation
 # ---------------------------------------------------------------------------
+
 
 @respx.mock
 async def test_release_body_truncated_at_3000_chars():
@@ -389,6 +444,7 @@ async def test_release_body_truncated_at_3000_chars():
 # Tag signature helpers
 # ---------------------------------------------------------------------------
 
+
 def _git_ref(tag_name: str, sha: str = "tagsha0001", obj_type: str = "tag") -> dict:
     return {"ref": f"refs/tags/{tag_name}", "object": {"sha": sha, "type": obj_type}}
 
@@ -399,7 +455,9 @@ def _git_tag_verified(sha: str = "tagsha0001", verified: bool = True) -> dict:
         "verification": {
             "verified": verified,
             "reason": "valid" if verified else "unsigned",
-            "signature": "-----BEGIN PGP SIGNATURE-----\n...\n-----END PGP SIGNATURE-----" if verified else None,
+            "signature": "-----BEGIN PGP SIGNATURE-----\n...\n-----END PGP SIGNATURE-----"
+            if verified
+            else None,
             "payload": "object ...\ntype commit\n...",
         },
     }
@@ -408,6 +466,7 @@ def _git_tag_verified(sha: str = "tagsha0001", verified: bool = True) -> dict:
 # ---------------------------------------------------------------------------
 # Tag signature — fetch_release integration
 # ---------------------------------------------------------------------------
+
 
 @respx.mock
 async def test_release_tag_signature_verified():
@@ -482,7 +541,7 @@ async def test_release_tag_signing_regression():
 
     env = ActivityEnvironment()
     result = await env.run(release_check, "pip", "pkg", "1.0.0", "1.1.0")
-    assert result.tag_signature_verified is None   # lightweight tag → no signature
+    assert result.tag_signature_verified is None  # lightweight tag → no signature
     assert result.tag_was_previously_signed is True
 
 
@@ -510,11 +569,15 @@ async def test_release_tag_no_regression_when_both_unsigned():
 # Classifier integration
 # ---------------------------------------------------------------------------
 
+
 def test_rule_based_flags_possible_rerelease():
     from activities.classifier import _rule_based
 
     signals = PackageSignals(
-        ecosystem="pip", package_name="pkg", old_version="1.0.0", new_version="1.0.1",
+        ecosystem="pip",
+        package_name="pkg",
+        old_version="1.0.0",
+        new_version="1.0.1",
         age=ReleaseAgeSignals(release_age_hours=200.0),
         release=ReleaseSignals(possible_rerelease=True),
     )
@@ -527,7 +590,10 @@ def test_rule_based_flags_large_timestamp_skew():
     from activities.classifier import _rule_based
 
     signals = PackageSignals(
-        ecosystem="pip", package_name="pkg", old_version="1.0.0", new_version="1.0.1",
+        ecosystem="pip",
+        package_name="pkg",
+        old_version="1.0.0",
+        new_version="1.0.1",
         age=ReleaseAgeSignals(release_age_hours=200.0),
         release=ReleaseSignals(timestamp_skew_minutes=300.0),
     )
@@ -540,7 +606,10 @@ def test_rule_based_flags_tag_signing_regression():
     from activities.classifier import _rule_based
 
     signals = PackageSignals(
-        ecosystem="pip", package_name="pkg", old_version="1.0.0", new_version="1.0.1",
+        ecosystem="pip",
+        package_name="pkg",
+        old_version="1.0.0",
+        new_version="1.0.1",
         age=ReleaseAgeSignals(release_age_hours=200.0),
         release=ReleaseSignals(tag_was_previously_signed=True, tag_signature_verified=None),
     )

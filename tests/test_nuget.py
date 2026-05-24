@@ -2,10 +2,10 @@
 Unit tests for the NuGet ecosystem provider.
 HTTP calls mocked with respx; Temporal context via ActivityEnvironment.
 """
+
 from __future__ import annotations
 
 import io
-import time
 import zipfile
 
 import httpx
@@ -16,25 +16,30 @@ from temporalio.testing import ActivityEnvironment
 
 from activities.ecosystems.nuget import NuGetProvider, _fetch_catalog_entry, _parse_owners
 
-_REG    = "https://api.nuget.org/v3/registration5"
-_FLAT   = "https://api.nuget.org/v3-flatcontainer"
+_REG = "https://api.nuget.org/v3/registration5"
+_FLAT = "https://api.nuget.org/v3-flatcontainer"
 _SEARCH = "https://azuresearch-usnc.nuget.org/query"
 
-PACKAGE   = "Newtonsoft.Json"
-OLD_VER   = "12.0.3"
-NEW_VER   = "13.0.1"
-ID_LOWER  = "newtonsoft.json"
+PACKAGE = "Newtonsoft.Json"
+OLD_VER = "12.0.3"
+NEW_VER = "13.0.1"
+ID_LOWER = "newtonsoft.json"
 
 
 # ---------------------------------------------------------------------------
 # Fixture helpers
 # ---------------------------------------------------------------------------
 
+
 def _reg_index(versions: list[dict] | None = None) -> dict:
     """Build a small inline registration index."""
     items = versions or [
-        _catalog_entry(OLD_VER, owners="jamesNK", project_url="https://github.com/JamesNK/Newtonsoft.Json"),
-        _catalog_entry(NEW_VER, owners="jamesNK", project_url="https://github.com/JamesNK/Newtonsoft.Json"),
+        _catalog_entry(
+            OLD_VER, owners="jamesNK", project_url="https://github.com/JamesNK/Newtonsoft.Json"
+        ),
+        _catalog_entry(
+            NEW_VER, owners="jamesNK", project_url="https://github.com/JamesNK/Newtonsoft.Json"
+        ),
     ]
     return {
         "@type": ["catalog:CatalogRoot", "PackageRegistration"],
@@ -94,6 +99,7 @@ def _make_nupkg() -> bytes:
 # fetch_metadata
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 @respx.mock
 async def test_fetch_metadata_returns_signals():
@@ -106,8 +112,8 @@ async def test_fetch_metadata_returns_signals():
     result = await env.run(NuGetProvider().fetch_metadata, PACKAGE, OLD_VER, NEW_VER)
 
     assert result.package_description == "Popular high-performance JSON framework"
-    assert result.is_major_bump is True          # 12 → 13
-    assert result.weekly_downloads is None       # NuGet has no weekly stat
+    assert result.is_major_bump is True  # 12 → 13
+    assert result.weekly_downloads is None  # NuGet has no weekly stat
 
 
 @pytest.mark.asyncio
@@ -126,9 +132,7 @@ async def test_fetch_metadata_minor_bump_not_flagged():
 @pytest.mark.asyncio
 @respx.mock
 async def test_fetch_metadata_404_raises():
-    respx.get(f"{_REG}/{ID_LOWER}/index.json").mock(
-        return_value=httpx.Response(404)
-    )
+    respx.get(f"{_REG}/{ID_LOWER}/index.json").mock(return_value=httpx.Response(404))
     respx.get(_SEARCH).mock(return_value=httpx.Response(200, json=_search_response()))
 
     env = ActivityEnvironment()
@@ -155,16 +159,22 @@ async def test_fetch_metadata_search_failure_still_works():
 # fetch_release_age
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 @respx.mock
 async def test_fetch_release_age_returns_hours():
     published = "2024-01-10T00:00:00Z"
     entry = _catalog_entry(NEW_VER, published=published)
     respx.get(f"{_REG}/{ID_LOWER}/index.json").mock(
-        return_value=httpx.Response(200, json=_reg_index([
-            _catalog_entry(OLD_VER),
-            entry,
-        ]))
+        return_value=httpx.Response(
+            200,
+            json=_reg_index(
+                [
+                    _catalog_entry(OLD_VER),
+                    entry,
+                ]
+            ),
+        )
     )
 
     env = ActivityEnvironment()
@@ -203,6 +213,7 @@ async def test_fetch_release_age_version_not_found_returns_none():
 # fetch_maintainer
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 @respx.mock
 async def test_fetch_maintainer_no_change():
@@ -218,13 +229,13 @@ async def test_fetch_maintainer_no_change():
 @pytest.mark.asyncio
 @respx.mock
 async def test_fetch_maintainer_new_owner_detected():
-    index = _reg_index([
-        _catalog_entry(OLD_VER, owners="alice"),
-        _catalog_entry(NEW_VER, owners="alice, bob"),  # bob is new
-    ])
-    respx.get(f"{_REG}/{ID_LOWER}/index.json").mock(
-        return_value=httpx.Response(200, json=index)
+    index = _reg_index(
+        [
+            _catalog_entry(OLD_VER, owners="alice"),
+            _catalog_entry(NEW_VER, owners="alice, bob"),  # bob is new
+        ]
     )
+    respx.get(f"{_REG}/{ID_LOWER}/index.json").mock(return_value=httpx.Response(200, json=index))
 
     env = ActivityEnvironment()
     result = await env.run(NuGetProvider().fetch_maintainer, PACKAGE, OLD_VER, NEW_VER)
@@ -249,9 +260,7 @@ async def test_fetch_maintainer_list_owners():
             }
         ],
     }
-    respx.get(f"{_REG}/{ID_LOWER}/index.json").mock(
-        return_value=httpx.Response(200, json=index)
-    )
+    respx.get(f"{_REG}/{ID_LOWER}/index.json").mock(return_value=httpx.Response(200, json=index))
 
     env = ActivityEnvironment()
     result = await env.run(NuGetProvider().fetch_maintainer, PACKAGE, OLD_VER, NEW_VER)
@@ -274,6 +283,7 @@ async def test_fetch_maintainer_version_not_found_returns_no_change():
 # get_archive_url
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 @respx.mock
 async def test_get_archive_url_constructs_correct_url():
@@ -290,9 +300,12 @@ async def test_get_archive_url_constructs_correct_url():
 def test_get_archive_url_lowercases_id():
     """NuGet flatcontainer paths must use the lowercase package ID."""
     import asyncio
+
     async def run():
         async with __import__("httpx").AsyncClient() as client:
-            result = await NuGetProvider().get_archive_url(client, "Microsoft.Extensions.Logging", "8.0.0")
+            result = await NuGetProvider().get_archive_url(
+                client, "Microsoft.Extensions.Logging", "8.0.0"
+            )
         return result
 
     result = asyncio.run(run())
@@ -305,6 +318,7 @@ def test_get_archive_url_lowercases_id():
 # ---------------------------------------------------------------------------
 # extract_archive
 # ---------------------------------------------------------------------------
+
 
 def test_extract_archive_extracts_nupkg(tmp_path):
     nupkg = _make_nupkg()
@@ -324,6 +338,7 @@ def test_extract_archive_rejects_path_traversal(tmp_path):
 # fetch_attestations
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_fetch_attestations_returns_false():
     env = ActivityEnvironment()
@@ -335,6 +350,7 @@ async def test_fetch_attestations_returns_false():
 # fetch_release
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 @respx.mock
 async def test_fetch_release_returns_signals_when_github_release_exists(monkeypatch):
@@ -342,23 +358,24 @@ async def test_fetch_release_returns_signals_when_github_release_exists(monkeypa
     respx.get(f"{_REG}/{ID_LOWER}/index.json").mock(
         return_value=httpx.Response(200, json=_reg_index())
     )
-    respx.get(
-        "https://api.github.com/repos/JamesNK/Newtonsoft.Json/releases/tags/v13.0.1"
-    ).mock(
-        return_value=httpx.Response(200, json={
-            "tag_name": "v13.0.1",
-            "author": {"login": "github-actions[bot]"},
-            "created_at": "2023-06-01T12:05:00Z",
-            "published_at": "2023-06-01T12:05:00Z",
-            "body": "Bug fix release",
-        })
+    respx.get("https://api.github.com/repos/JamesNK/Newtonsoft.Json/releases/tags/v13.0.1").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "tag_name": "v13.0.1",
+                "author": {"login": "github-actions[bot]"},
+                "created_at": "2023-06-01T12:05:00Z",
+                "published_at": "2023-06-01T12:05:00Z",
+                "body": "Bug fix release",
+            },
+        )
     )
-    respx.get(
-        "https://api.github.com/repos/JamesNK/Newtonsoft.Json/git/refs/tags/v13.0.1"
-    ).mock(return_value=httpx.Response(404))
-    respx.get(
-        "https://api.github.com/repos/JamesNK/Newtonsoft.Json/git/refs/tags/v12.0.3"
-    ).mock(return_value=httpx.Response(404))
+    respx.get("https://api.github.com/repos/JamesNK/Newtonsoft.Json/git/refs/tags/v13.0.1").mock(
+        return_value=httpx.Response(404)
+    )
+    respx.get("https://api.github.com/repos/JamesNK/Newtonsoft.Json/git/refs/tags/v12.0.3").mock(
+        return_value=httpx.Response(404)
+    )
 
     env = ActivityEnvironment()
     result = await env.run(NuGetProvider().fetch_release, PACKAGE, OLD_VER, NEW_VER)
@@ -371,13 +388,13 @@ async def test_fetch_release_returns_signals_when_github_release_exists(monkeypa
 @pytest.mark.asyncio
 @respx.mock
 async def test_fetch_release_no_github_url_returns_empty():
-    index = _reg_index([
-        _catalog_entry(OLD_VER, project_url=""),
-        _catalog_entry(NEW_VER, project_url=""),
-    ])
-    respx.get(f"{_REG}/{ID_LOWER}/index.json").mock(
-        return_value=httpx.Response(200, json=index)
+    index = _reg_index(
+        [
+            _catalog_entry(OLD_VER, project_url=""),
+            _catalog_entry(NEW_VER, project_url=""),
+        ]
     )
+    respx.get(f"{_REG}/{ID_LOWER}/index.json").mock(return_value=httpx.Response(200, json=index))
 
     env = ActivityEnvironment()
     result = await env.run(NuGetProvider().fetch_release, PACKAGE, OLD_VER, NEW_VER)
@@ -388,6 +405,7 @@ async def test_fetch_release_no_github_url_returns_empty():
 # ---------------------------------------------------------------------------
 # _fetch_catalog_entry — pagination
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 @respx.mock
@@ -412,9 +430,7 @@ async def test_fetch_catalog_entry_handles_paginated_index():
             {"catalogEntry": _catalog_entry(NEW_VER)},
         ]
     }
-    respx.get(f"{_REG}/{ID_LOWER}/index.json").mock(
-        return_value=httpx.Response(200, json=index)
-    )
+    respx.get(f"{_REG}/{ID_LOWER}/index.json").mock(return_value=httpx.Response(200, json=index))
     respx.get(page_url).mock(return_value=httpx.Response(200, json=page_body))
 
     entry = await _fetch_catalog_entry(PACKAGE, NEW_VER)
@@ -455,6 +471,7 @@ async def test_fetch_catalog_entry_case_insensitive_version_match():
 # _parse_owners
 # ---------------------------------------------------------------------------
 
+
 def test_parse_owners_from_string():
     assert _parse_owners("alice, Bob, CHARLIE") == {"alice", "bob", "charlie"}
 
@@ -475,13 +492,16 @@ def test_parse_owners_empty_list():
 # version_lineage integration
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 @respx.mock
 async def test_nuget_stale_version_line_detected():
     from activities.version_lineage import check
 
     respx.get(f"{_FLAT}/{ID_LOWER}/index.json").mock(
-        return_value=httpx.Response(200, json={"versions": ["12.0.1", "12.0.2", "12.0.3", "13.0.1"]})
+        return_value=httpx.Response(
+            200, json={"versions": ["12.0.1", "12.0.2", "12.0.3", "13.0.1"]}
+        )
     )
 
     env = ActivityEnvironment()
@@ -522,8 +542,10 @@ async def test_nuget_version_lineage_404_raises():
 # Webhook name validation
 # ---------------------------------------------------------------------------
 
+
 def test_nuget_name_accepted_by_webhook_validator():
     from activities.ecosystems.nuget import NuGetProvider
+
     name_re = NuGetProvider.name_re
     assert name_re.match("Newtonsoft.Json")
     assert name_re.match("Microsoft.Extensions.Logging")

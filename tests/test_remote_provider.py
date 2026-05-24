@@ -1,11 +1,11 @@
 """Tests for RemoteEcosystemProvider — the HTTP bridge base class."""
+
 from __future__ import annotations
 
 import io
 import re
 import tarfile
 import zipfile
-from pathlib import Path
 
 import httpx
 import pytest
@@ -35,6 +35,7 @@ NEW = "1.1.0"
 # ---------------------------------------------------------------------------
 # fetch_metadata
 # ---------------------------------------------------------------------------
+
 
 @respx.mock
 async def test_fetch_metadata_success():
@@ -69,6 +70,7 @@ async def test_fetch_metadata_410_non_retryable():
 # fetch_release_age
 # ---------------------------------------------------------------------------
 
+
 @respx.mock
 async def test_fetch_release_age_success():
     respx.post(f"{_BASE}/fetch_release_age").mock(
@@ -81,9 +83,7 @@ async def test_fetch_release_age_success():
 
 @respx.mock
 async def test_fetch_release_age_null_body():
-    respx.post(f"{_BASE}/fetch_release_age").mock(
-        return_value=httpx.Response(200, json=None)
-    )
+    respx.post(f"{_BASE}/fetch_release_age").mock(return_value=httpx.Response(200, json=None))
     env = ActivityEnvironment()
     result = await env.run(_PROVIDER.fetch_release_age, PKG, NEW)
     assert result.release_age_hours is None
@@ -92,6 +92,7 @@ async def test_fetch_release_age_null_body():
 # ---------------------------------------------------------------------------
 # fetch_maintainer
 # ---------------------------------------------------------------------------
+
 
 @respx.mock
 async def test_fetch_maintainer_changed():
@@ -107,14 +108,18 @@ async def test_fetch_maintainer_changed():
 # get_archive_url
 # ---------------------------------------------------------------------------
 
+
 @respx.mock
 async def test_get_archive_url_success():
     respx.post(f"{_BASE}/get_archive_url").mock(
-        return_value=httpx.Response(200, json={
-            "url": "https://files.pythonhosted.org/packages/mypackage-1.1.0.zip",
-            "filename": "mypackage-1.1.0.zip",
-            "checksum": "sha256:abc",
-        })
+        return_value=httpx.Response(
+            200,
+            json={
+                "url": "https://files.pythonhosted.org/packages/mypackage-1.1.0.zip",
+                "filename": "mypackage-1.1.0.zip",
+                "checksum": "sha256:abc",
+            },
+        )
     )
     async with httpx.AsyncClient() as client:
         result = await _PROVIDER.get_archive_url(client, PKG, NEW)
@@ -127,9 +132,7 @@ async def test_get_archive_url_success():
 
 @respx.mock
 async def test_get_archive_url_null_means_none():
-    respx.post(f"{_BASE}/get_archive_url").mock(
-        return_value=httpx.Response(200, json=None)
-    )
+    respx.post(f"{_BASE}/get_archive_url").mock(return_value=httpx.Response(200, json=None))
     async with httpx.AsyncClient() as client:
         result = await _PROVIDER.get_archive_url(client, PKG, NEW)
     assert result is None
@@ -138,11 +141,14 @@ async def test_get_archive_url_null_means_none():
 @respx.mock
 async def test_get_archive_url_untrusted_host_raises():
     respx.post(f"{_BASE}/get_archive_url").mock(
-        return_value=httpx.Response(200, json={
-            "url": "https://evil.example.com/malware.zip",
-            "filename": "malware.zip",
-            "checksum": "",
-        })
+        return_value=httpx.Response(
+            200,
+            json={
+                "url": "https://evil.example.com/malware.zip",
+                "filename": "malware.zip",
+                "checksum": "",
+            },
+        )
     )
     async with httpx.AsyncClient() as client:
         with pytest.raises(ApplicationError) as exc_info:
@@ -153,6 +159,7 @@ async def test_get_archive_url_untrusted_host_raises():
 # ---------------------------------------------------------------------------
 # extract_archive — zip
 # ---------------------------------------------------------------------------
+
 
 def test_extract_zip(tmp_path):
     buf = io.BytesIO()
@@ -190,6 +197,7 @@ def test_extract_zip_path_traversal_rejected(tmp_path):
 # fetch_attestations
 # ---------------------------------------------------------------------------
 
+
 @respx.mock
 async def test_fetch_attestations_has_attestation():
     respx.post(f"{_BASE}/fetch_attestations").mock(
@@ -205,10 +213,13 @@ async def test_fetch_attestations_has_attestation():
 # fetch_release
 # ---------------------------------------------------------------------------
 
+
 @respx.mock
 async def test_fetch_release_exists():
     respx.post(f"{_BASE}/fetch_release").mock(
-        return_value=httpx.Response(200, json={"github_release_exists": True, "release_author": "bot"})
+        return_value=httpx.Response(
+            200, json={"github_release_exists": True, "release_author": "bot"}
+        )
     )
     env = ActivityEnvironment()
     result = await env.run(_PROVIDER.fetch_release, PKG, OLD, NEW)
@@ -220,8 +231,10 @@ async def test_fetch_release_exists():
 # not auto-discovered as a standalone provider
 # ---------------------------------------------------------------------------
 
+
 def test_remote_base_class_not_in_registry():
     from activities.ecosystems import _build_provider_registry
+
     registry = _build_provider_registry()
     # The base class has no ecosystem_name value, so it must not be registered
     for name, provider in registry.items():

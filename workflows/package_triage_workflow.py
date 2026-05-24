@@ -5,11 +5,19 @@ from temporalio.common import RetryPolicy
 
 with workflow.unsafe.imports_passed_through():
     from activities.models import (
-        PackageSignals, Verdict,
-        PyPISignals, SocketSignals, OSVSignals,
-        DiffSignals, MaintainerSignals, ReleaseAgeSignals,
-        AttestationSignals, ReleaseSignals, VersionLineSignals,
-        DepsDevSignals, ScorecardSignals,
+        PackageSignals,
+        Verdict,
+        PyPISignals,
+        SocketSignals,
+        OSVSignals,
+        DiffSignals,
+        MaintainerSignals,
+        ReleaseAgeSignals,
+        AttestationSignals,
+        ReleaseSignals,
+        VersionLineSignals,
+        DepsDevSignals,
+        ScorecardSignals,
     )
 
 # Single source of truth for signal activities:
@@ -21,17 +29,17 @@ with workflow.unsafe.imports_passed_through():
 # Append-only: inserting mid-list changes Temporal's ScheduleActivity command sequence,
 # which breaks replay of existing workflow histories and requires fixture regeneration.
 _SIGNAL_REGISTRY: list[tuple[str, str, type, bool]] = [
-    ("pypi",        "activities.pypi_metadata.fetch",  PyPISignals,        False),
-    ("socket",      "activities.socket.score",          SocketSignals,      False),
-    ("osv",         "activities.osv.check",             OSVSignals,         False),
-    ("diff",        "activities.package_diff.compute",  DiffSignals,        True),   # archive download
-    ("maintainer",  "activities.maintainer.history",    MaintainerSignals,  False),
-    ("age",         "activities.release_age.check",     ReleaseAgeSignals,  False),
-    ("attestation", "activities.attestation.check",     AttestationSignals, False),
-    ("release",     "activities.release_notes.check",   ReleaseSignals,     False),
-    ("version_line","activities.version_lineage.check", VersionLineSignals, False),
-    ("deps_dev",    "activities.depsdev.fetch",         DepsDevSignals,     False),
-    ("scorecard",   "activities.scorecard.fetch",       ScorecardSignals,   False),
+    ("pypi", "activities.pypi_metadata.fetch", PyPISignals, False),
+    ("socket", "activities.socket.score", SocketSignals, False),
+    ("osv", "activities.osv.check", OSVSignals, False),
+    ("diff", "activities.package_diff.compute", DiffSignals, True),  # archive download
+    ("maintainer", "activities.maintainer.history", MaintainerSignals, False),
+    ("age", "activities.release_age.check", ReleaseAgeSignals, False),
+    ("attestation", "activities.attestation.check", AttestationSignals, False),
+    ("release", "activities.release_notes.check", ReleaseSignals, False),
+    ("version_line", "activities.version_lineage.check", VersionLineSignals, False),
+    ("deps_dev", "activities.depsdev.fetch", DepsDevSignals, False),
+    ("scorecard", "activities.scorecard.fetch", ScorecardSignals, False),
 ]
 
 # Derived from the registry — used by tests/test_signal_wiring.py to verify worker registration.
@@ -74,7 +82,9 @@ class PackageTriageWorkflow:
         raw = await asyncio.gather(
             *(
                 workflow.execute_activity(
-                    name, args=args, result_type=model,
+                    name,
+                    args=args,
+                    result_type=model,
                     **(slow_opts if slow else default_opts),
                 )
                 for _, name, model, slow in _SIGNAL_REGISTRY
@@ -99,7 +109,9 @@ class PackageTriageWorkflow:
             custom_raw = await asyncio.gather(
                 *(
                     workflow.execute_activity(
-                        name, args=args, result_type=dict,
+                        name,
+                        args=args,
+                        result_type=dict,
                         **default_opts,
                     )
                     for name in extra_signal_activities
@@ -108,9 +120,7 @@ class PackageTriageWorkflow:
             )
             for name, result in zip(extra_signal_activities, custom_raw):
                 if isinstance(result, Exception):
-                    workflow.logger.warning(
-                        f"Custom signal '{name}' failed: {result!r} — skipped"
-                    )
+                    workflow.logger.warning(f"Custom signal '{name}' failed: {result!r} — skipped")
                 else:
                     custom_signals[name] = result
 
