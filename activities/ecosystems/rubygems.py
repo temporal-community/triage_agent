@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import io
+import re
 import tarfile
 from datetime import date, datetime, timedelta, timezone
 
@@ -23,6 +24,8 @@ from activities.models import AttestationSignals, MaintainerSignals, PyPISignals
 class RubyGemsProvider:
     ecosystem_name = "rubygems"
     osv_name = "RubyGems"
+    dependabot_slug = "bundler"
+    name_re = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,213}$")
 
     # ------------------------------------------------------------------
     # fetch_metadata

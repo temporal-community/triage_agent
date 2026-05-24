@@ -252,17 +252,23 @@ async def _run_scenario(
         workflows=[PRActionWorkflow, PackageTriageWorkflow],
         activities=acts,
     ):
+        # For human-review scenarios, embed the signal atomically in the workflow
+        # start event using start_signal. This puts the decision in the workflow
+        # history before the first task runs, so wait_condition is satisfied
+        # immediately and the 7-day timer is never scheduled.
+        start_kwargs: dict = {}
+        if human_signal is not None:
+            start_kwargs = {
+                "start_signal": "submit_decision",
+                "start_signal_args": [human_signal, "alice"],
+            }
         handle = await env.client.start_workflow(
             PRActionWorkflow.run,
             _PR,
             id=f"fix-{name}",
             task_queue="gen-fixtures",
+            **start_kwargs,
         )
-
-        if human_signal is not None:
-            # Send signal with approver matching config.reviewers so the
-            # authorization check in the workflow passes.
-            await handle.signal(PRActionWorkflow.submit_decision, args=[human_signal, "alice"])
         await handle.result()
 
         history = await handle.fetch_history()

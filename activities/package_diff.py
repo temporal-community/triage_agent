@@ -13,6 +13,7 @@ import hmac
 import json
 import re
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
 
 import httpx
@@ -148,9 +149,10 @@ async def compute(ecosystem: str, package: str, old_version: str, new_version: s
         old_url, old_filename, old_integrity = old_info
         new_url, new_filename, new_integrity = new_info
 
+        activity.heartbeat("downloading archives")
         old_bytes, new_bytes = await asyncio.gather(
-            _download(client, old_url, old_integrity),
-            _download(client, new_url, new_integrity),
+            _download(client, old_url, old_integrity, heartbeat=activity.heartbeat),
+            _download(client, new_url, new_integrity, heartbeat=activity.heartbeat),
         )
 
     if old_bytes is None or new_bytes is None:
@@ -160,6 +162,7 @@ async def compute(ecosystem: str, package: str, old_version: str, new_version: s
         )
 
     # Extraction and diff are CPU/blocking I/O — run in a thread.
+    activity.heartbeat("extracting and diffing")
     diff_summary, install_script_added, install_script_changed, new_dep_count, net_calls, binary_data = (
         await asyncio.to_thread(
             _extract_and_diff, old_bytes, old_filename, new_bytes, new_filename, provider
@@ -181,18 +184,27 @@ async def compute(ecosystem: str, package: str, old_version: str, new_version: s
 # HTTP helpers
 # ---------------------------------------------------------------------------
 
-async def _download(client: httpx.AsyncClient, url: str, integrity: str) -> bytes | None:
+async def _download(
+    client: httpx.AsyncClient,
+    url: str,
+    integrity: str,
+    heartbeat: Callable | None = None,
+) -> bytes | None:
     """Download *url*, verify integrity, return bytes or None if oversized.
 
     integrity formats accepted:
       - 64-char hex string        → SHA-256 (PyPI digests.sha256)
       - 'sha512-<base64>'         → SHA-512 SRI (npm dist.integrity)
       - ''                        → no verification
+
+    heartbeat is called every ~1 MB so the Temporal worker can prove liveness
+    to the server during slow downloads.
     """
     validate_archive_url(url)
 
     chunks: list[bytes] = []
     total = 0
+    next_heartbeat_at = 1024 * 1024  # pulse every 1 MB
     async with client.stream("GET", url) as resp:
         resp.raise_for_status()
         async for chunk in resp.aiter_bytes(chunk_size=65536):
@@ -200,6 +212,9 @@ async def _download(client: httpx.AsyncClient, url: str, integrity: str) -> byte
             if total > MAX_DOWNLOAD_BYTES:
                 return None
             chunks.append(chunk)
+            if heartbeat and total >= next_heartbeat_at:
+                heartbeat(f"downloaded {total // 1024} KB from {url}")
+                next_heartbeat_at += 1024 * 1024
     data = b"".join(chunks)
 
     if integrity:

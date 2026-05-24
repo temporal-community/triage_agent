@@ -25,6 +25,8 @@ from activities.models import AttestationSignals, MaintainerSignals, PyPISignals
 class NpmProvider:
     ecosystem_name = "npm"
     osv_name = "npm"
+    dependabot_slug = "npm_and_yarn"
+    name_re = re.compile(r"^(@[A-Za-z0-9._-]+/)?[A-Za-z0-9][A-Za-z0-9._-]{0,213}$")
 
     # ------------------------------------------------------------------
     # fetch_metadata

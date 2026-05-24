@@ -523,10 +523,10 @@ async def test_nuget_version_lineage_404_raises():
 # ---------------------------------------------------------------------------
 
 def test_nuget_name_accepted_by_webhook_validator():
-    import re
-    from api.webhook import _NUGET_NAME_RE
-    assert _NUGET_NAME_RE.match("Newtonsoft.Json")
-    assert _NUGET_NAME_RE.match("Microsoft.Extensions.Logging")
-    assert _NUGET_NAME_RE.match("MyPackage123")
-    assert not _NUGET_NAME_RE.match("../evil")
-    assert not _NUGET_NAME_RE.match("bad/slash")
+    from activities.ecosystems.nuget import NuGetProvider
+    name_re = NuGetProvider.name_re
+    assert name_re.match("Newtonsoft.Json")
+    assert name_re.match("Microsoft.Extensions.Logging")
+    assert name_re.match("MyPackage123")
+    assert not name_re.match("../evil")
+    assert not name_re.match("bad/slash")

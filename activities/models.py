@@ -7,7 +7,7 @@ class PRContext(BaseModel):
     pr_number: int
     pr_author: str                      # "dependabot[bot]" or "renovate[bot]"
     installation_id: int                # GitHub App installation
-    ecosystem: Literal["pip", "npm", "rubygems", "maven", "composer", "nuget", "cargo"]
+    ecosystem: Literal["pip", "npm", "rubygems", "maven", "composer", "nuget", "cargo", "go"]
     package_name: str
     old_version: str
     new_version: str
@@ -115,7 +115,7 @@ class AttestationSignals(BaseModel):
 
 
 class PackageSignals(BaseModel):
-    ecosystem: Literal["pip", "npm", "rubygems", "maven", "composer", "nuget", "cargo"]
+    ecosystem: Literal["pip", "npm", "rubygems", "maven", "composer", "nuget", "cargo", "go"]
     package_name: str
     old_version: str
     new_version: str

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import io
+import re
 import tarfile
 from datetime import datetime, timezone
 
@@ -27,6 +28,8 @@ _API_BASE = "https://crates.io/api/v1"
 class CargoProvider:
     ecosystem_name = "cargo"
     osv_name = "crates.io"
+    dependabot_slug = "cargo"
+    name_re = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
 
     # ------------------------------------------------------------------
     # fetch_metadata

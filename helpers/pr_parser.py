@@ -21,17 +21,7 @@ import re
 from dataclasses import dataclass
 from typing import Literal
 
-# Maps Dependabot's internal ecosystem slugs to our ecosystem strings.
-# Add new entries here as more ecosystems are supported.
-_DEPENDABOT_ECOSYSTEM_MAP: dict[str, Literal["pip", "npm", "rubygems", "maven", "composer", "nuget", "cargo"]] = {
-    "npm_and_yarn": "npm",
-    "pip": "pip",
-    "bundler": "rubygems",
-    "maven": "maven",
-    "composer": "composer",
-    "nuget": "nuget",
-    "cargo": "cargo",
-}
+from activities.ecosystems import get_dependabot_slug_map
 
 
 @dataclass
@@ -39,7 +29,7 @@ class ParsedPR:
     package: str
     old_version: str
     new_version: str
-    ecosystem: Literal["pip", "npm", "rubygems", "maven", "composer", "nuget", "cargo"] = "pip"
+    ecosystem: Literal["pip", "npm", "rubygems", "maven", "composer", "nuget", "cargo", "go"] = "pip"
 
 
 # @? allows scoped npm packages: @typescript-eslint/parser
@@ -85,14 +75,15 @@ def parse_pr(title: str, body: str = "", branch: str = "") -> ParsedPR | None:
     return None
 
 
-def _detect_ecosystem(package: str, branch: str) -> Literal["pip", "npm", "rubygems", "maven", "composer", "nuget", "cargo"]:
+def _detect_ecosystem(package: str, branch: str) -> Literal["pip", "npm", "rubygems", "maven", "composer", "nuget", "cargo", "go"]:
     # Dependabot branch names encode ecosystem: dependabot/{ecosystem}/{rest}
     if branch.startswith("dependabot/"):
         parts = branch.split("/")
         if len(parts) >= 2:
             slug = parts[1]
-            if slug in _DEPENDABOT_ECOSYSTEM_MAP:
-                return _DEPENDABOT_ECOSYSTEM_MAP[slug]
+            slug_map = get_dependabot_slug_map()
+            if slug in slug_map:
+                return slug_map[slug]
 
     # Scoped npm packages are unambiguous regardless of bot
     if package.startswith("@"):

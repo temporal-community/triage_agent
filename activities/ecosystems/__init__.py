@@ -40,7 +40,10 @@ MAX_EXTRACT_BYTES = 100 * 1024 * 1024  # zip bomb guard
 
 
 class EcosystemProvider(Protocol):
+    ecosystem_name: str
     osv_name: str
+    dependabot_slug: str   # Dependabot's internal branch prefix, e.g. "npm_and_yarn"
+    name_re: re.Pattern    # package name validation regex for the webhook allowlist
 
     async def fetch_metadata(
         self, package: str, old_version: str, new_version: str
@@ -98,6 +101,23 @@ def get_provider(ecosystem: str) -> EcosystemProvider:
     return _PROVIDERS[ecosystem]
 
 
+def get_dependabot_slug_map() -> dict[str, str]:
+    """Return {dependabot_slug: ecosystem_name} built from provider attributes."""
+    global _PROVIDERS
+    if _PROVIDERS is None:
+        _PROVIDERS = _build_provider_registry()
+    return {p.dependabot_slug: name for name, p in _PROVIDERS.items()}
+
+
+def get_name_re(ecosystem: str) -> re.Pattern | None:
+    """Return the package name validation regex for this ecosystem, or None."""
+    global _PROVIDERS
+    if _PROVIDERS is None:
+        _PROVIDERS = _build_provider_registry()
+    p = _PROVIDERS.get(ecosystem)
+    return p.name_re if p is not None else None
+
+
 # ---------------------------------------------------------------------------
 # Shared utilities used by multiple providers
 # ---------------------------------------------------------------------------
@@ -110,6 +130,7 @@ ALLOWED_CDN_HOSTS: frozenset[str] = frozenset({
     "codeload.github.com",   # Composer archives — GitHub's archive CDN (no redirect)
     "api.nuget.org",
     "static.crates.io",
+    "proxy.golang.org",
 })
 
 
@@ -130,7 +151,7 @@ def validate_archive_url(url: str) -> None:
 
 def is_major(old: str, new: str) -> bool:
     try:
-        return int(new.split(".")[0]) > int(old.split(".")[0])
+        return int(new.split(".")[0].lstrip("vV")) > int(old.split(".")[0].lstrip("vV"))
     except (ValueError, IndexError):
         return False
 

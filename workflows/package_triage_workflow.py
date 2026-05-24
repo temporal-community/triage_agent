@@ -57,8 +57,17 @@ class PackageTriageWorkflow:
         new_version: str,
     ) -> Verdict:
         retry = RetryPolicy(maximum_attempts=5, initial_interval=timedelta(seconds=2))
-        default_opts: dict = dict(start_to_close_timeout=timedelta(seconds=30), retry_policy=retry)
-        slow_opts: dict = dict(start_to_close_timeout=timedelta(minutes=2), retry_policy=retry)
+        default_opts: dict = dict(
+            start_to_close_timeout=timedelta(seconds=30),
+            schedule_to_close_timeout=timedelta(minutes=5),
+            retry_policy=retry,
+        )
+        slow_opts: dict = dict(
+            start_to_close_timeout=timedelta(minutes=2),
+            schedule_to_close_timeout=timedelta(minutes=10),
+            heartbeat_timeout=timedelta(seconds=45),  # detect stuck archive downloads
+            retry_policy=retry,
+        )
         args = [ecosystem, package, old_version, new_version]
 
         raw = await asyncio.gather(

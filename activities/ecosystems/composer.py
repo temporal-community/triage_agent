@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import asyncio
 import io
+import re
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -38,6 +39,8 @@ _CODELOAD  = "https://codeload.github.com"
 class ComposerProvider:
     ecosystem_name = "composer"
     osv_name = "Packagist"
+    dependabot_slug = "composer"
+    name_re = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,99}/[A-Za-z0-9][A-Za-z0-9._-]{0,99}$")
 
     # ------------------------------------------------------------------
     # Internal helpers

@@ -19,6 +19,7 @@ from temporalio.client import Client
 from temporalio.common import WorkflowIDReusePolicy
 from temporalio.contrib.pydantic import pydantic_data_converter
 
+from activities.ecosystems import get_name_re
 from activities.models import PRContext
 from helpers.pr_parser import parse_pr
 from workflows.pr_action_workflow import PRActionWorkflow
@@ -26,48 +27,16 @@ from workflows.pr_action_workflow import PRActionWorkflow
 _BOT_LOGINS = {"dependabot[bot]", "renovate[bot]"}
 _PR_ACTIONS = {"opened", "synchronize", "reopened"}
 
-# Allowlist patterns for package names and version strings.
-# These are strict enough to block path traversal, command injection, and
-# SSRF gadgets while allowing all real package names per ecosystem.
-#   PyPI/RubyGems: PEP 508 / gem names — letters, digits, dots, hyphens, underscores
-#   npm: unscoped or @scope/name — mixed case allowed for legacy packages
-#   Version: semver-ish — digits, dots, hyphens, plus, tilde, caret, letters
-_PYPI_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,213}$")
-_NPM_NAME_RE = re.compile(
-    r"^(@[A-Za-z0-9._-]+/)?[A-Za-z0-9][A-Za-z0-9._-]{0,213}$"
-)
+# Fallback for unknown ecosystems — strict enough to block injection attacks.
+_FALLBACK_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,213}$")
+
+# Version: semver-ish — digits, dots, hyphens, plus, tilde, caret, letters
 _VERSION_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+\-~^]{0,127}$")
-
-# Maven coordinate format: groupId:artifactId — e.g. "com.google.guava:guava"
-_MAVEN_NAME_RE = re.compile(
-    r"^[A-Za-z0-9][A-Za-z0-9._-]{0,213}:[A-Za-z0-9][A-Za-z0-9._-]{0,213}$"
-)
-
-# Composer: vendor/package — both parts follow similar rules to PyPI names
-_COMPOSER_NAME_RE = re.compile(
-    r"^[A-Za-z0-9][A-Za-z0-9._-]{0,99}/[A-Za-z0-9][A-Za-z0-9._-]{0,99}$"
-)
-
-# NuGet: package IDs are case-insensitive flat names, same character set as PyPI
-_NUGET_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,213}$")
-
-# Cargo: crate names — letters, digits, hyphens, underscores; max 64 chars
-_CARGO_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
-
-_NAME_RE_BY_ECOSYSTEM: dict[str, re.Pattern[str]] = {
-    "pip": _PYPI_NAME_RE,
-    "npm": _NPM_NAME_RE,
-    "rubygems": _PYPI_NAME_RE,  # gem names follow the same rules as PyPI
-    "maven": _MAVEN_NAME_RE,
-    "composer": _COMPOSER_NAME_RE,
-    "nuget": _NUGET_NAME_RE,
-    "cargo": _CARGO_NAME_RE,
-}
 
 
 def _validate_parsed_package(ecosystem: str, package: str, old: str, new: str) -> str | None:
     """Return an error reason string, or None if the input is valid."""
-    name_re = _NAME_RE_BY_ECOSYSTEM.get(ecosystem, _PYPI_NAME_RE)
+    name_re = get_name_re(ecosystem) or _FALLBACK_NAME_RE
     if not name_re.match(package):
         return f"invalid package name: {package!r}"
     for label, ver in (("old_version", old), ("new_version", new)):

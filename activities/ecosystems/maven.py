@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import io
+import re
 import xml.etree.ElementTree as ET
 import zipfile
 from datetime import datetime, timezone
@@ -40,6 +41,8 @@ _SEARCH   = "https://search.maven.org/solrsearch/select"
 class MavenProvider:
     ecosystem_name = "maven"
     osv_name = "Maven"
+    dependabot_slug = "maven"
+    name_re = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,213}:[A-Za-z0-9][A-Za-z0-9._-]{0,213}$")
 
     # ------------------------------------------------------------------
     # Internal helpers
