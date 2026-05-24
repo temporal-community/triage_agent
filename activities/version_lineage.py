@@ -29,6 +29,8 @@ async def check(ecosystem: str, package: str, old_version: str, new_version: str
             return await _check_rubygems(package, new_version)
         if ecosystem == "maven":
             return await _check_maven(package, new_version)
+        if ecosystem == "composer":
+            return await _check_composer(package, new_version)
     except ApplicationError:
         raise
     except Exception:  # noqa: BLE001
@@ -80,6 +82,39 @@ async def _check_npm(package: str, new_version: str) -> VersionLineSignals:
             release_dates[version] = parse_upload_time(raw)
         except Exception:  # noqa: BLE001
             pass
+
+    return detect_stale_version_line(all_versions, new_version, release_dates=release_dates)
+
+
+async def _check_composer(package: str, new_version: str) -> VersionLineSignals:
+    """Use the Packagist API to get all versions for a vendor/package."""
+    if "/" not in package:
+        return VersionLineSignals()
+    vendor, name = package.split("/", 1)
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        resp = await client.get(f"https://packagist.org/packages/{vendor}/{name}.json")
+    if resp.status_code == 404:
+        raise ApplicationError(f"{package} not found on Packagist", type="PackageNotFound", non_retryable=True)
+    if resp.status_code != 200:
+        return VersionLineSignals()
+
+    versions: dict = resp.json().get("package", {}).get("versions", {})
+    if not versions:
+        return VersionLineSignals()
+
+    all_versions: list[str] = []
+    release_dates: dict[str, datetime] = {}
+    for vkey, vdata in versions.items():
+        # Skip Packagist dev-branch aliases (e.g. "dev-main", "dev-develop")
+        if vkey.startswith("dev-"):
+            continue
+        all_versions.append(vkey)
+        raw_time = vdata.get("time", "")
+        if raw_time:
+            try:
+                release_dates[vkey] = parse_upload_time(raw_time)
+            except Exception:  # noqa: BLE001
+                pass
 
     return detect_stale_version_line(all_versions, new_version, release_dates=release_dates)
 

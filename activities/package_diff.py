@@ -45,6 +45,7 @@ HIGH_SIGNAL_NAMES = {
     "Rakefile",
     "Gemfile",
     "pom.xml",
+    "composer.json",
 }
 HIGH_SIGNAL_SUFFIXES = {".pth", ".gemspec"}
 

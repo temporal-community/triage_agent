@@ -67,6 +67,7 @@ class EcosystemProvider(Protocol):
 
 
 def get_provider(ecosystem: str) -> EcosystemProvider:
+    from activities.ecosystems.composer import ComposerProvider
     from activities.ecosystems.maven import MavenProvider
     from activities.ecosystems.npm import NpmProvider
     from activities.ecosystems.pip import PipProvider
@@ -77,6 +78,7 @@ def get_provider(ecosystem: str) -> EcosystemProvider:
         "npm": NpmProvider(),
         "rubygems": RubyGemsProvider(),
         "maven": MavenProvider(),
+        "composer": ComposerProvider(),
     }
     if ecosystem not in providers:
         raise ValueError(f"Unknown ecosystem: {ecosystem!r}")
@@ -92,6 +94,7 @@ ALLOWED_CDN_HOSTS: frozenset[str] = frozenset({
     "registry.npmjs.org",
     "rubygems.org",
     "repo1.maven.org",
+    "codeload.github.com",   # Composer archives — GitHub's archive CDN (no redirect)
 })
 
 

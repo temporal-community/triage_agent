@@ -1,5 +1,5 @@
 from typing import Literal
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class PRContext(BaseModel):
@@ -7,7 +7,7 @@ class PRContext(BaseModel):
     pr_number: int
     pr_author: str                      # "dependabot[bot]" or "renovate[bot]"
     installation_id: int                # GitHub App installation
-    ecosystem: Literal["pip", "npm", "rubygems", "maven"]
+    ecosystem: Literal["pip", "npm", "rubygems", "maven", "composer"]
     package_name: str
     old_version: str
     new_version: str
@@ -28,26 +28,26 @@ class RepoConfig(BaseModel):
     max_new_dependencies: int = 5           # flag as yellow when more direct deps than this are added
 
 
-# Partial signal models — one per signal activity, merged into PackageSignals in the workflow.
+# Partial signal models — one per signal activity, nested into PackageSignals in the workflow.
 
 class PyPISignals(BaseModel):
-    weekly_downloads: int | None
-    is_major_bump: bool
+    weekly_downloads: int | None = None
+    is_major_bump: bool = False
     package_description: str | None = None
 
 
 class SocketSignals(BaseModel):
-    socket_score: int | None
-    socket_alerts: list[str]
+    socket_score: int | None = None
+    socket_alerts: list[str] = []
 
 
 class OSVSignals(BaseModel):
-    osv_vulnerabilities: list[str]
+    osv_vulnerabilities: list[str] = []
 
 
 class DiffSignals(BaseModel):
-    diff_summary: str
-    diff_size_bytes: int
+    diff_summary: str = ""
+    diff_size_bytes: int = 0
     install_script_added: bool = False
     install_script_changed: bool = False
     new_dependency_count: int = 0  # net new direct dependencies added across manifest files
@@ -64,11 +64,11 @@ class VersionLineSignals(BaseModel):
 
 
 class MaintainerSignals(BaseModel):
-    maintainer_changed: bool
+    maintainer_changed: bool = False
 
 
 class ReleaseAgeSignals(BaseModel):
-    release_age_hours: float | None   # None when upload_time is missing from PyPI metadata
+    release_age_hours: float | None = None   # None when upload_time is missing from PyPI metadata
 
 
 class ReleaseSignals(BaseModel):
@@ -112,54 +112,21 @@ class AttestationSignals(BaseModel):
 
 
 class PackageSignals(BaseModel):
-    ecosystem: Literal["pip", "npm", "rubygems", "maven"]
+    ecosystem: Literal["pip", "npm", "rubygems", "maven", "composer"]
     package_name: str
     old_version: str
     new_version: str
-    release_age_hours: float | None
-    is_major_bump: bool
-    socket_score: int | None
-    socket_alerts: list[str]
-    osv_vulnerabilities: list[str]
-    diff_summary: str
-    diff_size_bytes: int
-    maintainer_changed: bool
-    weekly_downloads: int | None
-    package_description: str | None = None
-    install_script_added: bool = False
-    install_script_changed: bool = False
-    new_dependency_count: int = 0
-    github_release_exists: bool = False
-    release_author: str | None = None
-    release_is_automated: bool = False
-    timestamp_skew_minutes: float | None = None
-    possible_rerelease: bool = False
-    release_body: str | None = None
-    tag_signature_verified: bool | None = None
-    tag_was_previously_signed: bool = False
-    has_attestation: bool = False
-    publisher_kind: str | None = None
-    publisher_repo: str | None = None
-    publisher_changed: bool = False
-    old_publisher_repo: str | None = None
-    publisher_account_age_days: int | None = None
-    source_ref: str | None = None
-    source_commit_sha: str | None = None
-    build_invocation_id: str | None = None
-    oidc_first_time: bool = False
-    metadata_repo: str | None = None            # from ReleaseSignals — registry-declared GitHub repo
-    stale_version_line: bool = False
-    latest_major: int | None = None
-    bump_major: int | None = None
-    is_deprecated: bool = False
-    deprecated_reason: str | None = None
-    scorecard_score: float | None = None
-    scorecard_repo: str | None = None
-    scorecard_maintained: int | None = None
-    scorecard_dangerous_workflow: int | None = None
-    scorecard_token_permissions: int | None = None
-    scorecard_branch_protection: int | None = None
-    scorecard_signed_releases: int | None = None
+    pypi: PyPISignals = Field(default_factory=PyPISignals)
+    socket: SocketSignals = Field(default_factory=SocketSignals)
+    osv: OSVSignals = Field(default_factory=OSVSignals)
+    diff: DiffSignals = Field(default_factory=DiffSignals)
+    maintainer: MaintainerSignals = Field(default_factory=MaintainerSignals)
+    age: ReleaseAgeSignals = Field(default_factory=ReleaseAgeSignals)
+    attestation: AttestationSignals = Field(default_factory=AttestationSignals)
+    release: ReleaseSignals = Field(default_factory=ReleaseSignals)
+    version_line: VersionLineSignals = Field(default_factory=VersionLineSignals)
+    deps_dev: DepsDevSignals = Field(default_factory=DepsDevSignals)
+    scorecard: ScorecardSignals = Field(default_factory=ScorecardSignals)
 
 
 class Verdict(BaseModel):

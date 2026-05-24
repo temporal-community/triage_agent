@@ -42,11 +42,17 @@ _MAVEN_NAME_RE = re.compile(
     r"^[A-Za-z0-9][A-Za-z0-9._-]{0,213}:[A-Za-z0-9][A-Za-z0-9._-]{0,213}$"
 )
 
+# Composer: vendor/package — both parts follow similar rules to PyPI names
+_COMPOSER_NAME_RE = re.compile(
+    r"^[A-Za-z0-9][A-Za-z0-9._-]{0,99}/[A-Za-z0-9][A-Za-z0-9._-]{0,99}$"
+)
+
 _NAME_RE_BY_ECOSYSTEM: dict[str, re.Pattern[str]] = {
     "pip": _PYPI_NAME_RE,
     "npm": _NPM_NAME_RE,
     "rubygems": _PYPI_NAME_RE,  # gem names follow the same rules as PyPI
     "maven": _MAVEN_NAME_RE,
+    "composer": _COMPOSER_NAME_RE,
 }
 
 

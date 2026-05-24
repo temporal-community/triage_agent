@@ -130,7 +130,7 @@ All fields are optional. Any field you omit stays at its safe default (no auto-m
 
 ## Roadmap
 
-- [x] PyPI, npm, RubyGems, and Maven (Java/JVM) ecosystem support
+- [x] PyPI, npm, RubyGems, Maven (Java/JVM), and Composer (PHP) ecosystem support
 - [x] Seven parallel signal sources (metadata, OSV, Socket.dev, diff, release age, maintainer history, SLSA/Sigstore attestations)
 - [x] LLM classifier with rule-based fallback
 - [x] GitHub App auth
@@ -140,7 +140,7 @@ All fields are optional. Any field you omit stays at its safe default (no auto-m
 - [x] Replay test fixtures (workflow determinism guarantee)
 - [x] EcosystemProvider plugin architecture (adding an ecosystem = one new file)
 - [ ] Public GitHub App registration
-- [ ] Composer (PHP) and other ecosystems
+- [ ] NuGet (.NET), Cargo (Rust), and other ecosystems
 - [ ] Renovate-triggered webhook support (currently Dependabot-focused)
 
 ---
