@@ -8,7 +8,7 @@ You have 47 unreviewed Dependabot PRs. You're going to merge most of them anyway
 - **Does this version have known vulnerabilities?** Queries [OSV - Open Source Vulnerabilities database](https://osv.dev) (includes the [OpenSSF malicious-packages database](https://github.com/ossf/malicious-packages)) for CVEs and confirmed malicious packages.
 - **Is the package itself suspicious?** [Socket.dev](https://socket.dev) scans for obfuscated code, install-time scripts, typosquatting, and permission creep.
 - **What code actually changed?** Downloads and diffs both package archives — flags new binary `.so`/`.dll`/`.node` files (which execute on import), new install hooks, and unusual dependency additions.
-- **Is the release fresh?** Very new releases (<24h) haven't had time for community review; older is safer.
+- **Is the release fresh?** Releases younger than 24h are flagged as "very fresh"; younger than 7 days as "recent". Auto-merge won't fire on anything under 7 days by default.
 - **Did the maintainer change?** A new account publishing a popular package is a classic supply chain attack vector.
 - **Was it built from the right place?** Checks [SLSA/Sigstore](https://slsa.dev) attestations — cryptographic proof that the artifact was built by a specific CI pipeline from a specific repo. A mismatch is an automatic red flag.
 - **Is the upstream repo healthy?** Queries the [OpenSSF Scorecard](https://securityscorecards.dev) to check if the project has dangerous CI workflows, overprivileged tokens, or no active maintenance.
