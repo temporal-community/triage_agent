@@ -17,7 +17,7 @@ You have 47 unreviewed Dependabot PRs. You're going to merge most of them anyway
 
 It classifies the risk as GREEN / YELLOW / RED, posts a comment explaining its reasoning, and takes action based on how you've configured it (or nothing if you haven't).
 
-> **Status:** Experimental — works locally and with personal GitHub App installs. Supports pip, npm, RubyGems, Maven, Composer, NuGet, Cargo, and Go. Public deployment coming soon.
+> **Status:** Experimental — self-hosted, bring your own keys. Run the worker locally or deploy it yourself (see [DEPLOYMENT.md](DEPLOYMENT.md)). No shared infrastructure, no accounts, no sign-up.
 
 ---
 
@@ -167,7 +167,7 @@ block_classifications: []   # override the default red-blocking if you want trul
 - [x] Observe-only safe default (comment-only with no config file)
 - [x] Replay test fixtures (workflow determinism guarantee)
 - [x] Ecosystem plugin architecture — entry points + `RemoteEcosystemProvider` HTTP bridge for non-Python stacks
-- [ ] Public GitHub App registration
+- [x] Pluggable classifier — Claude, OpenAI, Ollama, or any `triage_agent.classifiers` plugin
 - [ ] Renovate full support (basic detection works; rich old-version extraction is partial)
 
 ---
