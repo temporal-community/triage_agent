@@ -244,8 +244,12 @@ def collect_optional_keys() -> dict[str, str]:
         key = _ask("OpenAI API key", secret=True)
         if key:
             result["OPENAI_API_KEY"] = key
-            result["OPENAI_MODEL"] = "gpt-5.5-instant"
             result["CLASSIFIER"] = "openai"
+        model = _ask("OpenAI model ID (see platform.openai.com/docs/models)")
+        if model:
+            result["OPENAI_MODEL"] = model
+        else:
+            _warn("No model set — add OPENAI_MODEL to .env before starting the worker.")
     elif llm_choice == 3:
         host = _ask("Ollama host", default="http://localhost:11434")
         model = _ask("Ollama model (must be pulled locally)", default="llama3.2")
