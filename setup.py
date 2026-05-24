@@ -151,8 +151,8 @@ def collect_github_credentials() -> dict[str, str]:
   2. Fill in:
        App name:        dependabot-supply-chain-scout (or any name)
        Homepage URL:    https://github.com/temporal-community/triage-agent
-       Webhook URL:     your ngrok/public URL + /webhook  (set up later)
-       Webhook secret:  (generate one below)
+       Webhook URL:     https://placeholder.example.com/webhook  (you'll update this in step 5 below)
+       Webhook secret:  (generate one below — copy it into this form)
 
   3. Permissions — Repository permissions:
        Contents:        Read-only
@@ -286,6 +286,31 @@ def print_repo_config() -> None:
 
 def print_next_steps(used_app: bool) -> None:
     _h("You're set up. Next steps:")
+
+    if used_app:
+        webhook_registration = textwrap.dedent("""\
+  5. Wire the webhook URL into your GitHub App:
+       a. Go to: https://github.com/settings/apps  (or your org's /settings/apps)
+       b. Click your app → "General" tab
+       c. Under "Webhook", set:
+            Webhook URL:    https://<your-ngrok-id>.ngrok-free.app/webhook
+            Webhook secret: (already set during app creation — must match GITHUB_WEBHOOK_SECRET in .env)
+       d. Save changes.
+       e. Open the "Permissions & events" tab and confirm "Pull requests" is checked under Subscribe to events.
+    """)
+    else:
+        webhook_registration = textwrap.dedent("""\
+  5. Register the webhook in each repo you want to monitor:
+       a. Go to: https://github.com/OWNER/REPO/settings/hooks/new
+          (replace OWNER/REPO with your repo — repeat for each repo)
+       b. Fill in:
+            Payload URL:    https://<your-ngrok-id>.ngrok-free.app/webhook
+            Content type:   application/json
+            Secret:         (copy GITHUB_WEBHOOK_SECRET from your .env)
+            Events:         ✓ Pull requests   (select "Let me select individual events")
+       c. Click "Add webhook". GitHub will send a ping — a ✓ means it's wired.
+    """)
+
     print(textwrap.dedent(f"""
   1. Start Temporal (in a separate terminal):
        temporal server start-dev
@@ -293,7 +318,7 @@ def print_next_steps(used_app: bool) -> None:
   2. Start the worker (in a separate terminal):
        uv run python -m worker
 
-  3. Test a triage run against a real public package:
+  3. Test a triage run against a real public package (no webhook needed):
        uv run python -m start_workflow \\
          --repo temporalio/ai-cookbook \\
          --package idna --old-version 3.11 --new-version 3.15 \\
@@ -301,11 +326,11 @@ def print_next_steps(used_app: bool) -> None:
 
      Watch the run at: http://localhost:8233
 
-  4. To receive live Dependabot webhooks:
+  4. To receive live Dependabot webhooks, expose the API server:
        uv run uvicorn api.webhook:app --port 8080
-       ngrok http 8080  # then paste the HTTPS URL into GitHub → Settings → Webhooks
-    {'5. Register the webhook URL in your GitHub App settings.' if used_app else ''}
-    """))
+       ngrok http 8080   # note the https:// URL it prints
+
+    """) + webhook_registration)
 
 
 # ---------------------------------------------------------------------------

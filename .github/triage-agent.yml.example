@@ -1,0 +1,77 @@
+# .github/triage-agent.yml
+#
+# Copy this file to .github/triage-agent.yml in any repo where you want
+# the Scout to do more than post comments.
+#
+# ALL FIELDS ARE OPTIONAL. The Scout is safe to install with no config:
+# it will post a verdict comment on every Dependabot/Renovate PR but
+# never merge, close, or request review.
+#
+# See the full reference: https://github.com/temporal-community/dependabot-supply-chain-scout#full-config-reference
+
+
+# ---------------------------------------------------------------------------
+# Auto-merge
+# ---------------------------------------------------------------------------
+
+# Set to true to allow the Scout to merge PRs automatically.
+# Only kicks in when the verdict matches auto_merge_classifications AND
+# the classifier's confidence is >= auto_merge_min_confidence.
+auto_merge_enabled: false
+
+# Which verdict classifications are eligible for auto-merge.
+# Default is ["green"] — change to ["green", "yellow"] at your own risk.
+auto_merge_classifications: [green]
+
+# Minimum classifier confidence (0.0–1.0) required before auto-merge fires.
+# 0.80 means "the classifier must be at least 80% sure this is green".
+# Raise this if you want the bot to be more conservative.
+auto_merge_min_confidence: 0.80
+
+# Never auto-merge a release published less than this many hours ago,
+# even if the verdict is GREEN. Gives time for community review of fresh releases.
+# Default: 168 hours (7 days). Set to 0 to disable the age gate.
+min_release_age_hours: 168
+
+
+# ---------------------------------------------------------------------------
+# Human review
+# ---------------------------------------------------------------------------
+
+# GitHub usernames to @-mention for review when a PR is classified YELLOW.
+# Leave empty (or omit) to skip review requests.
+# reviewers: [alice, bob]
+reviewers: []
+
+
+# ---------------------------------------------------------------------------
+# Blocking
+# ---------------------------------------------------------------------------
+
+# Verdicts that should trigger PR closure + label.
+# Default is ["red"]. Set to [] for fully observe-only mode (no closures).
+block_classifications: [red]
+
+
+# ---------------------------------------------------------------------------
+# Thresholds
+# ---------------------------------------------------------------------------
+
+# Flag a bump as YELLOW when it adds more than this many new direct dependencies
+# across all manifest files (package.json, requirements.txt, etc.).
+# A routine patch bump adding 10 transitive packages is suspicious.
+max_new_dependencies: 5
+
+
+# ---------------------------------------------------------------------------
+# Ecosystem plugins (advanced)
+# ---------------------------------------------------------------------------
+
+# Names of additional Temporal activities to call for custom signals.
+# Each activity receives (ecosystem, package, old_version, new_version)
+# and must return a JSON-serialisable dict. Results appear in the LLM
+# context as supplementary data (sandboxed — cannot override core signals).
+#
+# Requires the corresponding plugin package to be installed in your worker deployment.
+# See CONTRIBUTING.md for the plugin authoring guide.
+# extra_signal_activities: []

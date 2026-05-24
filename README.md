@@ -17,7 +17,7 @@ You have 47 unreviewed Dependabot PRs. You're going to merge most of them anyway
 
 It classifies the risk as GREEN / YELLOW / RED, posts a comment explaining its reasoning, and takes action based on how you've configured it (or nothing if you haven't).
 
-> **Status:** Experimental — works locally and with personal GitHub App installs. Supports pip, npm, and RubyGems. Public deployment coming soon.
+> **Status:** Experimental — works locally and with personal GitHub App installs. Supports pip, npm, RubyGems, Maven, Composer, NuGet, Cargo, and Go. Public deployment coming soon.
 
 ---
 
@@ -112,42 +112,71 @@ Copy `.env.example` to `.env` and fill in what you have.
 
 ## Configuring your repo
 
-Add `.github/triage-agent.yml` to any repo where you want the Scout to do more than comment:
+Add `.github/triage-agent.yml` to any repo where you want the Scout to do more than comment. All fields are optional — omitting the file entirely is safe (comment-only mode).
+
+A ready-to-copy template is at [`.github/triage-agent.yml.example`](.github/triage-agent.yml.example).
+
+### Full config reference
+
+| Field | Default | What it does |
+|---|---|---|
+| `auto_merge_enabled` | `false` | Enable auto-merge for classified PRs |
+| `auto_merge_classifications` | `["green"]` | Which verdicts are eligible for auto-merge |
+| `auto_merge_min_confidence` | `0.80` | Classifier confidence required before auto-merge fires (0–1) |
+| `min_release_age_hours` | `168` (7 days) | Never auto-merge a release newer than this, even if GREEN |
+| `reviewers` | `[]` | GitHub usernames to request review on YELLOW verdicts |
+| `block_classifications` | `["red"]` | Close the PR and add a label for these verdicts |
+| `max_new_dependencies` | `5` | Flag as YELLOW when a bump adds more than this many new direct deps |
+| `extra_signal_activities` | `[]` | Additional Temporal activity names to call (for ecosystem plugins) |
+
+**Minimal "just auto-merge safe stuff" config:**
 
 ```yaml
 # .github/triage-agent.yml
 auto_merge_enabled: true
-auto_merge_classifications: [green]   # auto-merge green verdicts
-reviewers: [alice, bob]               # request review on yellow
-min_release_age_hours: 168            # never merge anything < 7 days old
-block_classifications: [red]          # add a label + block merge on red
-max_new_dependencies: 5               # flag as yellow if > 5 new direct deps added
+reviewers: [your-github-username]   # gets pinged on yellow
 ```
 
-All fields are optional. Any field you omit stays at its safe default (no auto-merge, no review requests, no blocking).
+**Stricter config — wait a week, block red, request two reviewers on yellow:**
+
+```yaml
+auto_merge_enabled: true
+auto_merge_min_confidence: 0.90
+min_release_age_hours: 168
+reviewers: [alice, bob]
+block_classifications: [red]
+```
+
+**Observe-only (just get comments, never take action):**
+
+```yaml
+# Empty file, or omit the file entirely — this is the default.
+block_classifications: []   # override the default red-blocking if you want truly zero action
+```
 
 ---
 
 ## Roadmap
 
-- [x] PyPI, npm, RubyGems, Maven (Java/JVM), Composer (PHP), and NuGet (.NET) ecosystem support
-- [x] Seven parallel signal sources (metadata, OSV, Socket.dev, diff, release age, maintainer history, SLSA/Sigstore attestations)
+- [x] pip, npm, RubyGems, Maven (Java/JVM), Composer (PHP), NuGet (.NET), Cargo (Rust), Go Modules
+- [x] Eleven parallel signal sources (OSV, Socket.dev, diff, release age, maintainer, SLSA/Sigstore, OpenSSF Scorecard, deps.dev deprecation, version staleness, PR file audit, metadata)
 - [x] LLM classifier with rule-based fallback
 - [x] GitHub App auth
 - [x] FastAPI webhook receiver
 - [x] Per-repo config via `.github/triage-agent.yml`
-- [x] Observe-only safe default
+- [x] Observe-only safe default (comment-only with no config file)
 - [x] Replay test fixtures (workflow determinism guarantee)
-- [x] EcosystemProvider plugin architecture (adding an ecosystem = one new file)
+- [x] Ecosystem plugin architecture — entry points + `RemoteEcosystemProvider` HTTP bridge for non-Python stacks
 - [ ] Public GitHub App registration
-- [ ] Cargo (Rust) and other ecosystems
-- [ ] Renovate-triggered webhook support (currently Dependabot-focused)
+- [ ] Renovate full support (basic detection works; rich old-version extraction is partial)
 
 ---
 
 ## How it works under the hood
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the two-workflow Temporal design, signal sources, LLM classifier, security hardening, and how to run it against live GitHub webhooks.
+
+For contributor docs — adding ecosystems, signals, or custom plugins — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 
