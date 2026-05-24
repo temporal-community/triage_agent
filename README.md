@@ -69,18 +69,23 @@ For a GREEN verdict, the comment is shorter — just the badge, reasoning, and a
 You need Python 3.10+, [`uv`](https://docs.astral.sh/uv/), and the [Temporal CLI](https://docs.temporal.io/cli).
 
 ```bash
-# Clone and install
 git clone https://github.com/temporal-community/dependabot-supply-chain-scout
 cd dependabot-supply-chain-scout
-uv sync
+uv run python setup.py
+```
 
-# Start Temporal (separate terminal)
+The setup script checks prerequisites, walks you through GitHub credentials (PAT for local testing, GitHub App for production), writes `.env`, and prints the repo config snippet to paste into your target repo.
+
+Then:
+
+```bash
+# Terminal 1 — Temporal dev server
 temporal server start-dev
 
-# Start the worker (separate terminal)
+# Terminal 2 — worker
 uv run python -m worker
 
-# Run a triage against a real public PR
+# Test a triage run against a real public package (no API keys needed)
 uv run python -m start_workflow \
   --repo temporalio/ai-cookbook \
   --package idna \
