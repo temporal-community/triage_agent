@@ -50,6 +50,10 @@ def test_dependabot_titles(title, pkg, old, new, ecosystem):
         ("Update dependency requests to v2.32.0", "requests", "2.32.0"),
         ("chore(deps): update dependency litellm to 1.30.2", "litellm", "1.30.2"),
         ("Update dependency numpy to v2.0.0", "numpy", "2.0.0"),
+        # "dependency" keyword is optional in some Renovate presets
+        ("Update requests to v2.32.0", "requests", "2.32.0"),
+        ("fix(deps): Update lodash to 4.17.21", "lodash", "4.17.21"),
+        ("chore(deps): Update boto3 to 1.34.0", "boto3", "1.34.0"),
     ],
 )
 def test_renovate_titles(title, pkg, new):
@@ -63,11 +67,82 @@ def test_renovate_titles(title, pkg, new):
 def test_unknown_title_returns_none():
     assert parse_pr("Fix typo in README") is None
     assert parse_pr("chore: update CI config") is None
+    # "Update X to Y" must not match when Y doesn't look like a version
+    assert parse_pr("Update README to fix typo") is None
+    assert parse_pr("Update tests to use new API") is None
 
 
-def test_renovate_extracts_old_version_from_body():
+# ---------------------------------------------------------------------------
+# Renovate old-version extraction from PR body
+# ---------------------------------------------------------------------------
+
+
+def test_renovate_extracts_old_version_from_from_to_body():
     title = "Update dependency requests to v2.32.0"
     body = "| requests | from `2.31.0` to `2.32.0` |"
+    result = parse_pr(title, body)
+    assert result is not None
+    assert result.old_version == "2.31.0"
+
+
+def test_renovate_extracts_old_version_from_arrow_pattern():
+    title = "Update dependency requests to v2.32.0"
+    body = "| [requests](https://pypi.org/project/requests) | `2.31.0` -> `2.32.0` |"
+    result = parse_pr(title, body)
+    assert result is not None
+    assert result.old_version == "2.31.0"
+
+
+def test_renovate_arrow_without_backticks():
+    title = "Update dependency requests to v2.32.0"
+    body = "requests: 2.31.0 -> 2.32.0"
+    result = parse_pr(title, body)
+    assert result is not None
+    assert result.old_version == "2.31.0"
+
+
+def test_renovate_arrow_unicode():
+    title = "Update dependency requests to v2.32.0"
+    body = "| requests | 2.31.0 → 2.32.0 |"
+    result = parse_pr(title, body)
+    assert result is not None
+    assert result.old_version == "2.31.0"
+
+
+def test_renovate_v_prefix_in_body_stripped_for_comparison():
+    # Body may say "v2.31.0 -> v2.32.0" while title says "to v2.32.0"
+    title = "Update dependency requests to v2.32.0"
+    body = "| requests | `v2.31.0` -> `v2.32.0` |"
+    result = parse_pr(title, body)
+    assert result is not None
+    assert result.old_version == "v2.31.0"
+
+
+def test_renovate_prerelease_version_extracted():
+    title = "Update dependency mylib to 2.0.0"
+    body = "| mylib | `1.0.0-rc.1` -> `2.0.0` |"
+    result = parse_pr(title, body)
+    assert result is not None
+    assert result.old_version == "1.0.0-rc.1"
+
+
+def test_renovate_no_false_positive_substring_match():
+    # "xml" must not accidentally pull old version from the "xml-js" line
+    title = "Update dependency xml to v1.0.1"
+    body = (
+        "| xml-js | `2.0.0` -> `2.0.1` |\n"
+        "| xml | `1.0.0` -> `1.0.1` |\n"
+    )
+    result = parse_pr(title, body)
+    assert result is not None
+    assert result.old_version == "1.0.0"
+
+
+def test_renovate_fallback_strategy_no_package_line():
+    # Package name doesn't appear on the same line as the version transition;
+    # strategy 3 (any matching arrow) should still find the old version.
+    title = "Update dependency requests to 2.32.0"
+    body = "This bump updates the HTTP library.\n\n`2.31.0` -> `2.32.0`\n"
     result = parse_pr(title, body)
     assert result is not None
     assert result.old_version == "2.31.0"

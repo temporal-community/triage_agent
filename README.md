@@ -168,7 +168,7 @@ block_classifications: []   # override the default red-blocking if you want trul
 - [x] Replay test fixtures (workflow determinism guarantee)
 - [x] Ecosystem plugin architecture — entry points + `RemoteEcosystemProvider` HTTP bridge for non-Python stacks
 - [x] Pluggable classifier — Claude, OpenAI, Ollama, or any `triage_agent.classifiers` plugin
-- [ ] Renovate full support (basic detection works; rich old-version extraction is partial)
+- [x] Renovate full support — title variants with/without `dependency` keyword, arrow and from/to body extraction, pre-release versions, false-positive prevention
 
 ---
 
