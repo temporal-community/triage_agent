@@ -696,6 +696,3 @@ def safe_tar_extractall(tf: tarfile.TarFile, dest: str) -> None:
                 non_retryable=True,
             )
         tf.extract(member, dest, filter="data")
-
-# Backward-compatible alias
-build_release_signals = build_release_checks

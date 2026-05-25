@@ -4,7 +4,7 @@ Guidance for Claude Code when working in this repo. See [ARCHITECTURE.md](ARCHIT
 
 ## What this is
 
-**dependency-scout** — vets Dependabot/Renovate PRs by gathering supply chain risk signals in parallel, classifying GREEN/YELLOW/RED, and acting on the verdict. Key principle: graceful degradation — zero API keys works (rule-based, log-only); gets smarter as keys are added.
+**dependency-scout** — vets Dependabot/Renovate PRs by gathering supply chain risk checks in parallel, classifying GREEN/YELLOW/RED, and acting on the verdict. Key principle: graceful degradation — zero API keys works (rule-based, log-only); gets smarter as keys are added.
 
 Ecosystems: pip (production), npm (implemented, deployment pending).
 

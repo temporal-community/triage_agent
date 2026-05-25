@@ -208,19 +208,3 @@ class Verdict(BaseModel):
     flags: list[str]
     release_age_hours: float | None = None  # passed through for per-repo age gate enforcement
     new_dependency_count: int = 0  # passed through for per-repo max_new_dependencies gate
-
-
-# Backward-compatible aliases — tests and callers that used the old *Signals names still work.
-PyPISignals = PyPIChecks
-SocketSignals = SocketChecks
-OSVSignals = OSVChecks
-DiffSignals = DiffChecks
-PRFilesSignals = PRFilesChecks
-VersionLineSignals = VersionLineChecks
-MaintainerSignals = MaintainerChecks
-ReleaseAgeSignals = ReleaseAgeChecks
-ReleaseSignals = ReleaseChecks
-DepsDevSignals = DepsDevChecks
-ScorecardSignals = ScorecardChecks
-AttestationSignals = AttestationChecks
-PackageSignals = PackageChecks

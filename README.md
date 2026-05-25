@@ -25,7 +25,7 @@ It classifies the risk as GREEN / YELLOW / RED, posts a comment explaining its r
 
 When a Dependabot or Renovate PR opens on **GitHub or GitLab**, the Scout:
 
-1. **Fetches signals** from public APIs (PyPI/npm/RubyGems, OSV, Socket.dev, pypistats, SLSA provenance) — no API keys required for most signals
+1. **Runs checks** from public APIs (PyPI/npm/RubyGems, OSV, Socket.dev, pypistats, SLSA provenance) — no API keys required for most checks
 2. **Downloads and diffs** the package archive to see what code actually changed
 3. **Classifies risk** as GREEN, YELLOW, or RED using your choice of LLM — Claude, OpenAI, Ollama, or a custom plugin — with a rule-based fallback if you'd rather not use any LLM
 4. **Posts a verdict comment** to the PR/MR explaining its reasoning
@@ -109,7 +109,7 @@ Open **http://localhost:8233** to watch the workflow run in the Temporal UI. No 
 | `GITHUB_TOKEN` or GitHub App | Posts real PR comments on GitHub |
 | `GITLAB_TOKEN` | Posts real MR comments on GitLab |
 | `ENABLE_PR_ACTIONS=true` | Can automatically merge GREEN PRs and/or close RED ones, based on your config |
-| `SOCKET_API_KEY` | Adds Socket.dev supply-chain score to signals |
+| `SOCKET_API_KEY` | Adds Socket.dev supply-chain score check |
 
 Copy `.env.example` to `.env` and fill in what you have, or run `uv run python setup.py` to be walked through it interactively.
 
@@ -168,8 +168,8 @@ Everything that varies between deployments is pluggable via Python entry points 
 | What to extend | Entry point group | How |
 |---|---|---|
 | New package ecosystem | `dependency_scout.ecosystems` | Implement `EcosystemProvider`, or use `RemoteEcosystemProvider` for non-Python stacks |
-| Custom classifier (OpenAI, Gemini, …) | `dependency_scout.classifiers` | Implement `async def classify(signals) -> Verdict`, set `CLASSIFIER=name` |
-| Extra signal activities | `dependency_scout.activities` | Decorate with `@activity.defn`, list in `extra_signal_activities` config |
+| Custom classifier (OpenAI, Gemini, …) | `dependency_scout.classifiers` | Implement `async def classify(checks) -> Verdict`, set `CLASSIFIER=name` |
+| Extra check activities | `dependency_scout.activities` | Decorate with `@activity.defn`, list in `extra_signal_activities` config |
 | New dependency bot (PyUp, etc.) | call `register_bot_parser()` | Implement `BotParser` with `bot_logins` and `parse()` |
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for full examples of each.
@@ -179,7 +179,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for full examples of each.
 ## Roadmap
 
 - [x] pip, npm, RubyGems, Maven (Java/JVM), Composer (PHP), NuGet (.NET), Cargo (Rust), Go Modules
-- [x] Eleven parallel signal sources (OSV, Socket.dev, diff, release age, maintainer, SLSA/Sigstore, OpenSSF Scorecard, deps.dev deprecation, version staleness, PR file audit, metadata)
+- [x] Eleven parallel check sources (OSV, Socket.dev, diff, release age, maintainer, SLSA/Sigstore, OpenSSF Scorecard, deps.dev deprecation, version staleness, PR file audit, metadata)
 - [x] LLM classifier with rule-based fallback
 - [x] GitHub and GitLab support
 - [x] FastAPI webhook receiver
@@ -188,7 +188,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for full examples of each.
 - [x] Replay test fixtures (workflow determinism guarantee)
 - [x] Ecosystem plugin architecture — entry points + `RemoteEcosystemProvider` HTTP bridge for non-Python stacks
 - [x] Pluggable classifier — Claude, OpenAI, Ollama, or any `dependency_scout.classifiers` plugin
-- [x] Signal activity plugin architecture — third-party signals via `dependency_scout.activities` entry points, surfaced to LLM automatically
+- [x] Check activity plugin architecture — third-party checks via `dependency_scout.activities` entry points, surfaced to LLM automatically
 - [x] Temporal Cloud support — TLS credentials in `.env`, no code changes needed vs local dev
 - [x] Renovate full support — title variants with/without `dependency` keyword, arrow and from/to body extraction, pre-release versions, false-positive prevention
 
@@ -197,7 +197,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for full examples of each.
 ## Project layout
 
 ```
-activities/     Temporal activity definitions — one file per signal source.
+activities/     Temporal activity definitions — one file per check source.
                 Each activity fetches one kind of data (PyPI metadata, Socket score,
                 OSV vulnerabilities, package diff, maintainer info, etc.) and returns
                 a typed Pydantic model. Activities run in parallel inside the workflow.
@@ -208,8 +208,8 @@ ecosystems/     Per-ecosystem providers (pip, npm, RubyGems, Cargo, Go, Composer
                 remote.py is the HTTP bridge for non-Python ecosystem plugins.
 
 workflows/      Two Temporal workflow definitions.
-                package_triage_workflow.py — orchestrates all signal activities,
-                collects results into PackageSignals, calls the classifier, returns
+                package_triage_workflow.py — orchestrates all check activities,
+                collects results into PackageChecks, calls the classifier, returns
                 a Verdict. pr_action_workflow.py — receives the Verdict and takes
                 action (comment, merge, close, request review) via the platform client.
 
@@ -217,7 +217,7 @@ classifiers/    Classifier implementations — Claude (default), OpenAI, Ollama,
                 rule-based fallback. Selected by the CLASSIFIER env var or loaded via
                 dependency_scout.classifiers entry points for custom plugins.
 
-models/         Shared Pydantic data models: PRContext, RepoConfig, PackageSignals
+models/         Shared Pydantic data models: PRContext, RepoConfig, PackageChecks
                 (and all its signal sub-models), and Verdict. Imported by activities,
                 workflows, classifiers, and tests.
 

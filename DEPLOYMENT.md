@@ -11,7 +11,7 @@ Three processes need to run:
 | Process | Command | Purpose |
 |---|---|---|
 | Temporal server | see below | Workflow orchestration + storage |
-| Worker | `uv run python -m worker` | Executes signal activities and workflows |
+| Worker | `uv run python -m worker` | Executes check activities and workflows |
 | Webhook API | `uv run uvicorn api.webhook:app` | Receives GitHub webhook events |
 
 The webhook API and worker are stateless and can be scaled horizontally. Temporal is the stateful component.
@@ -62,13 +62,13 @@ For larger deployments, see the [Temporal self-hosting docs](https://docs.tempor
 | `GITHUB_WEBHOOK_SECRET` | HMAC-SHA256 webhook verification — **required**, no fallback |
 | `GITHUB_APP_ID` + `GITHUB_APP_PRIVATE_KEY_PATH` | GitHub App credentials for posting comments and taking actions |
 
-### Optional secrets (unlock more signals)
+### Optional secrets (unlock more checks)
 
 | Variable | What changes without it |
 |---|---|
 | `ANTHROPIC_API_KEY` | Falls back to rule-based classifier |
 | `GITHUB_TOKEN` | Can't post comments or auto-merge (observe-only) |
-| `SOCKET_API_KEY` | Socket.dev supply-chain score signal is skipped |
+| `SOCKET_API_KEY` | Socket.dev supply-chain score check is skipped |
 
 ### Where to store them
 

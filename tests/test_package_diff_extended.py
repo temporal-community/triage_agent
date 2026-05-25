@@ -3163,9 +3163,7 @@ def test_proc_mem_in_new_py_file_sets_net_calls(tmp_path):
         tmp_path / "new",
         {
             "pkg/secrets.py": (
-                "import struct\n"
-                "with open('/proc/1234/mem', 'rb') as f:\n"
-                "    data = f.read(4096)\n"
+                "import struct\nwith open('/proc/1234/mem', 'rb') as f:\n    data = f.read(4096)\n"
             )
         },
     )
@@ -3177,7 +3175,9 @@ def test_net_calls_musl_bun_download_js():
     """musl variant check followed by Bun download URL sets network_calls_in_lib (SAP CAP)."""
     assert (
         _added_lines_have_net_calls(
-            ["const variant = musl ? 'oven-sh/bun/releases/download/bun-linux-musl-x64.zip' : 'bun-linux-x64.zip';"],
+            [
+                "const variant = musl ? 'oven-sh/bun/releases/download/bun-linux-musl-x64.zip' : 'bun-linux-x64.zip';"
+            ],
             ".js",
         )
         is True
@@ -3188,7 +3188,9 @@ def test_net_calls_glibc_bun_download_js():
     """glibc detection + bun/releases URL in JS sets network_calls_in_lib."""
     assert (
         _added_lines_have_net_calls(
-            ["if (glibc) { url = 'https://github.com/oven-sh/bun/releases/download/bun-linux-x64.zip'; }"],
+            [
+                "if (glibc) { url = 'https://github.com/oven-sh/bun/releases/download/bun-linux-x64.zip'; }"
+            ],
             ".js",
         )
         is True
@@ -3215,7 +3217,9 @@ def test_net_calls_graphql_create_commit_js():
     """GitHub GraphQL createCommitOnBranch mutation in JS sets network_calls_in_lib."""
     assert (
         _added_lines_have_net_calls(
-            ["const res = await fetch('https://api.github.com/graphql', {body: JSON.stringify({query: 'mutation { createCommitOnBranch(...) }'})}); "],
+            [
+                "const res = await fetch('https://api.github.com/graphql', {body: JSON.stringify({query: 'mutation { createCommitOnBranch(...) }'})}); "
+            ],
             ".js",
         )
         is True
@@ -3226,7 +3230,9 @@ def test_obfuscation_php_fileinode_file():
     """fileinode(__FILE__) in PHP flags per-host execution guard (Laravel Lang stealth)."""
     assert (
         _added_lines_have_net_calls(
-            ["if (!file_exists($marker) && md5(fileinode(__FILE__) . php_uname('m'))) { eval(base64_decode($payload)); }"],
+            [
+                "if (!file_exists($marker) && md5(fileinode(__FILE__) . php_uname('m'))) { eval(base64_decode($payload)); }"
+            ],
             ".php",
         )
         is False  # fileinode is in _OBFUSCATION_PATTERNS, not _NET_CALL_PATTERNS

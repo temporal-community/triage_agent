@@ -44,7 +44,6 @@ _CHECK_REGISTRY: list[tuple[str, str, type, bool]] = [
 
 # Derived from the registry — used by tests/test_check_wiring.py to verify worker registration.
 CHECK_ACTIVITY_NAMES: list[str] = [name for _, name, _, _ in _CHECK_REGISTRY]
-SIGNAL_ACTIVITY_NAMES = CHECK_ACTIVITY_NAMES  # backward-compatible alias
 
 
 @workflow.defn

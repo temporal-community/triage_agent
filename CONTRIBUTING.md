@@ -196,12 +196,12 @@ The classifier receives the full `PackageChecks` object including `custom_checks
 
 ## Design principles
 
-- **Graceful degradation** — missing API keys or upstream errors produce degraded signal defaults, not a crash. This is enforced at two levels: each activity catches its own errors and returns a zero-state model; the workflow's `asyncio.gather` uses `return_exceptions=True` so a single failing activity never discards the other ten results.
+- **Graceful degradation** — missing API keys or upstream errors produce degraded check defaults, not a crash. This is enforced at two levels: each activity catches its own errors and returns a zero-state model; the workflow's `asyncio.gather` uses `return_exceptions=True` so a single failing activity never discards the other ten results.
 - **Attacker-controlled data stays sandboxed** — package descriptions, socket alert strings, release notes, and diff content go into clearly-labelled XML tags in the LLM prompt and are explicitly named in the system prompt as untrusted.
 - **No silent fallbacks** — use `ApplicationError(..., non_retryable=True)` for permanent errors (404, auth failure) so Temporal doesn't retry endlessly.
 - **Archive URLs are validated** before any HTTP request — add new CDN hosts to `ALLOWED_CDN_HOSTS`, never skip the `validate_archive_url()` call.
-- **Signals are nested, not flat** — `PackageSignals` holds typed sub-models (`signals.age.release_age_hours`, not `signals.release_age_hours`). Field name collisions between signals are structurally impossible.
-- **The registry is the source of truth** — `_SIGNAL_REGISTRY` in `package_triage_workflow.py` drives the gather order, the `SIGNAL_ACTIVITY_NAMES` constant, and the worker registration test. When adding a signal, the registry row is the one required workflow-layer edit.
+- **Checks are nested, not flat** — `PackageChecks` holds typed sub-models (`signals.age.release_age_hours`, not `signals.release_age_hours`). Field name collisions between checks are structurally impossible.
+- **The registry is the source of truth** — `_CHECK_REGISTRY` in `package_triage_workflow.py` drives the gather order, the `CHECK_ACTIVITY_NAMES` constant, and the worker registration test. When adding a check, the registry row is the one required workflow-layer edit.
 - **Worker registration is automatic** — `worker.py` scans `activities/*.py` at startup for `@activity.defn`-decorated functions. Creating a new activity file is sufficient; no manual entry in `ACTIVITIES` is needed.
 - **Ecosystem provider registration is automatic** — `get_provider()` scans `activities/ecosystems/*.py` for classes with an `ecosystem_name` attribute, then checks the `dependency_scout.ecosystems` entry points group for installed plugins. Creating a new provider file (or installing a plugin package) is sufficient; no manual registration is needed.
 
@@ -241,13 +241,13 @@ class DrupalProvider(RemoteEcosystemProvider):
 
 Your service must expose `POST {base_url}/{method_name}` endpoints. Each endpoint receives the method parameters as a JSON body and responds with the corresponding signal model fields as JSON. The full request/response spec is in the docstrings in `activities/ecosystems/remote.py`.
 
-### Adding custom signal activities
+### Adding custom check activities
 
-Plugins can also contribute new signal-gathering activities. Declare them in `pyproject.toml`:
+Plugins can also contribute new check-gathering activities. Declare them in `pyproject.toml`:
 
 ```toml
 [project.entry-points."dependency_scout.activities"]
-drupal_signal = "dependency_scout_drupal.activities:check"
+drupal_check = "dependency_scout_drupal.activities:check"
 ```
 
 `check` must be decorated with `@activity.defn`. It receives `(ecosystem, package, old_version, new_version)` and must return a JSON-serialisable dict. The worker loads it automatically at startup alongside built-in activities.
@@ -259,17 +259,17 @@ extra_signal_activities:
   - "dependency_scout_drupal.activities:check"
 ```
 
-Results land in `PackageSignals.custom_signals` and are surfaced to the LLM in a sandboxed `<untrusted_custom>` block — the same way package descriptions and diff content are handled. They cannot override or poison the core trusted signals.
+Results land in `PackageChecks.custom_checks` and are surfaced to the LLM in a sandboxed `<untrusted_custom>` block — the same way package descriptions and diff content are handled. They cannot override or poison the core trusted checks.
 
-**How the classifier handles your signal results:**
+**How the classifier handles your check results:**
 
 - **LLM classifiers (Claude, OpenAI, Ollama)** — your results appear automatically in the prompt as labeled JSON. The LLM reasons over them without any code changes on your part. No schema registration needed; the LLM infers meaning from the key names and values.
-- **Rule-based classifier** — ignores `custom_signals` by design. Deterministic threshold rules can only be written for signals whose structure is known at compile time. If you need rule-based support for your signal, contribute it as a built-in signal (see "Adding a new signal" above) rather than a plugin activity.
+- **Rule-based classifier** — ignores `custom_checks` by design. Deterministic threshold rules can only be written for checks whose structure is known at compile time. If you need rule-based support for your check, contribute it as a built-in check (see "Adding a new check" above) rather than a plugin activity.
 
-This means plugins work best when an LLM classifier is configured. The rule-based fallback will still run and post a verdict — it just won't factor in your custom signal.
+This means plugins work best when an LLM classifier is configured. The rule-based fallback will still run and post a verdict — it just won't factor in your custom check.
 
 ### In both cases
 
 Once installed, `get_provider("drupal")` returns your provider and `check` is registered with the worker automatically — no changes to this repo needed. Built-in providers take precedence over plugins with the same `ecosystem_name`, so core ecosystems cannot be shadowed.
 
-**Security note:** both entry point groups (`dependency_scout.ecosystems` and `dependency_scout.activities`) load plugin code into the same process as the core worker. This is the same trust boundary as any `pip install` dependency — the operator who deploys triage-agent is implicitly trusting the packages they install. Plugin results in `custom_signals` are rendered in the sandboxed `<untrusted_custom>` section of the LLM prompt and cannot influence the trusted signal block.
+**Security note:** both entry point groups (`dependency_scout.ecosystems` and `dependency_scout.activities`) load plugin code into the same process as the core worker. This is the same trust boundary as any `pip install` dependency — the operator who deploys triage-agent is implicitly trusting the packages they install. Plugin results in `custom_checks` are rendered in the sandboxed `<untrusted_custom>` section of the LLM prompt and cannot influence the trusted checks block.

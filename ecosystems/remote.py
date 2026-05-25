@@ -37,11 +37,11 @@ from temporalio.exceptions import ApplicationError
 
 from ecosystems import EcosystemProviderBase, MAX_EXTRACT_BYTES, validate_archive_url
 from models import (
-    AttestationSignals,
-    MaintainerSignals,
-    PyPISignals,
-    ReleaseAgeSignals,
-    ReleaseSignals,
+    AttestationChecks,
+    MaintainerChecks,
+    PyPIChecks,
+    ReleaseAgeChecks,
+    ReleaseChecks,
 )
 from helpers.http import get_client
 
@@ -91,9 +91,9 @@ class RemoteEcosystemProvider(EcosystemProviderBase):
     # EcosystemProvider methods
     # ------------------------------------------------------------------
 
-    async def fetch_metadata(self, package: str, old_version: str, new_version: str) -> PyPISignals:
+    async def fetch_metadata(self, package: str, old_version: str, new_version: str) -> PyPIChecks:
         """POST fetch_metadata — request: {package, old_version, new_version}
-        Response: PyPISignals fields (weekly_downloads, is_major_bump, package_description).
+        Response: PyPIChecks fields (weekly_downloads, is_major_bump, package_description).
         """
         data = await self._post(
             "fetch_metadata",
@@ -103,11 +103,11 @@ class RemoteEcosystemProvider(EcosystemProviderBase):
                 "new_version": new_version,
             },
         )
-        return PyPISignals(**(data or {}))
+        return PyPIChecks(**(data or {}))
 
-    async def fetch_release_age(self, package: str, new_version: str) -> ReleaseAgeSignals:
+    async def fetch_release_age(self, package: str, new_version: str) -> ReleaseAgeChecks:
         """POST fetch_release_age — request: {package, new_version}
-        Response: ReleaseAgeSignals fields (release_age_hours).
+        Response: ReleaseAgeChecks fields (release_age_hours).
         """
         data = await self._post(
             "fetch_release_age",
@@ -116,13 +116,13 @@ class RemoteEcosystemProvider(EcosystemProviderBase):
                 "new_version": new_version,
             },
         )
-        return ReleaseAgeSignals(**(data or {}))
+        return ReleaseAgeChecks(**(data or {}))
 
     async def fetch_maintainer(
         self, package: str, old_version: str, new_version: str
-    ) -> MaintainerSignals:
+    ) -> MaintainerChecks:
         """POST fetch_maintainer — request: {package, old_version, new_version}
-        Response: MaintainerSignals fields (maintainer_changed).
+        Response: MaintainerChecks fields (maintainer_changed).
         """
         data = await self._post(
             "fetch_maintainer",
@@ -132,7 +132,7 @@ class RemoteEcosystemProvider(EcosystemProviderBase):
                 "new_version": new_version,
             },
         )
-        return MaintainerSignals(**(data or {}))
+        return MaintainerChecks(**(data or {}))
 
     async def get_archive_url(
         self, client: httpx.AsyncClient, package: str, version: str
@@ -208,9 +208,9 @@ class RemoteEcosystemProvider(EcosystemProviderBase):
 
     async def fetch_attestations(
         self, package: str, old_version: str, new_version: str
-    ) -> AttestationSignals:
+    ) -> AttestationChecks:
         """POST fetch_attestations — request: {package, old_version, new_version}
-        Response: AttestationSignals fields.
+        Response: AttestationChecks fields.
         """
         data = await self._post(
             "fetch_attestations",
@@ -220,11 +220,11 @@ class RemoteEcosystemProvider(EcosystemProviderBase):
                 "new_version": new_version,
             },
         )
-        return AttestationSignals(**(data or {}))
+        return AttestationChecks(**(data or {}))
 
-    async def fetch_release(self, package: str, old_version: str, version: str) -> ReleaseSignals:
+    async def fetch_release(self, package: str, old_version: str, version: str) -> ReleaseChecks:
         """POST fetch_release — request: {package, old_version, version}
-        Response: ReleaseSignals fields.
+        Response: ReleaseChecks fields.
         """
         data = await self._post(
             "fetch_release",
@@ -234,4 +234,4 @@ class RemoteEcosystemProvider(EcosystemProviderBase):
                 "version": version,
             },
         )
-        return ReleaseSignals(**(data or {}))
+        return ReleaseChecks(**(data or {}))
