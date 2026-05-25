@@ -1,8 +1,8 @@
 # Checks
 
-**When do you need a new check?** When there's a new external data source or check you want to run on every bump — if you find yourself thinking "I wish the classifier knew about X."
+**When do you need a new check?** When there's a new external data source you want to run on every bump — if you find yourself thinking "I wish the classifier knew about X."
 
-Checks are the individual units of work that Temporal executes, retries, and tracks. Each one calls an external API or does a computation, then returns a structured result. The workflow orchestrates them; checks do the actual work.
+Each check calls an external API or does a computation, then returns a structured result. The workflow runs all 11 in parallel and collects the results; checks do the actual work. For PR side-effect functions (comment, merge, close), see [`pr_actions/`](../pr_actions/README.md).
 
 ## Triage checks
 
@@ -24,15 +24,15 @@ These eleven checks run in parallel for every package bump. All degrade graceful
 
 `package_diff.compute` downloads and extracts the full package archive — it's the slowest check and runs on a longer timeout than the rest. It calls `activity.heartbeat()` at each phase (download → extract → artifact/source comparison) so Temporal can detect worker crashes mid-run rather than waiting for the full timeout to expire.
 
-## Activity naming convention
+## Check naming convention
 
-Activity names are strings, not function references. The string registered with `@activity.defn(name=...)` must match exactly what the workflow passes to `workflow.execute_activity(...)`.
+Each check function is registered under a string name (e.g. `"activities.metadata.fetch"`) that the workflow uses to schedule it. The name in `@activity.defn(name=...)` must match exactly what appears in `_CHECK_REGISTRY` in `workflows/package_triage_workflow.py`.
 
-The Temporal Python SDK does support type-safe function references (`workflow.execute_activity(fetch, ...)`), but this codebase uses strings deliberately: the triage checks are driven by `_CHECK_REGISTRY` in `package_triage_workflow.py`, a data structure that maps field names to activity names and result types. This makes it easy to add or reorder checks without touching workflow control flow. The trade-off is that name mismatches are caught at runtime rather than import time — see [CLAUDE.md](../CLAUDE.md) for the full convention.
+This codebase uses string names deliberately: `_CHECK_REGISTRY` is a data structure mapping field names to check names and result types, making it easy to add or reorder checks without touching workflow control flow. The trade-off is that name mismatches are caught at runtime rather than import time — see [CLAUDE.md](../CLAUDE.md) for the full convention.
 
 ## Worker auto-discovery
 
-The worker (`worker.py`) automatically discovers and registers every `@activity.defn`-decorated function found in `checks/*.py`. **You do not need to manually register new checks** — just put the file in this directory and restart the worker.
+The worker (`worker.py`) automatically discovers and registers every check function found in `checks/*.py` and `pr_actions/*.py`. **You do not need to manually register new checks** — just put the file in this directory and restart the worker.
 
 ## Adding a new triage check
 

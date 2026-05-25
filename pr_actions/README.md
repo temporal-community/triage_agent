@@ -1,8 +1,10 @@
 # PR Actions
 
-PR side-effect functions called by `PRActionWorkflow` after a triage verdict is reached. These talk to the GitHub or GitLab API to act on the PR.
+**When do you need a new PR action?** When you want the workflow to do something new with the PR after a verdict — e.g. post to Slack, open a Jira ticket, or trigger a downstream pipeline.
 
-All functions live in `actions.py` and are registered as Temporal activities with the `activities.platform.*` name prefix.
+These functions are called by `PRActionWorkflow` after a triage verdict is reached. They talk to the GitHub or GitLab API (or any external service) to act on the PR. For the triage check functions that produce the verdict, see [`checks/`](../checks/README.md).
+
+All functions live in `actions.py`.
 
 ## Actions
 
