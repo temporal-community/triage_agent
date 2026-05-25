@@ -461,10 +461,12 @@ _PERSISTENCE_PATTERNS: list[re.Pattern[str]] = [
 
 # Patterns for npm worm self-propagation: reads credentials AND calls publish endpoint.
 _NPM_CRED_READ_RE = re.compile(
-    r"\.npmrc|NPM_TOKEN|npm_[A-Za-z0-9]{20,}|~[/\\]\.npm[/\\]_authtoken", re.IGNORECASE
+    r"\.npmrc|NPM_TOKEN|NODE_AUTH_TOKEN|npm_[A-Za-z0-9]{20,}|~[/\\]\.npm[/\\]_authtoken", re.IGNORECASE
 )
 _NPM_PUBLISH_RE = re.compile(
-    r"registry\.npmjs\.org[^\n]{0,60}publish|npm\s+publish\b|@npmcli/[^\n]{0,40}publish|npm\s+pack\b",
+    r"registry\.npmjs\.org[^\n]{0,60}(?:publish|packages|whoami)"
+    r"|npm\s+publish\b|@npmcli/[^\n]{0,40}publish|npm\s+pack\b"
+    r"|/-/npm/v1/tokens",  # npm token enumeration — worm validating stolen token before self-propagation (Mini Shai-Hulud/TanStack)
     re.IGNORECASE,
 )
 
