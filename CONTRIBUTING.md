@@ -1,5 +1,34 @@
 # Contributing
 
+## Adding a detection pattern for a new attack
+
+This is the lowest-barrier contribution: a two-line YAML edit, no Python required.
+
+Detection patterns (regex strings that flag suspicious code in package diffs) live in `detections/`:
+
+| File | What it covers |
+|---|---|
+| `net_calls.yaml` | Outbound network calls in library code, by language extension |
+| `obfuscation.yaml` | Encoded payloads, zero-width Unicode tricks |
+| `persistence.yaml` | OS persistence mechanisms, npm worm propagation |
+| `file_types.yaml` | Suspicious filenames, dangerous binary extensions |
+
+Add a pattern — for example, a new HTTP client library that a recent attack used:
+
+```yaml
+# detections/net_calls.yaml, under the .py block:
+- pattern: 'evil_http\.fetch\b'
+  desc: EvilHTTP library used in SupplyChainCorp May 2026 attack
+```
+
+Use **single-quoted** YAML strings for regex — backslashes work as-is without doubling.
+
+Run `uv run pytest tests/test_detections.py -v` to verify your pattern compiles. Then run the full suite (`uv run pytest -x -q`).
+
+Use the `/add-detection` Claude Code skill for a guided walkthrough in Claude Code.
+
+---
+
 ## Adding a new ecosystem
 
 The plugin architecture makes this straightforward. Adding Composer, NuGet, or any other ecosystem is approximately 150 lines in one file.

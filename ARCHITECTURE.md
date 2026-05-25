@@ -215,10 +215,16 @@ activities/         @activity.defn Temporal wrappers only — thin glue calling 
 workflows/          PackageTriageWorkflow, PRActionWorkflow
 helpers/            GitHub App auth, comment formatting, config providers, HTTP client
 api/                FastAPI webhook receiver
-tests/              pytest suite (771 tests)
+detections/         YAML-driven detection pattern store. All regex patterns used by
+                    activities/package_diff.py live here as plain YAML (net_calls.yaml,
+                    obfuscation.yaml, persistence.yaml, file_types.yaml). Edit YAML
+                    to add attack coverage — no Python required. Use /add-detection.
+tests/              pytest suite
 ```
 
-The split between `activities/` and the top-level packages is intentional: `ecosystems/`, `platforms/`, and `classifiers/` are stable public extension points. Plugin authors import from them directly without needing to know anything about Temporal.
+The split between `activities/` and the top-level packages is intentional: `ecosystems/`, `platforms/`, `classifiers/`, and `detections/` are stable public extension points. Plugin authors import from them directly without needing to know anything about Temporal.
+
+`detections/` is the lowest-barrier extension point: adding a new network-call signature for a language you know is a two-line YAML edit.
 
 ---
 

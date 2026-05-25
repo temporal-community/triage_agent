@@ -307,6 +307,14 @@ api/            FastAPI webhook receiver. Parses incoming Dependabot and Renovat
                 webhook payloads and starts a PackageTriageWorkflow via the Temporal
                 client. Entry point for production traffic.
 
+detections/     YAML files containing every regex pattern used for supply chain
+                attack detection: network calls (160 patterns across 11 languages),
+                obfuscation/gzip/zero-width tricks, OS persistence mechanisms,
+                worm propagation signatures, and suspicious file type lists.
+                Edit these to add coverage for new attacks — no Python required.
+                detections/__init__.py loads all YAML at startup and exports
+                typed constants that the rest of the code uses.
+
 tests/          pytest test suite — one file per module, plus test_workflow_replay.py
                 which replays recorded Temporal event histories from tests/fixtures/
                 to catch non-deterministic workflow changes.
