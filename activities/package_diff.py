@@ -167,6 +167,8 @@ _NET_CALL_PATTERNS: dict[str, list[re.Pattern[str]]] = {
             r"\bHTTP\.(get|post|head|put|delete|patch)\b",
             r"rubygems\.org/api/v1/gems",  # registry-as-exfiltration (GemStuffer pattern)
             r"authorized_keys",  # SSH persistence via authorized_keys append
+            r"ENV\s*\[\s*['\"]HOME['\"]\s*\]\s*=\s*['\"]\/tmp\/",  # redirect HOME → /tmp (GemStuffer)
+            r"File\.binwrite\s*\(\s*['\"]\/tmp\/\.",  # write hidden binary to /tmp (malware staging)
         ],
         ".py": [
             r"\brequests\.(get|post|put|delete|head|patch|request)\s*\(",
@@ -205,6 +207,20 @@ _NET_CALL_PATTERNS: dict[str, list[re.Pattern[str]]] = {
             r"\bhttps?\.(request|get)\s*\(",
             r"\bXMLHttpRequest\b",
         ],
+        ".cjs": [
+            r"\bfetch\s*\(",
+            r"\baxios\.(get|post|put|delete|request|create)\b",
+            r"\bhttps?\.(request|get)\s*\(",
+            r"\bXMLHttpRequest\b",
+            r"\bgot\s*[\.(]",
+            r"\bdns\.resolveTxt\s*\(",  # DNS TXT C2 (node-ipc used .cjs specifically to evade .js checks)
+            r"\bdns\.resolve(?:Txt|Host|Mx|Ns)?\s*\(",
+            r"\bdns\.lookup\s*\(",
+            r"169\.254\.169\.254",
+            r"api\.telegram\.org/bot",
+            r"\.icp0\.io",
+            r"(?:appendFileSync|writeFile(?:Sync)?)\s*\([^,]*(?:\.bashrc|\.zshrc|\.profile|bash_profile)",
+        ],
         ".mjs": [
             r"\bfetch\s*\(",
             r"\baxios\b",
@@ -216,6 +232,7 @@ _NET_CALL_PATTERNS: dict[str, list[re.Pattern[str]]] = {
             r"\bfile_get_contents\s*\(\s*['\"]https?://",
             r"\bGuzzleHttp\\",
             r"\\Http\\Client\b",
+            r"(?:shell_exec|passthru|popen)\s*\(\s*['\"](?:curl|wget)\b",  # shell binary download (Intercom PHP)
         ],
         ".java": [
             r"\bHttpClient\b",
@@ -237,6 +254,7 @@ _NET_CALL_PATTERNS: dict[str, list[re.Pattern[str]]] = {
             r'os\.Getenv\s*\(\s*"GITHUB_ENV"\s*\)',  # CI env-file poisoning (inject into Actions env)
             r'os\.Getenv\s*\(\s*"GITHUB_PATH"\s*\)',  # CI PATH poisoning (inject fake binaries)
             r"authorized_keys",  # SSH persistence via authorized_keys append
+            r"\bexec\.Command\s*\(",  # subprocess execution in Go library code (BufferZoneCorp)
         ],
         ".rs": [
             r"\breqwest::(get|post|Client|blocking)\b",  # reqwest — most common Rust HTTP client
@@ -301,6 +319,7 @@ _OBFUSCATION_PATTERNS: dict[str, list[re.Pattern[str]]] = {
             r"\beval\s*\(\s*str_rot13\s*\(",
             r"\beval\s*\(\s*gzdecode\s*\(",
             r"\bchr\s*\(\s*\d{2,3}\s*\)\s*\.\s*chr\s*\(",  # chr(X).chr(Y) hostname obfuscation (Laravel Lang May 2026)
+            r"array_map\s*\(\s*['\"]chr['\"]\s*,",  # array_map('chr', [...]) char-code domain construction
         ],
         ".cs": [
             r"\[ModuleInitializer\]",  # auto-executes on DLL load (NuGet Chinese UI attack)

