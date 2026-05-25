@@ -16,6 +16,7 @@ import httpx
 from temporalio.exceptions import ApplicationError
 
 from ecosystems import (
+    EcosystemProviderBase,
     build_release_signals,
     fetch_vcs_release,
     fetch_vcs_tag_signature,
@@ -39,7 +40,7 @@ _PACKAGIST = "https://packagist.org"
 _CODELOAD = "https://codeload.github.com"
 
 
-class ComposerProvider:
+class ComposerProvider(EcosystemProviderBase):
     ecosystem_name = "composer"
     osv_name = "Packagist"
     dependabot_slug = "composer"

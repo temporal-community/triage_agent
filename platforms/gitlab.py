@@ -228,3 +228,9 @@ class GitLabPlatformClient:
         changes = resp.json().get("changes", [])
         unexpected = [c["new_path"] for c in changes if _is_ci_infra_file(c["new_path"])]
         return PRFilesSignals(unexpected_files=unexpected)
+
+
+def create_client(pr: PRContext) -> GitLabPlatformClient:
+    """Entry-point factory: called by get_platform_client() with the full PRContext."""
+    base_url = os.environ.get("GITLAB_BASE_URL", "https://gitlab.com")
+    return GitLabPlatformClient(base_url=base_url)

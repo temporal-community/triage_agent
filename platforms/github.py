@@ -225,3 +225,8 @@ class GitHubPlatformClient:
         resp.raise_for_status()
         unexpected = [f["filename"] for f in resp.json() if _is_ci_infra_file(f["filename"])]
         return PRFilesSignals(unexpected_files=unexpected)
+
+
+def create_client(pr: PRContext) -> GitHubPlatformClient:
+    """Entry-point factory: called by get_platform_client() with the full PRContext."""
+    return GitHubPlatformClient(installation_id=pr.installation_id)

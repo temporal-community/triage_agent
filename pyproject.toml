@@ -30,8 +30,12 @@ rule_based = "classifiers:RuleBasedClassifier"
 # Third-party providers register here.
 
 [project.entry-points."dependency_scout.platforms"]
-github = "platforms.github:GitHubPlatformClient"
-gitlab = "platforms.gitlab:GitLabPlatformClient"
+# Built-in clients are registered here so get_platform_client() is a uniform entry-point
+# lookup. Third-party platforms (Gitea, Bitbucket, …) register their own factory here:
+#   myplatform = "my_package.platform:create_client"
+# The factory must accept (pr: PRContext) and return a PlatformClient.
+github = "platforms.github:create_client"
+gitlab = "platforms.gitlab:create_client"
 
 [build-system]
 requires = ["hatchling"]

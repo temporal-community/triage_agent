@@ -17,6 +17,7 @@ import httpx
 from temporalio.exceptions import ApplicationError
 
 from ecosystems import (
+    EcosystemProviderBase,
     build_release_signals,
     fetch_vcs_release,
     fetch_vcs_tag_signature,
@@ -40,7 +41,7 @@ _NUGET_FLAT = "https://api.nuget.org/v3-flatcontainer"
 _NUGET_SEARCH = "https://azuresearch-usnc.nuget.org/query"
 
 
-class NuGetProvider:
+class NuGetProvider(EcosystemProviderBase):
     ecosystem_name = "nuget"
     osv_name = "NuGet"
     dependabot_slug = "nuget"

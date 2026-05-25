@@ -10,6 +10,7 @@ import httpx
 from temporalio.exceptions import ApplicationError
 
 from ecosystems import (
+    EcosystemProviderBase,
     build_release_signals,
     fetch_vcs_release,
     fetch_vcs_tag_signature,
@@ -29,7 +30,7 @@ from models import (
 from helpers.http import get_client
 
 
-class RubyGemsProvider:
+class RubyGemsProvider(EcosystemProviderBase):
     ecosystem_name = "rubygems"
     osv_name = "RubyGems"
     dependabot_slug = "bundler"

@@ -18,6 +18,7 @@ import httpx
 from temporalio.exceptions import ApplicationError
 
 from ecosystems import (
+    EcosystemProviderBase,
     build_release_signals,
     fetch_vcs_release,
     fetch_vcs_tag_signature,
@@ -39,7 +40,7 @@ _CENTRAL = "https://repo1.maven.org/maven2"
 _SEARCH = "https://search.maven.org/solrsearch/select"
 
 
-class MavenProvider:
+class MavenProvider(EcosystemProviderBase):
     ecosystem_name = "maven"
     osv_name = "Maven"
     dependabot_slug = "maven"

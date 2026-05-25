@@ -35,7 +35,7 @@ from typing import Any
 import httpx
 from temporalio.exceptions import ApplicationError
 
-from ecosystems import MAX_EXTRACT_BYTES, validate_archive_url
+from ecosystems import EcosystemProviderBase, MAX_EXTRACT_BYTES, validate_archive_url
 from models import (
     AttestationSignals,
     MaintainerSignals,
@@ -46,7 +46,7 @@ from models import (
 from helpers.http import get_client
 
 
-class RemoteEcosystemProvider:
+class RemoteEcosystemProvider(EcosystemProviderBase):
     """Delegate all EcosystemProvider calls to a remote HTTP service.
 
     Subclasses must declare five class attributes and nothing else:

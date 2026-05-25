@@ -12,6 +12,7 @@ import httpx
 from temporalio.exceptions import ApplicationError
 
 from ecosystems import (
+    EcosystemProviderBase,
     build_release_signals,
     fetch_vcs_account_age,
     fetch_vcs_ci_workflow_changes,
@@ -34,7 +35,7 @@ from models import (
 from helpers.http import get_client
 
 
-class PipProvider:
+class PipProvider(EcosystemProviderBase):
     ecosystem_name = "pip"
     osv_name = "PyPI"
     dependabot_slug = "pip"

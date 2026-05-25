@@ -10,6 +10,7 @@ import httpx
 from temporalio.exceptions import ApplicationError
 
 from ecosystems import (
+    EcosystemProviderBase,
     build_release_signals,
     fetch_vcs_release,
     fetch_vcs_tag_signature,
@@ -35,7 +36,7 @@ _HEADERS = {
 _API_BASE = "https://crates.io/api/v1"
 
 
-class CargoProvider:
+class CargoProvider(EcosystemProviderBase):
     ecosystem_name = "cargo"
     osv_name = "crates.io"
     dependabot_slug = "cargo"

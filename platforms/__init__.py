@@ -3,8 +3,15 @@ PlatformClient Protocol and factory.
 
 A PlatformClient handles all PR-management operations for a specific platform
 (GitHub, GitLab, …).  Add a new platform by:
-  1. Implementing PlatformClient in platforms/{name}.py
-  2. Adding a branch to get_platform_client() below
+  1. Implementing PlatformClient in a module (platforms/{name}.py or a plugin package)
+  2. Exposing a factory function with signature (pr: PRContext) -> PlatformClient
+  3. Registering it under the dependency_scout.platforms entry point group:
+       [project.entry-points."dependency_scout.platforms"]
+       myplatform = "my_package.platform:create_client"
+
+Built-in platforms (github, gitlab) are also registered as entry points so the
+factory is a uniform lookup; the if/elif fallback handles dev environments where
+the package isn't installed in editable mode.
 """
 
 from __future__ import annotations
@@ -25,6 +32,18 @@ class PlatformClient(Protocol):
 
 
 def get_platform_client(pr: PRContext) -> PlatformClient:
+    # Check entry points first so third-party platforms (and overrides of built-ins) work.
+    try:
+        from importlib.metadata import entry_points
+
+        for ep in entry_points(group="dependency_scout.platforms"):
+            if ep.name == pr.platform:
+                factory = ep.load()
+                return factory(pr)
+    except Exception:  # noqa: BLE001
+        pass
+
+    # Built-in fallbacks for dev environments where the package isn't installed.
     if pr.platform == "github":
         from platforms.github import GitHubPlatformClient
 

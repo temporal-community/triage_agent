@@ -17,6 +17,7 @@ import httpx
 from temporalio.exceptions import ApplicationError
 
 from ecosystems import (
+    EcosystemProviderBase,
     build_release_signals,
     fetch_vcs_release,
     fetch_vcs_tag_signature,
@@ -43,7 +44,7 @@ def _escape(module: str) -> str:
     return re.sub(r"[A-Z]", lambda m: "!" + m.group().lower(), module)
 
 
-class GoModulesProvider:
+class GoModulesProvider(EcosystemProviderBase):
     ecosystem_name = "go"
     osv_name = "Go"
     dependabot_slug = "go_modules"

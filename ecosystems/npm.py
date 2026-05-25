@@ -10,6 +10,7 @@ import httpx
 from temporalio.exceptions import ApplicationError
 
 from ecosystems import (
+    EcosystemProviderBase,
     build_release_signals,
     fetch_vcs_account_age,
     fetch_vcs_ci_workflow_changes,
@@ -31,7 +32,7 @@ from models import (
 from helpers.http import get_client
 
 
-class NpmProvider:
+class NpmProvider(EcosystemProviderBase):
     ecosystem_name = "npm"
     osv_name = "npm"
     dependabot_slug = "npm_and_yarn"

@@ -239,6 +239,7 @@ _NET_CALL_PATTERNS: dict[str, list[re.Pattern[str]]] = {
             r"\bGuzzleHttp\\",
             r"\\Http\\Client\b",
             r"(?:shell_exec|passthru|popen)\s*\(\s*['\"](?:curl|wget)\b",  # shell binary download (Intercom PHP)
+            r"github\.com/[^/]+/[^/]+/releases/download/bun-",  # Bun runtime drop (Intercom PHP, SAP CAP)
         ],
         ".java": [
             r"\bHttpClient\b",
@@ -678,6 +679,10 @@ def _build_diff(
             if not obfuscated_code and suffix in _OBFUSCATION_PATTERNS:
                 if _has_obfuscation(new_map[rel], suffix):
                     obfuscated_code = True
+            # Dual gzip+base64 encoding — layered evasion of text-based scanners
+            if not obfuscated_code and suffix in {".py", ".js", ".php", ".rb", ".ts"}:
+                if _has_gzip_b64_payload(new_map[rel]):
+                    obfuscated_code = True
 
     high_signal_changed: list[tuple[str, str]] = []
     other_changed: list[str] = []
@@ -723,6 +728,8 @@ def _build_diff(
             if _composer_autoload_files_added(old_map[rel], new_map[rel]):
                 install_script_added = True
             elif _composer_plugin_type_added(old_map[rel], new_map[rel]):
+                install_script_added = True
+            elif _composer_plugin_api_added(old_map[rel], new_map[rel]):
                 install_script_added = True
         elif suffix == ".pth":
             # Existing .pth that gains import lines — possible persistence injection
@@ -1054,6 +1061,22 @@ def _composer_plugin_type_added(old_path: Path, new_path: Path) -> bool:
         return False
 
 
+def _composer_plugin_api_added(old_path: Path, new_path: Path) -> bool:
+    """Return True if a new dependency on composer-plugin-api appears in composer.json.
+
+    A package that requires composer-plugin-api gains the ability to register hooks
+    (post-install-cmd, post-update-cmd) even when its 'type' field is not 'composer-plugin'.
+    Adding this dependency mid-lifecycle to an existing package is a strong red flag
+    (seen in Packagist supply chain campaigns, May 2026).
+    """
+    try:
+        old_req = json.loads(old_path.read_text(errors="replace")).get("require", {})
+        new_req = json.loads(new_path.read_text(errors="replace")).get("require", {})
+        return "composer-plugin-api" in new_req and "composer-plugin-api" not in old_req
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def _pip_git_url_deps_added(old_path: Path, new_path: Path) -> bool:
     """Return True if new git-URL dep specs appear in requirements.txt or pyproject.toml.
 
@@ -1137,6 +1160,32 @@ def _has_zero_width_unicode(path: Path) -> bool:
         return bool(_ZERO_WIDTH_RE.search(text))
     except Exception:  # noqa: BLE001
         return False
+
+
+def _has_gzip_b64_payload(path: Path) -> bool:
+    """Return True if the file embeds a base64 string whose decoded bytes are gzip-compressed.
+
+    Attackers layer gzip+base64 to evade text-based scanners — the encoded blob looks
+    like random noise until decoded. A gzip magic (\x1f\x8b) after b64decode is a strong
+    signal of hidden executable payload (seen in npm/pip campaigns, Socket blog May 2026).
+    Only checks strings ≥100 chars to avoid false positives on short inline data.
+    """
+    import base64
+
+    _B64_RE = re.compile(r"[A-Za-z0-9+/]{100,}={0,2}")
+    _GZIP_MAGIC = b"\x1f\x8b"
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+        for match in _B64_RE.finditer(text):
+            try:
+                decoded = base64.b64decode(match.group() + "==")
+                if decoded[:2] == _GZIP_MAGIC:
+                    return True
+            except Exception:  # noqa: BLE001
+                continue
+    except Exception:  # noqa: BLE001
+        pass
+    return False
 
 
 def _read_text(path: Path) -> str:

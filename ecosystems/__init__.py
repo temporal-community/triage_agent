@@ -1,12 +1,17 @@
 """
 Ecosystem abstraction layer.
 
-To add a new ecosystem:
-  1. Create ecosystems/{name}.py implementing EcosystemProvider
+To add a new ecosystem (built-in):
+  1. Create ecosystems/{name}.py with a class that inherits EcosystemProviderBase
      (set ecosystem_name = "<key>" as a class attribute — get_provider() discovers it automatically)
   2. Add the ecosystem name to the Literal types in models/__init__.py
   3. Add the branch slug to helpers/pr_parser.py's _DEPENDABOT_ECOSYSTEM_MAP
   4. Add a name-validation regex entry in api/webhook.py's _NAME_RE_BY_ECOSYSTEM
+
+To add a new ecosystem (plugin):
+  Inherit from EcosystemProviderBase and register under the dependency_scout.ecosystems
+  entry point group.  New optional signal methods added to EcosystemProviderBase in future
+  releases will have safe no-op defaults, so your provider won't break on upgrade.
 """
 
 from __future__ import annotations
@@ -71,6 +76,48 @@ class EcosystemProvider(Protocol):
     async def fetch_release(
         self, package: str, old_version: str, version: str
     ) -> ReleaseSignals: ...
+
+
+class EcosystemProviderBase:
+    """Base class for ecosystem providers. Prefer inheriting this over implementing
+    EcosystemProvider from scratch.
+
+    All current signal methods raise NotImplementedError — subclasses must implement them.
+    Future optional signal methods will be added here with safe empty-model defaults,
+    so providers that inherit EcosystemProviderBase won't break when new signals are added.
+    """
+
+    ecosystem_name: str
+    osv_name: str
+    dependabot_slug: str
+    name_re: re.Pattern
+
+    async def fetch_metadata(self, package: str, old_version: str, new_version: str) -> PyPISignals:
+        raise NotImplementedError
+
+    async def fetch_release_age(self, package: str, new_version: str) -> ReleaseAgeSignals:
+        raise NotImplementedError
+
+    async def fetch_maintainer(
+        self, package: str, old_version: str, new_version: str
+    ) -> MaintainerSignals:
+        raise NotImplementedError
+
+    async def get_archive_url(
+        self, client: httpx.AsyncClient, package: str, version: str
+    ) -> tuple[str, str, str] | None:
+        raise NotImplementedError
+
+    def extract_archive(self, archive_bytes: bytes, filename: str, dest: str) -> None:
+        raise NotImplementedError
+
+    async def fetch_attestations(
+        self, package: str, old_version: str, new_version: str
+    ) -> AttestationSignals:
+        raise NotImplementedError
+
+    async def fetch_release(self, package: str, old_version: str, version: str) -> ReleaseSignals:
+        raise NotImplementedError
 
 
 _PROVIDERS: dict[str, EcosystemProvider] | None = None
