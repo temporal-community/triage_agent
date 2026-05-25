@@ -1,9 +1,9 @@
-import httpx
 from temporalio import activity
 
 from activities.ecosystems import get_provider
 from activities.models import OSVSignals
 from helpers.cache import ActivityCache
+from helpers.http import get_client
 
 _cache: ActivityCache = ActivityCache(ttl_seconds=3600)  # new CVEs can appear; refresh hourly
 
@@ -16,16 +16,17 @@ async def check(ecosystem: str, package: str, old_version: str, new_version: str
         return hit
 
     osv_ecosystem = get_provider(ecosystem).osv_name
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        resp = await client.post(
-            "https://api.osv.dev/v1/query",
-            json={
-                "package": {"name": package, "ecosystem": osv_ecosystem},
-                "version": new_version,
-            },
-        )
-        resp.raise_for_status()
-        data = resp.json()
+    client = get_client()
+    resp = await client.post(
+        "https://api.osv.dev/v1/query",
+        json={
+            "package": {"name": package, "ecosystem": osv_ecosystem},
+            "version": new_version,
+        },
+        timeout=15.0,
+    )
+    resp.raise_for_status()
+    data = resp.json()
 
     vuln_ids: list[str] = []
     for vuln in data.get("vulns", []):

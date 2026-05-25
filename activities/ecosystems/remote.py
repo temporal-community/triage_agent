@@ -43,6 +43,7 @@ from activities.models import (
     ReleaseAgeSignals,
     ReleaseSignals,
 )
+from helpers.http import get_client
 
 
 class RemoteEcosystemProvider:
@@ -73,8 +74,8 @@ class RemoteEcosystemProvider:
         Raises ApplicationError(non_retryable=True) on 404/410.
         Raises httpx.HTTPStatusError on other 4xx/5xx (Temporal will retry).
         """
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(f"{self.remote_base_url}/{method}", json=payload)
+        client = get_client()
+        resp = await client.post(f"{self.remote_base_url}/{method}", json=payload, timeout=30.0)
         if resp.status_code in (404, 410):
             raise ApplicationError(
                 f"Remote provider {self.ecosystem_name!r} returned {resp.status_code} for {method}",

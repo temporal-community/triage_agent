@@ -33,6 +33,7 @@ from activities.models import (
     ReleaseAgeSignals,
     ReleaseSignals,
 )
+from helpers.http import get_client
 
 _CENTRAL = "https://repo1.maven.org/maven2"
 _SEARCH = "https://search.maven.org/solrsearch/select"
@@ -73,8 +74,8 @@ class MavenProvider:
         group_id, artifact_id = self._parse(package)
         pom_url = f"{self._artifact_base(group_id, artifact_id, new_version)}.pom"
 
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.get(pom_url)
+        client = get_client()
+        resp = await client.get(pom_url, timeout=15.0)
 
         if resp.status_code == 404:
             raise ApplicationError(
@@ -99,16 +100,17 @@ class MavenProvider:
 
     async def fetch_release_age(self, package: str, new_version: str) -> ReleaseAgeSignals:
         group_id, artifact_id = self._parse(package)
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.get(
-                _SEARCH,
-                params={
-                    "q": f"g:{group_id} AND a:{artifact_id} AND v:{new_version}",
-                    "core": "gav",
-                    "rows": "1",
-                    "wt": "json",
-                },
-            )
+        client = get_client()
+        resp = await client.get(
+            _SEARCH,
+            params={
+                "q": f"g:{group_id} AND a:{artifact_id} AND v:{new_version}",
+                "core": "gav",
+                "rows": "1",
+                "wt": "json",
+            },
+            timeout=15.0,
+        )
 
         if resp.status_code != 200:
             return ReleaseAgeSignals(release_age_hours=None)
@@ -136,8 +138,10 @@ class MavenProvider:
         old_url = f"{self._artifact_base(group_id, artifact_id, old_version)}.pom"
         new_url = f"{self._artifact_base(group_id, artifact_id, new_version)}.pom"
 
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            old_resp, new_resp = await asyncio.gather(client.get(old_url), client.get(new_url))
+        client = get_client()
+        old_resp, new_resp = await asyncio.gather(
+            client.get(old_url, timeout=15.0), client.get(new_url, timeout=15.0)
+        )
 
         if old_resp.status_code != 200 or new_resp.status_code != 200:
             return MaintainerSignals(maintainer_changed=False)
@@ -214,19 +218,20 @@ class MavenProvider:
         token = os.environ.get("GITHUB_TOKEN")
         group_id, artifact_id = self._parse(package)
 
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            new_pom_resp, search_resp = await asyncio.gather(
-                client.get(f"{self._artifact_base(group_id, artifact_id, version)}.pom"),
-                client.get(
-                    _SEARCH,
-                    params={
-                        "q": f"g:{group_id} AND a:{artifact_id} AND v:{version}",
-                        "core": "gav",
-                        "rows": "1",
-                        "wt": "json",
-                    },
-                ),
-            )
+        client = get_client()
+        new_pom_resp, search_resp = await asyncio.gather(
+            client.get(f"{self._artifact_base(group_id, artifact_id, version)}.pom", timeout=15.0),
+            client.get(
+                _SEARCH,
+                params={
+                    "q": f"g:{group_id} AND a:{artifact_id} AND v:{version}",
+                    "core": "gav",
+                    "rows": "1",
+                    "wt": "json",
+                },
+                timeout=15.0,
+            ),
+        )
 
         if new_pom_resp.status_code != 200:
             return ReleaseSignals()

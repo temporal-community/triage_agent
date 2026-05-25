@@ -2,11 +2,11 @@
 
 from urllib.parse import quote
 
-import httpx
 from temporalio import activity
 
 from activities.models import DepsDevSignals
 from helpers.cache import ActivityCache
+from helpers.http import get_client
 
 _cache: ActivityCache = ActivityCache(ttl_seconds=86400)  # deprecation changes rarely; 24h TTL
 
@@ -35,8 +35,8 @@ async def fetch(ecosystem: str, package: str, old_version: str, new_version: str
     url = f"https://api.deps.dev/v3alpha/systems/{system}/packages/{encoded_package}/versions/{encoded_version}"
 
     try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.get(url)
+        client = get_client()
+        resp = await client.get(url, timeout=15.0)
 
         if resp.status_code != 200:
             return DepsDevSignals()

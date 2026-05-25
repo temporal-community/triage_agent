@@ -1,11 +1,11 @@
 import os
 
-import httpx
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
 from activities.models import SocketSignals
 from helpers.cache import ActivityCache
+from helpers.http import get_client
 
 _cache: ActivityCache = ActivityCache(ttl_seconds=3600)  # scores can be updated; refresh hourly
 
@@ -30,13 +30,14 @@ async def score(ecosystem: str, package: str, old_version: str, new_version: str
     ecosystem_slug = _ECOSYSTEM_MAP.get(ecosystem, "pypi")
     purl = f"pkg:{ecosystem_slug}/{package}@{new_version}"
 
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        resp = await client.post(
-            "https://api.socket.dev/v0/purl",
-            headers={"Authorization": f"Bearer {api_key}"},
-            json={"components": [{"purl": purl}]},
-            params={"alerts": "true"},
-        )
+    client = get_client()
+    resp = await client.post(
+        "https://api.socket.dev/v0/purl",
+        headers={"Authorization": f"Bearer {api_key}"},
+        json={"components": [{"purl": purl}]},
+        params={"alerts": "true"},
+        timeout=15.0,
+    )
 
     if resp.status_code == 401:
         raise ApplicationError(

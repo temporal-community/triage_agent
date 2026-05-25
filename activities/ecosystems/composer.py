@@ -33,6 +33,7 @@ from activities.models import (
     ReleaseAgeSignals,
     ReleaseSignals,
 )
+from helpers.http import get_client
 
 _PACKAGIST = "https://packagist.org"
 _CODELOAD = "https://codeload.github.com"
@@ -68,8 +69,8 @@ class ComposerProvider:
 
     async def fetch_metadata(self, package: str, old_version: str, new_version: str) -> PyPISignals:
         vendor, name = self._parse(package)
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.get(f"{_PACKAGIST}/packages/{vendor}/{name}.json")
+        client = get_client()
+        resp = await client.get(f"{_PACKAGIST}/packages/{vendor}/{name}.json", timeout=15.0)
 
         if resp.status_code == 404:
             raise ApplicationError(
@@ -98,8 +99,8 @@ class ComposerProvider:
 
     async def fetch_release_age(self, package: str, new_version: str) -> ReleaseAgeSignals:
         vendor, name = self._parse(package)
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.get(f"{_PACKAGIST}/packages/{vendor}/{name}.json")
+        client = get_client()
+        resp = await client.get(f"{_PACKAGIST}/packages/{vendor}/{name}.json", timeout=15.0)
         if resp.status_code != 200:
             return ReleaseAgeSignals()
 
@@ -126,8 +127,8 @@ class ComposerProvider:
         self, package: str, old_version: str, new_version: str
     ) -> MaintainerSignals:
         vendor, name = self._parse(package)
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.get(f"{_PACKAGIST}/packages/{vendor}/{name}.json")
+        client = get_client()
+        resp = await client.get(f"{_PACKAGIST}/packages/{vendor}/{name}.json", timeout=15.0)
         if resp.status_code != 200:
             return MaintainerSignals()
 
@@ -227,8 +228,8 @@ class ComposerProvider:
         token = os.environ.get("GITHUB_TOKEN")
         vendor, name = self._parse(package)
 
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.get(f"{_PACKAGIST}/packages/{vendor}/{name}.json")
+        client = get_client()
+        resp = await client.get(f"{_PACKAGIST}/packages/{vendor}/{name}.json", timeout=15.0)
         if resp.status_code != 200:
             return ReleaseSignals()
 

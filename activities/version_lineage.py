@@ -11,13 +11,13 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-import httpx
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
 from activities.ecosystems import detect_stale_version_line, parse_upload_time
 from activities.models import VersionLineSignals
 from helpers.cache import ActivityCache
+from helpers.http import get_client
 
 _cache: ActivityCache = ActivityCache(ttl_seconds=3600)  # new majors can be released; 1h TTL
 
@@ -57,8 +57,8 @@ async def check(
 
 
 async def _check_pypi(package: str, new_version: str) -> VersionLineSignals:
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        resp = await client.get(f"https://pypi.org/pypi/{package}/json")
+    client = get_client()
+    resp = await client.get(f"https://pypi.org/pypi/{package}/json", timeout=15.0)
     if resp.status_code == 404:
         raise ApplicationError(
             f"{package} not found on PyPI", type="PackageNotFound", non_retryable=True
@@ -84,11 +84,12 @@ async def _check_pypi(package: str, new_version: str) -> VersionLineSignals:
 
 
 async def _check_npm(package: str, new_version: str) -> VersionLineSignals:
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        resp = await client.get(
-            f"https://registry.npmjs.org/{package}",
-            headers={"Accept": "application/json"},
-        )
+    client = get_client()
+    resp = await client.get(
+        f"https://registry.npmjs.org/{package}",
+        headers={"Accept": "application/json"},
+        timeout=15.0,
+    )
     if resp.status_code == 404:
         raise ApplicationError(
             f"{package} not found on npm", type="PackageNotFound", non_retryable=True
@@ -115,8 +116,8 @@ async def _check_composer(package: str, new_version: str) -> VersionLineSignals:
     if "/" not in package:
         return VersionLineSignals()
     vendor, name = package.split("/", 1)
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        resp = await client.get(f"https://packagist.org/packages/{vendor}/{name}.json")
+    client = get_client()
+    resp = await client.get(f"https://packagist.org/packages/{vendor}/{name}.json", timeout=15.0)
     if resp.status_code == 404:
         raise ApplicationError(
             f"{package} not found on Packagist", type="PackageNotFound", non_retryable=True
@@ -150,16 +151,17 @@ async def _check_maven(package: str, new_version: str) -> VersionLineSignals:
     if ":" not in package:
         return VersionLineSignals()
     group_id, artifact_id = package.split(":", 1)
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        resp = await client.get(
-            "https://search.maven.org/solrsearch/select",
-            params={
-                "q": f"g:{group_id} AND a:{artifact_id}",
-                "core": "gav",
-                "rows": "200",
-                "wt": "json",
-            },
-        )
+    client = get_client()
+    resp = await client.get(
+        "https://search.maven.org/solrsearch/select",
+        params={
+            "q": f"g:{group_id} AND a:{artifact_id}",
+            "core": "gav",
+            "rows": "200",
+            "wt": "json",
+        },
+        timeout=15.0,
+    )
     if resp.status_code != 200:
         return VersionLineSignals()
 
@@ -187,8 +189,10 @@ async def _check_maven(package: str, new_version: str) -> VersionLineSignals:
 async def _check_nuget(package: str, new_version: str) -> VersionLineSignals:
     """Use the NuGet flat-container version index to detect stale major-line bumps."""
     id_lower = package.lower()
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        resp = await client.get(f"https://api.nuget.org/v3-flatcontainer/{id_lower}/index.json")
+    client = get_client()
+    resp = await client.get(
+        f"https://api.nuget.org/v3-flatcontainer/{id_lower}/index.json", timeout=15.0
+    )
     if resp.status_code == 404:
         raise ApplicationError(
             f"{package} not found on NuGet", type="PackageNotFound", non_retryable=True
@@ -200,8 +204,8 @@ async def _check_nuget(package: str, new_version: str) -> VersionLineSignals:
 
 
 async def _check_rubygems(package: str, new_version: str) -> VersionLineSignals:
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        resp = await client.get(f"https://rubygems.org/api/v1/versions/{package}.json")
+    client = get_client()
+    resp = await client.get(f"https://rubygems.org/api/v1/versions/{package}.json", timeout=15.0)
     if resp.status_code == 404:
         raise ApplicationError(
             f"{package} not found on RubyGems", type="PackageNotFound", non_retryable=True

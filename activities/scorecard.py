@@ -2,11 +2,11 @@
 
 from urllib.parse import quote
 
-import httpx
 from temporalio import activity
 
 from activities.models import ScorecardSignals
 from helpers.cache import ActivityCache
+from helpers.http import get_client
 
 _cache: ActivityCache = ActivityCache(ttl_seconds=86400)  # repo health changes slowly; 24h TTL
 
@@ -66,22 +66,23 @@ async def fetch(
     depsdev_url = f"https://api.deps.dev/v3alpha/systems/{system}/packages/{encoded_package}/versions/{encoded_version}"
 
     try:
-        async with httpx.AsyncClient(timeout=20.0) as client:
-            # Step A — resolve GitHub repo via deps.dev
-            deps_resp = await client.get(depsdev_url)
-            if deps_resp.status_code != 200:
-                return ScorecardSignals()
+        client = get_client()
+        # Step A — resolve GitHub repo via deps.dev
+        deps_resp = await client.get(depsdev_url, timeout=20.0)
+        if deps_resp.status_code != 200:
+            return ScorecardSignals()
 
-            vcs = _find_vcs_repo(deps_resp.json())
-            if vcs is None or vcs[0] != "github":
-                return ScorecardSignals()
-            repo = vcs[1]
+        vcs = _find_vcs_repo(deps_resp.json())
+        if vcs is None or vcs[0] != "github":
+            return ScorecardSignals()
+        repo = vcs[1]
 
-            # Step B — query OpenSSF Scorecard (GitHub-only API)
-            sc_resp = await client.get(
-                f"https://api.securityscorecards.dev/projects/github.com/{repo}",
-                headers={"Accept": "application/json"},
-            )
+        # Step B — query OpenSSF Scorecard (GitHub-only API)
+        sc_resp = await client.get(
+            f"https://api.securityscorecards.dev/projects/github.com/{repo}",
+            headers={"Accept": "application/json"},
+            timeout=20.0,
+        )
 
         if sc_resp.status_code != 200:
             return ScorecardSignals(scorecard_repo=repo)

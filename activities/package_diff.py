@@ -24,6 +24,7 @@ from temporalio.exceptions import ApplicationError
 from activities.ecosystems import get_provider, validate_archive_url
 from activities.models import DiffSignals
 from helpers.cache import ActivityCache
+from helpers.http import get_client
 
 _cache: ActivityCache = ActivityCache()  # archive contents are immutable after publish
 
@@ -340,23 +341,23 @@ async def compute(ecosystem: str, package: str, old_version: str, new_version: s
 
     provider = get_provider(ecosystem)
 
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        old_info, new_info = await asyncio.gather(
-            provider.get_archive_url(client, package, old_version),
-            provider.get_archive_url(client, package, new_version),
-        )
+    client = get_client()
+    old_info, new_info = await asyncio.gather(
+        provider.get_archive_url(client, package, old_version),
+        provider.get_archive_url(client, package, new_version),
+    )
 
-        if old_info is None or new_info is None:
-            return DiffSignals(diff_summary="[sdist not available]", diff_size_bytes=0)
+    if old_info is None or new_info is None:
+        return DiffSignals(diff_summary="[sdist not available]", diff_size_bytes=0)
 
-        old_url, old_filename, old_integrity = old_info
-        new_url, new_filename, new_integrity = new_info
+    old_url, old_filename, old_integrity = old_info
+    new_url, new_filename, new_integrity = new_info
 
-        activity.heartbeat("downloading archives")
-        old_bytes, new_bytes = await asyncio.gather(
-            _download(client, old_url, old_integrity, heartbeat=activity.heartbeat),
-            _download(client, new_url, new_integrity, heartbeat=activity.heartbeat),
-        )
+    activity.heartbeat("downloading archives")
+    old_bytes, new_bytes = await asyncio.gather(
+        _download(client, old_url, old_integrity, heartbeat=activity.heartbeat),
+        _download(client, new_url, new_integrity, heartbeat=activity.heartbeat),
+    )
 
     if old_bytes is None or new_bytes is None:
         return DiffSignals(

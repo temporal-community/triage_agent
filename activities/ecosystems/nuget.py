@@ -33,6 +33,7 @@ from activities.models import (
     ReleaseAgeSignals,
     ReleaseSignals,
 )
+from helpers.http import get_client
 
 _NUGET_REG = "https://api.nuget.org/v3/registration5"
 _NUGET_FLAT = "https://api.nuget.org/v3-flatcontainer"
@@ -51,14 +52,15 @@ class NuGetProvider:
 
     async def fetch_metadata(self, package: str, old_version: str, new_version: str) -> PyPISignals:
         id_lower = package.lower()
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            reg_resp, search_resp = await asyncio.gather(
-                client.get(f"{_NUGET_REG}/{id_lower}/index.json"),
-                client.get(
-                    _NUGET_SEARCH,
-                    params={"q": f"PackageId:{package}", "prerelease": "false", "take": "1"},
-                ),
-            )
+        client = get_client()
+        reg_resp, search_resp = await asyncio.gather(
+            client.get(f"{_NUGET_REG}/{id_lower}/index.json", timeout=15.0),
+            client.get(
+                _NUGET_SEARCH,
+                params={"q": f"PackageId:{package}", "prerelease": "false", "take": "1"},
+                timeout=15.0,
+            ),
+        )
 
         if reg_resp.status_code == 404:
             raise ApplicationError(
@@ -212,29 +214,29 @@ async def _fetch_catalog_entry(package: str, version: str) -> dict | None:
     id_lower = package.lower()
     ver_lower = version.lower()
     try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.get(f"{_NUGET_REG}/{id_lower}/index.json")
-            if resp.status_code == 404:
-                return None
-            if resp.status_code != 200:
-                return None
-            index = resp.json()
+        client = get_client()
+        resp = await client.get(f"{_NUGET_REG}/{id_lower}/index.json", timeout=15.0)
+        if resp.status_code == 404:
+            return None
+        if resp.status_code != 200:
+            return None
+        index = resp.json()
 
-            for page in index.get("items", []):
-                # Inline items: present in the index response
-                # Referenced items: page["items"] is None/absent — fetch the page URL
-                if "items" in page and page["items"] is not None:
-                    page_items = page["items"]
-                else:
-                    page_resp = await client.get(page["@id"])
-                    if page_resp.status_code != 200:
-                        continue
-                    page_items = page_resp.json().get("items", [])
+        for page in index.get("items", []):
+            # Inline items: present in the index response
+            # Referenced items: page["items"] is None/absent — fetch the page URL
+            if "items" in page and page["items"] is not None:
+                page_items = page["items"]
+            else:
+                page_resp = await client.get(page["@id"], timeout=15.0)
+                if page_resp.status_code != 200:
+                    continue
+                page_items = page_resp.json().get("items", [])
 
-                for item in page_items:
-                    entry = item.get("catalogEntry", {})
-                    if (entry.get("version") or "").lower() == ver_lower:
-                        return entry
+            for item in page_items:
+                entry = item.get("catalogEntry", {})
+                if (entry.get("version") or "").lower() == ver_lower:
+                    return entry
     except Exception:  # noqa: BLE001
         pass
     return None
