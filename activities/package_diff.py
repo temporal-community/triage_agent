@@ -155,6 +155,9 @@ _NET_CALL_PATTERNS: dict[str, list[re.Pattern[str]]] = {
             r"\bhttp\.client\.(HTTPConnection|HTTPSConnection)\b",
             r"\bsocket\.getaddrinfo\s*\(",  # DNS lookups (C2-over-DNS pattern)
             r"\bsocket\.gethostbyname\s*\(",
+            r"\bsubprocess\.(run|Popen|call|check_output|check_call)\s*\(",  # OS exec in library
+            r"169\.254\.169\.254",  # AWS/GCP IMDS probe — credential harvesting
+            r"api\.telegram\.org/bot",  # Telegram bot C2 exfiltration channel
         ],
         ".js": [
             r"\bfetch\s*\(",
@@ -167,6 +170,8 @@ _NET_CALL_PATTERNS: dict[str, list[re.Pattern[str]]] = {
             r"\bdns\.resolveTxt\s*\(",  # DNS TXT C2 (node-ipc, Go decimal pattern)
             r"\bdns\.resolve(?:Txt|Host|Mx|Ns)?\s*\(",
             r"\bdns\.lookup\s*\(",
+            r"169\.254\.169\.254",  # AWS/GCP IMDS probe — credential harvesting
+            r"api\.telegram\.org/bot",  # Telegram bot C2 exfiltration channel
         ],
         ".ts": [
             r"\bfetch\s*\(",
@@ -201,6 +206,8 @@ _NET_CALL_PATTERNS: dict[str, list[re.Pattern[str]]] = {
             r"\bnet\.LookupIP\s*\(",
             r"\bnet\.Dial\s*\(",
             r"\bnet\.DialTCP\s*\(",
+            r'\bos\.Setenv\s*\(\s*"GOPROXY"',  # redirect module downloads to attacker proxy
+            r'\bos\.Setenv\s*\(\s*"GOSUMDB"',  # disable checksum verification
         ],
         ".rs": [
             r"\breqwest::(get|post|Client|blocking)\b",  # reqwest — most common Rust HTTP client
@@ -518,6 +525,9 @@ def _build_diff(
         suffix = p.suffix.lower()
         if name in INSTALL_HOOK_NAMES or rel in INSTALL_HOOK_NAMES:
             install_script_added = True
+        # .pth files with import statements execute code at Python startup (persistence)
+        if suffix == ".pth" and _pth_has_executable_code(new_map[rel]):
+            install_script_added = True
         if suffix in DANGEROUS_BINARY_SUFFIXES:
             dangerous_new.append(rel)
         else:
@@ -581,8 +591,16 @@ def _build_diff(
         elif name == "Cargo.toml":
             if not git_url_dependency_added and _cargo_git_deps_added(old_map[rel], new_map[rel]):
                 git_url_dependency_added = True
-        elif name == "composer.json" and _composer_autoload_files_added(old_map[rel], new_map[rel]):
-            install_script_added = True
+        elif name == "composer.json":
+            if _composer_autoload_files_added(old_map[rel], new_map[rel]):
+                install_script_added = True
+            elif _composer_plugin_type_added(old_map[rel], new_map[rel]):
+                install_script_added = True
+        elif suffix == ".pth":
+            # Existing .pth that gains import lines — possible persistence injection
+            added_pth = _diff_added_lines(old_text, new_text)
+            if any(ln.strip().startswith(("import ", "import\t")) for ln in added_pth):
+                install_script_changed = True
 
         # Check for newly-added outbound network calls in non-install-hook library code
         if (
@@ -833,6 +851,38 @@ def _composer_autoload_files_added(old_path: Path, new_path: Path) -> bool:
             if new_files - old_files:
                 return True
         return False
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _pth_has_executable_code(path: Path) -> bool:
+    """Return True if a .pth file contains executable Python (import statements).
+
+    Legitimate .pth files contain only filesystem path entries (one per line).
+    A line starting with 'import' executes at Python startup for every interpreter
+    invocation — attackers use this as a persistence mechanism (CanisterWorm pattern).
+    """
+    try:
+        for line in path.read_text(errors="replace").splitlines():
+            stripped = line.strip()
+            if stripped.startswith(("import ", "import\t")):
+                return True
+        return False
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _composer_plugin_type_added(old_path: Path, new_path: Path) -> bool:
+    """Return True if composer.json changed its type to 'composer-plugin'.
+
+    Composer plugins register post-install-cmd/post-update-cmd hooks that run
+    arbitrary code on every 'composer install'. A type change to 'composer-plugin'
+    in a version bump is almost always malicious (Mini Shai-Hulud Packagist pattern).
+    """
+    try:
+        old_type = json.loads(old_path.read_text(errors="replace")).get("type", "")
+        new_type = json.loads(new_path.read_text(errors="replace")).get("type", "")
+        return new_type == "composer-plugin" and old_type != "composer-plugin"
     except Exception:  # noqa: BLE001
         return False
 

