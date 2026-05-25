@@ -24,8 +24,8 @@ patterns:
   desc: weaponised secrets scanner
 - pattern: rm\s+-rf\s+(?:~/|~[/\\]|\$HOME[/\\])
   desc: home dir wipe (Mini Shai-Hulud scorched-earth)
-- pattern: (?:writeFile|writeFileSync|open|write)\s*[(\s,]*['\"](?:\.cursorrules|CLAUDE\.md|\.cursor/rules|\.aider\.conf)
-  desc: AI coding assistant context hijacking (TrapDoor May 2026)
+- pattern: (?:writeFile|writeFileSync|open|write)\s*[(\s,]*['\"](?:\.cursorrules|CLAUDE\.md|\.cursor/rules|\.aider\.conf|mcp\.json|\.continue/config\.json|\.windsurf/mcp\.json)
+  desc: AI coding assistant context or MCP server hijacking (TrapDoor / SANDWORM_MODE May 2026)
 - pattern: site-packages[/\\][^\n]{0,80}\.pth
   desc: .pth file injection into site-packages for Python startup persistence (CanisterWorm/TeamPCP/LiteLLM Apr 2026)
 - pattern: Dir\.home[^\n]{0,60}(?:\.aws|\.ssh|\.npmrc)
@@ -34,6 +34,16 @@ patterns:
   desc: RubyGems API key file access in install hook (extconf.rb credential theft)
 - pattern: api\.github\.com/gists
   desc: GitHub Gist used as exfil dead-drop from install hook (TrapDoor crates.io build.rs pattern)
+- pattern: fs\.unlink\s*\(\s*__filename
+  desc: self-deleting dropper removes itself after execution to evade post-mortem forensics (Axios supply chain attack Apr 2026)
+- pattern: git\s+config\s+--global\s+init\.templateDir
+  desc: git template dir poisoning - all future git init repos inherit malicious hooks (SANDWORM_MODE May 2026)
+- pattern: sudo\s+shutdown\s+-h\s+0
+  desc: system halt prepended to ~/.bashrc/.zshrc - denies service and disrupts forensics on next terminal launch (Nx compromise 2025)
+- pattern: curl\s+-[a-zA-Z]*k[a-zA-Z]*\s
+  desc: curl with TLS verification disabled (-k) downloads unverified binary in install hook (Postinstall Hook campaign May 2026)
+- pattern: chmod\s+\+x\s+/tmp/\.
+  desc: makes hidden binary (leading dot) in /tmp executable - binary saved to evade plain ls output (Postinstall Hook campaign)
 - pattern: 'eval\s*\(\s*(?:base64|zlib|__import__)'
   desc: Python eval of decoded payload in install hook - layered obfuscation before execution
 - pattern: 'exec\s*\(\s*(?:base64|zlib|__import__|compile)'

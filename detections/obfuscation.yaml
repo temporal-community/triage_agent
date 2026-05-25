@@ -25,6 +25,12 @@ patterns:
     desc: Mach-O ARM64 magic - iOS/macOS exploit kit architecture fingerprinting (Coruna art-template)
   - pattern: \[[^\]]{15,}\]\.map\s*\(\s*(?:function\s*\([a-z]\)\s*\{[^}]{0,40}\}|[a-z]\s*=>)\s*String\.fromCharCode\s*\([a-z]\s*\^\s*\d{1,3}\s*\)\s*\)\.join\s*\(\s*['\"]['\"]
     desc: per-char XOR array string obfuscation (Coruna art-template May 2026)
+  - pattern: '\(0,\s*eval\)\s*\('
+    desc: indirect eval call - evades static eval() detection (SANDWORM_MODE May 2026)
+  - pattern: \bModule\._compile\s*\(
+    desc: Node.js Module._compile() in-memory execution - no file written to disk (SANDWORM_MODE)
+  - pattern: '_(?:cfg|loc)_\d{3}'
+    desc: payload split across numbered properties (_cfg_000.._cfg_044) to evade size-based scanners (SANDWORM_MODE)
   .ts:
   - pattern: \b_0x[0-9a-fA-F]{4,}\b
     desc: javascript-obfuscator hex variable names

@@ -182,6 +182,16 @@
   desc: custom DNS resolver bootstrap - overrides system resolver to avoid detection (node-ipc stealer May 2026)
 - pattern: api\.svix\.com/ingest
   desc: Svix webhook SaaS used as C2 dead-drop for stolen .env data (TanStack brandsquat Apr 2026)
+- pattern: ipinfo\.io/json
+  desc: public IP oracle for victim fingerprinting before C2 beacon (60 malicious packages Mar 2026)
+- pattern: freefan\.net|fanfree\.net
+  desc: DNS exfiltration domains used in SANDWORM_MODE worm (May 2026)
+- pattern: \bos\.networkInterfaces\s*\(
+  desc: internal network interface enumeration - maps victim infrastructure for follow-on intrusion (60 malicious packages)
+- pattern: \bdns\.getServers\s*\(
+  desc: DNS server enumeration - baseline for DNS C2 or network fingerprinting (60 malicious packages)
+- pattern: api\.github\.com/user/repos\b
+  desc: GitHub API create-repo as exfil staging - creates attacker-owned repos to upload stolen data (Nx compromise 2025)
 .ts:
 - pattern: \bfetch\s*\(
   desc: fetch API outbound network call
