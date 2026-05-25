@@ -444,3 +444,23 @@ def test_get_classifier_returns_claude_with_key(monkeypatch):
     from activities.classifier import get_classifier, ClaudeClassifier
 
     assert isinstance(get_classifier(), ClaudeClassifier)
+
+
+def test_rule_based_artifact_source_mismatch_is_red(base_signals):
+    base_signals.diff.artifact_source_mismatch = True
+    base_signals.diff.artifact_source_mismatch_files = ["mypkg/__init__.py"]
+    verdict = _rule_based(base_signals)
+    assert verdict.classification == "red"
+    assert verdict.confidence == 0.95
+    assert "mypkg/__init__.py" in verdict.reasoning
+    assert any("artifact/source mismatch" in f for f in verdict.flags)
+
+
+def test_rule_based_artifact_mismatch_takes_priority_over_install_script(base_signals):
+    """artifact_source_mismatch is checked before install_script_added — still returns red."""
+    base_signals.diff.artifact_source_mismatch = True
+    base_signals.diff.artifact_source_mismatch_files = ["index.js"]
+    base_signals.diff.install_script_added = True
+    verdict = _rule_based(base_signals)
+    assert verdict.classification == "red"
+    assert any("artifact/source mismatch" in f for f in verdict.flags)

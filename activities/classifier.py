@@ -317,6 +317,36 @@ def _rule_based(signals: PackageSignals) -> Verdict:
             new_dependency_count=signals.diff.new_dependency_count,
         )
 
+    # Hard RED: artifact/source mismatch (XZ-style backdoor injection)
+    if signals.diff.artifact_source_mismatch:
+        files = signals.diff.artifact_source_mismatch_files
+        file_list = ", ".join(files[:5])
+        return Verdict(
+            classification="red",
+            confidence=0.95,
+            reasoning=(
+                "Published archive contains code absent from the git tag source — "
+                f"XZ-style backdoor injection detected in: {file_list}"
+            ),
+            flags=[f"artifact/source mismatch: {file_list}"],
+            release_age_hours=signals.age.release_age_hours,
+            new_dependency_count=signals.diff.new_dependency_count,
+        )
+
+    # Hard RED: Socket detected malware or protestware
+    _SOCKET_RED_TYPES = {"malware", "protestware"}
+    if any(t in _SOCKET_RED_TYPES for t in signals.socket.socket_alert_types):
+        matched = [t for t in signals.socket.socket_alert_types if t in _SOCKET_RED_TYPES]
+        return Verdict(
+            classification="red",
+            confidence=0.92,
+            reasoning=f"Socket security analysis flagged: {', '.join(matched)}",
+            flags=[f"Socket alert: {t}" for t in matched]
+            + [a for a in signals.socket.socket_alerts if any(t in a for t in matched)],
+            release_age_hours=signals.age.release_age_hours,
+            new_dependency_count=signals.diff.new_dependency_count,
+        )
+
     # Hard RED: new install hook
     if signals.diff.install_script_added:
         return Verdict(
@@ -493,6 +523,17 @@ def _rule_based(signals: PackageSignals) -> Verdict:
         )
     if signals.socket.socket_alerts:
         flags.extend(signals.socket.socket_alerts)
+    if signals.socket.socket_score is not None and signals.socket.socket_score < 30:
+        # Scores this low almost always correlate with active malware — escalate to red.
+        return Verdict(
+            classification="red",
+            confidence=0.88,
+            reasoning=f"Socket package score is critically low ({signals.socket.socket_score}/100)",
+            flags=[f"critically low socket score ({signals.socket.socket_score}/100)"]
+            + flags,
+            release_age_hours=signals.age.release_age_hours,
+            new_dependency_count=signals.diff.new_dependency_count,
+        )
     if signals.socket.socket_score is not None and signals.socket.socket_score < 50:
         flags.append(f"low socket score ({signals.socket.socket_score}/100)")
     if signals.pypi.weekly_downloads is not None and signals.pypi.weekly_downloads < 1_000:

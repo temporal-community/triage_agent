@@ -12,6 +12,7 @@ import difflib
 import hashlib
 import hmac
 import json
+import os
 import re
 import tempfile
 from collections.abc import Callable
@@ -21,7 +22,12 @@ import httpx
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
-from activities.ecosystems import get_provider, validate_archive_url
+from activities.ecosystems import (
+    fetch_vcs_file_at_tag,
+    get_provider,
+    parse_vcs_repo,
+    validate_archive_url,
+)
 from activities.models import DiffSignals
 from helpers.cache import ActivityCache
 from helpers.http import get_client
@@ -344,6 +350,22 @@ _PIP_GIT_DEP_RE = re.compile(r"git\+https?://|git\+ssh://|\s@\s+https?://\S+\.gi
 # Cargo.toml inline table git dependency: some-crate = { git = "https://..." }
 _CARGO_GIT_DEP_RE = re.compile(r'\bgit\s*=\s*["\']https?://', re.IGNORECASE)
 
+# Files compared between archive and git tag to detect XZ-style build-artifact tampering.
+# Limited to files that: (a) are high-value attack targets, (b) have stable content between
+# registry publish and git commit (unlike auto-generated files or version bumps).
+_ARTIFACT_CHECK_NAMES: frozenset[str] = frozenset(
+    {"setup.py", "__init__.py", "index.js", "index.ts", "Cargo.toml"}
+)
+
+# Lines that consist only of a version string change (e.g. __version__ = "1.2.3" → "1.2.4").
+# Filtered out before counting unexplained new lines in the artifact/source diff.
+_VERSION_LINE_RE = re.compile(
+    r"""^\s*(?:__version__|version|VERSION)\s*=\s*['"][\d.]+['"]\s*$""", re.IGNORECASE
+)
+
+# Minimum new lines in archive (beyond version changes) to flag as a mismatch.
+_ARTIFACT_MISMATCH_THRESHOLD = 5
+
 
 # ---------------------------------------------------------------------------
 # Activity entry point
@@ -396,8 +418,15 @@ async def compute(ecosystem: str, package: str, old_version: str, new_version: s
         git_url_dep,
         obfuscated,
         lockfile_downgraded,
+        artifact_files,
     ) = await asyncio.to_thread(
         _extract_and_diff, old_bytes, old_filename, new_bytes, new_filename, provider
+    )
+
+    # XZ-style check: compare archive files against git tag source (async, runs after thread).
+    activity.heartbeat("checking artifact/source integrity")
+    artifact_mismatch, mismatch_files = await _compare_artifact_to_source(
+        client, ecosystem, package, new_version, artifact_files
     )
 
     result = DiffSignals(
@@ -411,6 +440,8 @@ async def compute(ecosystem: str, package: str, old_version: str, new_version: s
         git_url_dependency_added=git_url_dep,
         obfuscated_code=obfuscated,
         lockfile_integrity_downgraded=lockfile_downgraded,
+        artifact_source_mismatch=artifact_mismatch,
+        artifact_source_mismatch_files=mismatch_files,
     )
     _cache.set(key, result)
     return result
@@ -492,7 +523,7 @@ def _extract_and_diff(
     new_bytes: bytes,
     new_filename: str,
     provider,
-) -> tuple[str, bool, bool, int, bool, bool, bool, bool, bool]:
+) -> tuple[str, bool, bool, int, bool, bool, bool, bool, bool, dict[str, str]]:
     try:
         with tempfile.TemporaryDirectory() as old_dir, tempfile.TemporaryDirectory() as new_dir:
             provider.extract_archive(old_bytes, old_filename, old_dir)
@@ -508,9 +539,18 @@ def _extract_and_diff(
             old_map = _get_file_map(old_dir)
             new_map = _get_file_map(new_dir)
             diff_result = _build_diff(old_map, new_map)
-            return (*diff_result, lockfile_downgraded)
+
+            # Capture high-signal file contents for XZ-style artifact/source comparison.
+            # Done here while the temp dir is still alive — avoids a second extraction.
+            artifact_files: dict[str, str] = {
+                rel: _read_text(path)
+                for rel, path in new_map.items()
+                if Path(rel).name in _ARTIFACT_CHECK_NAMES
+            }
+
+            return (*diff_result, lockfile_downgraded, artifact_files)
     except Exception as exc:  # noqa: BLE001
-        return f"[extraction error: {exc}]", False, False, 0, False, False, False, False, False
+        return f"[extraction error: {exc}]", False, False, 0, False, False, False, False, False, {}
 
 
 def _is_noise(rel: str) -> bool:
@@ -1116,3 +1156,91 @@ def _unified_diff(old_text: str, new_text: str, filename: str) -> str:
         tofile=f"{filename} (new)",
     )
     return "".join(diff)
+
+
+def _count_extra_lines(source: str, archive: str) -> list[str]:
+    """Return lines present in archive but not in source, excluding version-string changes."""
+    extra = []
+    for line in difflib.unified_diff(source.splitlines(), archive.splitlines(), n=0):
+        if line.startswith("+") and not line.startswith("+++"):
+            actual = line[1:]
+            if not _VERSION_LINE_RE.match(actual.strip()):
+                extra.append(actual)
+    return extra
+
+
+async def _get_vcs_repo_for_package(
+    client: httpx.AsyncClient, ecosystem: str, package: str, version: str
+) -> tuple[str, str] | None:
+    """Return (platform, 'owner/repo') by querying the package registry, or None."""
+    try:
+        if ecosystem == "pip":
+            resp = await client.get(f"https://pypi.org/pypi/{package}/{version}/json", timeout=10.0)
+            if resp.status_code != 200:
+                return None
+            info = resp.json().get("info", {})
+            project_urls = info.get("project_urls") or {}
+            source_url = (
+                project_urls.get("Source Code")
+                or project_urls.get("Source")
+                or project_urls.get("Repository")
+                or info.get("home_page")
+                or ""
+            )
+            return parse_vcs_repo(source_url)
+        elif ecosystem == "npm":
+            resp = await client.get(f"https://registry.npmjs.org/{package}/{version}", timeout=10.0)
+            if resp.status_code != 200:
+                return None
+            repo_field = resp.json().get("repository") or {}
+            url = repo_field.get("url", "") if isinstance(repo_field, dict) else str(repo_field)
+            return parse_vcs_repo(url)
+    except Exception:  # noqa: BLE001
+        pass
+    return None
+
+
+async def _compare_artifact_to_source(
+    client: httpx.AsyncClient,
+    ecosystem: str,
+    package: str,
+    new_version: str,
+    artifact_files: dict[str, str],
+) -> tuple[bool, list[str]]:
+    """Return (mismatch_found, [paths with unexplained extra lines vs git tag source]).
+
+    Detects XZ-style attacks: code injected into the published archive that is absent
+    from the corresponding git tag, indicating the release was tampered after tagging.
+    """
+    if not artifact_files:
+        return False, []
+
+    vcs = await _get_vcs_repo_for_package(client, ecosystem, package, new_version)
+    if vcs is None:
+        return False, []
+
+    platform, owner_repo = vcs
+    owner, repo = owner_repo.split("/", 1)
+    token = os.environ.get("GITHUB_TOKEN")
+
+    paths = list(artifact_files.keys())
+    filenames = [Path(p).name for p in paths]
+
+    source_contents = await asyncio.gather(
+        *[
+            fetch_vcs_file_at_tag(platform, owner, repo, new_version, fname, token)
+            for fname in filenames
+        ],
+        return_exceptions=True,
+    )
+
+    mismatch_files: list[str] = []
+    for rel_path, source_content in zip(paths, source_contents):
+        if source_content is None or isinstance(source_content, Exception):
+            continue
+        archive_content = artifact_files[rel_path]
+        extra = _count_extra_lines(source_content, archive_content)
+        if len(extra) >= _ARTIFACT_MISMATCH_THRESHOLD:
+            mismatch_files.append(rel_path)
+
+    return bool(mismatch_files), mismatch_files

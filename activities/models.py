@@ -67,6 +67,7 @@ class PyPISignals(BaseModel):
 class SocketSignals(BaseModel):
     socket_score: int | None = None
     socket_alerts: list[str] = []
+    socket_alert_types: list[str] = []  # raw type names (e.g. ["malware", "installScripts"])
 
 
 class OSVSignals(BaseModel):
@@ -90,6 +91,10 @@ class DiffSignals(BaseModel):
         False  # machine-generated obfuscation detected (eval/atob, _0x vars, etc.)
     )
     lockfile_integrity_downgraded: bool = False  # package-lock.json sha512 entries removed or downgraded to sha1 (PackageGate pattern)
+    artifact_source_mismatch: bool = (
+        False  # archive has unexpected additions vs git tag source (XZ-style backdoor)
+    )
+    artifact_source_mismatch_files: list[str] = []  # which files have unexplained new lines
 
 
 class PRFilesSignals(BaseModel):
