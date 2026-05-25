@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import io
+import os
 import re
 import zipfile
 from datetime import datetime, timezone
@@ -21,7 +22,6 @@ from ecosystems import (
     fetch_vcs_release,
     fetch_vcs_tag_signature,
     is_major,
-    parse_github_repo,
     parse_vcs_repo,
     parse_upload_time,
     safe_zip_extractall,
@@ -179,17 +179,22 @@ class ComposerProvider(EcosystemProviderBase):
             return None
 
         source_url = version_data.get("source", {}).get("url", "")
-        owner_repo = parse_github_repo(source_url)
-        if not owner_repo:
+        vcs = parse_vcs_repo(source_url)
+        if not vcs:
             return None
 
+        platform, owner_repo = vcs
         owner, repo = owner_repo.split("/", 1)
         filename = f"{name}-{version}.zip"
 
-        # Construct direct codeload.github.com archive URL — no redirect needed.
-        # Try v-prefixed tag first (most PHP packages tag as vX.Y.Z).
         for tag in (f"v{version}", version):
-            url = f"{_CODELOAD}/{owner}/{repo}/zip/refs/tags/{tag}"
+            if platform == "github":
+                # Direct codeload.github.com URL — no redirect needed.
+                url = f"{_CODELOAD}/{owner}/{repo}/zip/refs/tags/{tag}"
+            else:
+                # GitLab (gitlab.com or self-hosted via GITLAB_BASE_URL)
+                base = os.environ.get("GITLAB_BASE_URL", "https://gitlab.com").rstrip("/")
+                url = f"{base}/{owner}/{repo}/-/archive/{tag}/{repo}-{tag}.zip"
             validate_archive_url(url)
             try:
                 head = await client.head(url, follow_redirects=True)
