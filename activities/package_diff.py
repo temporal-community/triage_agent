@@ -89,10 +89,23 @@ _SUSPICIOUS_PACKAGE_FILES = frozenset(
     {
         ".cursorrules",  # Cursor AI editor rules — executed in developer's coding session
         "CLAUDE.md",  # Claude Code project instructions — not a package artifact
+        # AI assistant / IDE hook files that execute code when the workspace is opened.
+        # A published package archive has no legitimate reason to include these.
+        "settings.json",  # caught by path prefix check below, but also flag by name
         ".env",  # secrets/environment — should never be in a published package
         ".env.local",
         ".env.production",
         "package.md",  # anti-forensic fake JSON file staged to replace package.json (Axios pattern)
+    }
+)
+
+# Path-prefix matches for _SUSPICIOUS_PACKAGE_FILES (checked against rel path, not just name).
+_SUSPICIOUS_PACKAGE_PREFIXES = frozenset(
+    {
+        ".claude/",  # Claude Code hook files
+        ".vscode/",  # VSCode task/launch configs that auto-execute
+        ".idea/",  # JetBrains workspace configs
+        ".devcontainer",  # Dev container auto-run config
     }
 )
 
@@ -192,6 +205,8 @@ _NET_CALL_PATTERNS: dict[str, list[re.Pattern[str]]] = {
             r"\.icp0\.io",  # ICP canister C2 (CanisterWorm) — decentralised exfil endpoint
             r"open\s*\([^,]*(?:\.bashrc|\.zshrc|\.profile|bash_profile)[^,]*,\s*['\"]a['\"]",  # shell RC append
             r"""subprocess\.[^\n]{0,60}["']node["'][^\n]{0,20}["']-e["']""",  # cross-lang node -e exec (Telnyx/TrapDoor)
+            r"""\bsubprocess\.[^\n]{0,80}['"](?:bun|deno)['"][^\n]{0,40}\.(?:js|mjs|cjs)['"]""",  # cross-runtime JS payload (PyTorch Lightning Apr 2026)
+            r"freemyip\.com|dnslog\.cn",  # free dynamic DNS C2 (Go Decimal typosquat May 2026)
             r"api\.mainnet-beta\.solana\.com",  # Solana RPC C2 dead-drop (GlassWorm)
             r"api\.(?:devnet|testnet)\.solana\.com",  # Solana non-mainnet RPC (same C2 pattern)
             r"discord\.com/api/webhooks/",  # Discord webhook exfil (Shai-Hulud / Yeshen-Asia)
@@ -292,6 +307,7 @@ _NET_CALL_PATTERNS: dict[str, list[re.Pattern[str]]] = {
             r'os\.Getenv\s*\(\s*"GITHUB_PATH"\s*\)',  # CI PATH poisoning (inject fake binaries)
             r"authorized_keys",  # SSH persistence via authorized_keys append
             r"\bexec\.Command\s*\(",  # subprocess execution in Go library code (BufferZoneCorp)
+            r"freemyip\.com|dnslog\.cn",  # free dynamic DNS C2 (Go Decimal typosquat May 2026)
         ],
         ".rs": [
             r"\breqwest::(get|post|Client|blocking)\b",  # reqwest — most common Rust HTTP client
@@ -729,7 +745,9 @@ def _build_diff(
         if suffix == ".pth" and _pth_has_executable_code(new_map[rel]):
             install_script_added = True
         # AI editor config / secrets files in a package archive are red flags
-        if name in _SUSPICIOUS_PACKAGE_FILES:
+        if name in _SUSPICIOUS_PACKAGE_FILES or any(
+            rel.startswith(prefix) for prefix in _SUSPICIOUS_PACKAGE_PREFIXES
+        ):
             regular_new_files.append(
                 f"+ {rel} [SUSPICIOUS: should not appear in a package archive]"
             )

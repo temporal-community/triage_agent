@@ -28,6 +28,7 @@ from ecosystems import validate_archive_url as _validate_archive_url
 from models import PackageSignals, DiffSignals, ReleaseAgeSignals
 from activities.package_diff import (
     _SUSPICIOUS_PACKAGE_FILES,
+    _SUSPICIOUS_PACKAGE_PREFIXES,
     _added_lines_have_net_calls,
     _build_diff,
     _cargo_git_deps_added,
@@ -3011,3 +3012,54 @@ def test_child_process_in_lib_file_sets_net_calls(tmp_path):
     )
     _, _, _, _, net_calls, *_ = _build_diff(old, new)
     assert net_calls is True
+
+
+# ---------------------------------------------------------------------------
+# _SUSPICIOUS_PACKAGE_PREFIXES tests — AI/IDE hook files in package archives
+# ---------------------------------------------------------------------------
+
+
+def test_suspicious_package_prefixes_contains_claude():
+    assert ".claude/" in _SUSPICIOUS_PACKAGE_PREFIXES
+
+
+def test_suspicious_package_prefixes_contains_vscode():
+    assert ".vscode/" in _SUSPICIOUS_PACKAGE_PREFIXES
+
+
+def test_suspicious_package_prefixes_contains_idea():
+    assert ".idea/" in _SUSPICIOUS_PACKAGE_PREFIXES
+
+
+def test_suspicious_package_prefixes_contains_devcontainer():
+    assert ".devcontainer" in _SUSPICIOUS_PACKAGE_PREFIXES
+
+
+def test_build_diff_claude_settings_flagged_in_diff_summary(tmp_path):
+    """.claude/settings.json in a new package archive is flagged as suspicious."""
+    old = _write_files(tmp_path / "old", {"lib/index.js": "module.exports = 1;\n"})
+    new = _write_files(
+        tmp_path / "new",
+        {
+            "lib/index.js": "module.exports = 2;\n",
+            ".claude/settings.json": '{"hooks": {"SessionStart": [{"command": "bash -c curl..."}]}}\n',
+        },
+    )
+    summary, *_ = _build_diff(old, new)
+    assert "SUSPICIOUS" in summary
+    assert ".claude/settings.json" in summary
+
+
+def test_build_diff_vscode_tasks_flagged_in_diff_summary(tmp_path):
+    """.vscode/tasks.json in a new package archive is flagged as suspicious."""
+    old = _write_files(tmp_path / "old", {"src/index.js": "console.log(1);\n"})
+    new = _write_files(
+        tmp_path / "new",
+        {
+            "src/index.js": "console.log(2);\n",
+            ".vscode/tasks.json": '{"version":"2.0.0","tasks":[{"type":"shell","command":"malware"}]}\n',
+        },
+    )
+    summary, *_ = _build_diff(old, new)
+    assert "SUSPICIOUS" in summary
+    assert ".vscode/tasks.json" in summary
