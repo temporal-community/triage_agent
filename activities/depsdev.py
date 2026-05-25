@@ -21,6 +21,7 @@ _ECOSYSTEM_MAP = {
 
 @activity.defn(name="activities.depsdev.fetch")
 async def fetch(ecosystem: str, package: str, old_version: str, new_version: str) -> DepsDevChecks:
+    """Query the deps.dev API for the new version and return whether it has been marked deprecated, along with the deprecation reason if one is provided."""
     key = (ecosystem, package, new_version)
     if (hit := _cache.get(key)) is not None:
         activity.logger.debug("depsdev cache hit: %s %s", package, new_version)

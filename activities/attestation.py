@@ -10,6 +10,9 @@ _cache: ActivityCache = ActivityCache()  # SLSA provenance is immutable once sig
 async def check(
     ecosystem: str, package: str, old_version: str, new_version: str
 ) -> AttestationChecks:
+    """Check whether the registry can cryptographically prove the package was built by a trusted CI pipeline, using Sigstore/SLSA provenance records.
+
+    Returns an ``AttestationChecks`` with flags indicating whether provenance exists and whether it was issued by a recognized build system."""
     key = (ecosystem, package, old_version, new_version)
     if (hit := _cache.get(key)) is not None:
         activity.logger.debug("attestation cache hit: %s %s", package, new_version)

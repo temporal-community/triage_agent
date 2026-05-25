@@ -36,6 +36,9 @@ _MEDIUM_INCLUDE_TYPES = {
 
 @activity.defn(name="activities.socket.score")
 async def score(ecosystem: str, package: str, old_version: str, new_version: str) -> SocketChecks:
+    """Query the Socket.dev API for the new version's supply chain risk score and any specific alerts such as install scripts, obfuscated code, or network access.
+
+    Returns a ``SocketChecks`` with a 0–100 score and a filtered list of high/critical alert messages; requires a ``SOCKET_API_KEY`` environment variable."""
     key = (ecosystem, package, new_version)
     if (hit := _cache.get(key)) is not None:
         activity.logger.debug("socket cache hit: %s %s", package, new_version)

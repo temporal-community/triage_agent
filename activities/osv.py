@@ -10,6 +10,9 @@ _cache: ActivityCache = ActivityCache(ttl_seconds=3600)  # new CVEs can appear; 
 
 @activity.defn(name="activities.osv.check")
 async def check(ecosystem: str, package: str, old_version: str, new_version: str) -> OSVChecks:
+    """Query the OSV.dev API to find published vulnerabilities affecting the new version of this package.
+
+    Returns an ``OSVChecks`` containing a list of CVE or OSV IDs for any matching advisories."""
     key = (ecosystem, package, new_version)
     if (hit := _cache.get(key)) is not None:
         activity.logger.debug("osv cache hit: %s %s", package, new_version)

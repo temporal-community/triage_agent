@@ -10,6 +10,9 @@ _cache: ActivityCache = ActivityCache()  # publishing history is immutable
 async def history(
     ecosystem: str, package: str, old_version: str, new_version: str
 ) -> MaintainerChecks:
+    """Compare the list of maintainers who published the old version against those who published the new version.
+
+    Returns a ``MaintainerChecks`` indicating whether any new uploaders appeared, which can signal an account takeover."""
     key = (ecosystem, package, old_version, new_version)
     if (hit := _cache.get(key)) is not None:
         activity.logger.debug("maintainer cache hit: %s %s", package, new_version)

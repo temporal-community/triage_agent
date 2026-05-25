@@ -171,6 +171,9 @@ _ARTIFACT_MISMATCH_THRESHOLD = 5
 async def compute(
     ecosystem: str, package: str, old_version: str, new_version: str
 ) -> PackageDiffChecks:
+    """Download both package archives from the registry, extract them, and diff them for suspicious changes such as new install hooks, obfuscated code, outbound network calls, and binary payloads.
+
+    Returns a ``PackageDiffChecks`` with a human-readable diff summary and boolean flags for each category of risk."""
     key = (ecosystem, package, old_version, new_version)
     if (hit := _cache.get(key)) is not None:
         activity.logger.debug("package_diff cache hit: %s %s→%s", package, old_version, new_version)

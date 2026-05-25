@@ -52,6 +52,9 @@ def _find_vcs_repo(data: dict) -> tuple[str, str] | None:
 async def fetch(
     ecosystem: str, package: str, old_version: str, new_version: str
 ) -> ScorecardChecks:
+    """Look up the package's source repository via deps.dev and then fetch its OpenSSF Scorecard from securityscorecards.dev.
+
+    Returns a ``ScorecardChecks`` with the overall score and individual check scores for CI hygiene, branch protection, token permissions, and signed releases."""
     key = (ecosystem, package)  # scorecard is per-repo, not per-version
     if (hit := _cache.get(key)) is not None:
         activity.logger.debug("scorecard cache hit: %s", package)

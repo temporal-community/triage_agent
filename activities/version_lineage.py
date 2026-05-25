@@ -26,6 +26,9 @@ _cache: ActivityCache = ActivityCache(ttl_seconds=3600)  # new majors can be rel
 async def check(
     ecosystem: str, package: str, old_version: str, new_version: str
 ) -> VersionLineageChecks:
+    """Fetch all published versions of the package from its registry and determine whether the new version bumps a stale major line while a newer stable major is actively maintained.
+
+    Returns a ``VersionLineageChecks`` flagging whether this looks like a neglected branch being unexpectedly revived."""
     key = (ecosystem, package, new_version)
     if (hit := _cache.get(key)) is not None:
         activity.logger.debug("version_lineage cache hit: %s %s", package, new_version)
