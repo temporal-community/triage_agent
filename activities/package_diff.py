@@ -92,6 +92,7 @@ _SUSPICIOUS_PACKAGE_FILES = frozenset(
         ".env",  # secrets/environment — should never be in a published package
         ".env.local",
         ".env.production",
+        "package.md",  # anti-forensic fake JSON file staged to replace package.json (Axios pattern)
     }
 )
 
@@ -192,9 +193,11 @@ _NET_CALL_PATTERNS: dict[str, list[re.Pattern[str]]] = {
             r"open\s*\([^,]*(?:\.bashrc|\.zshrc|\.profile|bash_profile)[^,]*,\s*['\"]a['\"]",  # shell RC append
             r"""subprocess\.[^\n]{0,60}["']node["'][^\n]{0,20}["']-e["']""",  # cross-lang node -e exec (Telnyx/TrapDoor)
             r"api\.mainnet-beta\.solana\.com",  # Solana RPC C2 dead-drop (GlassWorm)
+            r"api\.(?:devnet|testnet)\.solana\.com",  # Solana non-mainnet RPC (same C2 pattern)
             r"discord\.com/api/webhooks/",  # Discord webhook exfil (Shai-Hulud / Yeshen-Asia)
             r"logs\.betterstack\.com|logtail\.com",  # BetterStack/Logtail exfil
             r"api\.github\.com/gists",  # GitHub Gist dead-drop
+            r"pastebin\.com/raw/",  # Pastebin raw paste dead-drop (StegaBin C2 infrastructure)
         ],
         ".js": [
             r"\bfetch\s*\(",
@@ -218,6 +221,9 @@ _NET_CALL_PATTERNS: dict[str, list[re.Pattern[str]]] = {
             r"api\.github\.com/user/repos",  # GitHub repo creation as encrypted dead-drop (Mini Shai-Hulud)
             r"window\.ethereum\s*=|window\.solana\s*=|window\.phantom\s*=",  # crypto wallet API monkey-patching (September 2025 npm)
             r"\bfetch\s*=\s*(?!==)|XMLHttpRequest\.prototype\.\w+\s*=",  # global fetch/XHR hijack (crypto drainer)
+            r"\bchild_process\b.*\.(exec|execSync|spawn|spawnSync)\s*\(",  # OS shell execution in library (download-and-exec)
+            r"require\s*\(\s*['\"]child_process['\"]\s*\)",  # child_process require (shell execution capability)
+            r"pastebin\.com/raw/",  # Pastebin raw paste dead-drop (StegaBin C2 infrastructure)
         ],
         ".ts": [
             r"\bfetch\s*\(",
@@ -245,6 +251,9 @@ _NET_CALL_PATTERNS: dict[str, list[re.Pattern[str]]] = {
             r"getTransaction\s*\(|getSignaturesForAddress\s*\(",  # Solana RPC C2
             r"discord\.com/api/webhooks/",
             r"api\.github\.com/gists",
+            r"\bchild_process\b.*\.(exec|execSync|spawn|spawnSync)\s*\(",  # OS shell execution
+            r"require\s*\(\s*['\"]child_process['\"]\s*\)",  # child_process require
+            r"pastebin\.com/raw/",  # Pastebin raw paste dead-drop
         ],
         ".mjs": [
             r"\bfetch\s*\(",
@@ -366,18 +375,21 @@ _ZERO_WIDTH_RE = re.compile("[​‌‍⁠﻿￼]")
 _ZERO_WIDTH_SOURCE_EXTENSIONS = frozenset({".js", ".ts", ".mjs", ".cjs", ".py", ".rb", ".php"})
 
 # Patterns that indicate OS-level persistence being installed from a lifecycle hook.
-_PERSISTENCE_PATTERNS: list[re.Pattern[str]] = [re.compile(p) for p in [
-    r"LaunchAgents",  # macOS LaunchAgent plist drop (Mini Shai-Hulud TanStack)
-    r"\blaunchctl\s+load\b",  # register macOS daemon
-    r"\bsystemctl\s+--user\b",  # systemd user service registration
-    r"~[/\\]\.config[/\\]systemd[/\\]user[/\\]",  # systemd user service path
-    r"\bpm2\s+(?:start|save|startup)\b",  # pm2 process manager daemon (Sonatype Q2 2025)
-    r"crontab\s+-[il]\b|crontab\s+[^-\s]",  # crontab modification
-    r"\bnpx\s+pm2\b|\brequire\s*\(['\"]pm2['\"]\)",  # pm2 via npx or require
-    r"github\.com/[^/\s]+/[^/\s]+/releases/download/bun-v",  # Bun runtime bootstrap (Shai-Hulud)
-    r"\btrufflehog\b|\bgitleaks\b|\bdetect-secrets\b",  # weaponised secrets scanner
-    r"rm\s+-rf\s+(?:~/|~[/\\]|\$HOME[/\\])",  # home dir wipe (Mini Shai-Hulud scorched-earth)
-]]
+_PERSISTENCE_PATTERNS: list[re.Pattern[str]] = [
+    re.compile(p)
+    for p in [
+        r"LaunchAgents",  # macOS LaunchAgent plist drop (Mini Shai-Hulud TanStack)
+        r"\blaunchctl\s+load\b",  # register macOS daemon
+        r"\bsystemctl\s+--user\b",  # systemd user service registration
+        r"~[/\\]\.config[/\\]systemd[/\\]user[/\\]",  # systemd user service path
+        r"\bpm2\s+(?:start|save|startup)\b",  # pm2 process manager daemon (Sonatype Q2 2025)
+        r"crontab\s+-[il]\b|crontab\s+[^-\s]",  # crontab modification
+        r"\bnpx\s+pm2\b|\brequire\s*\(['\"]pm2['\"]\)",  # pm2 via npx or require
+        r"github\.com/[^/\s]+/[^/\s]+/releases/download/bun-v",  # Bun runtime bootstrap (Shai-Hulud)
+        r"\btrufflehog\b|\bgitleaks\b|\bdetect-secrets\b",  # weaponised secrets scanner
+        r"rm\s+-rf\s+(?:~/|~[/\\]|\$HOME[/\\])",  # home dir wipe (Mini Shai-Hulud scorched-earth)
+    ]
+]
 
 # Patterns for npm worm self-propagation: reads credentials AND calls publish endpoint.
 _NPM_CRED_READ_RE = re.compile(
@@ -465,6 +477,8 @@ async def compute(ecosystem: str, package: str, old_version: str, new_version: s
         binary_data,
         git_url_dep,
         obfuscated,
+        persistence,
+        worm,
         lockfile_downgraded,
         artifact_files,
     ) = await asyncio.to_thread(
@@ -487,6 +501,8 @@ async def compute(ecosystem: str, package: str, old_version: str, new_version: s
         binary_data_added=binary_data,
         git_url_dependency_added=git_url_dep,
         obfuscated_code=obfuscated,
+        persistence_mechanism_added=persistence,
+        worm_propagation_pattern=worm,
         lockfile_integrity_downgraded=lockfile_downgraded,
         artifact_source_mismatch=artifact_mismatch,
         artifact_source_mismatch_files=mismatch_files,
@@ -571,7 +587,7 @@ def _extract_and_diff(
     new_bytes: bytes,
     new_filename: str,
     provider,
-) -> tuple[str, bool, bool, int, bool, bool, bool, bool, bool, dict[str, str]]:
+) -> tuple[str, bool, bool, int, bool, bool, bool, bool, bool, bool, bool, dict[str, str]]:
     try:
         with tempfile.TemporaryDirectory() as old_dir, tempfile.TemporaryDirectory() as new_dir:
             provider.extract_archive(old_bytes, old_filename, old_dir)
@@ -598,7 +614,20 @@ def _extract_and_diff(
 
             return (*diff_result, lockfile_downgraded, artifact_files)
     except Exception as exc:  # noqa: BLE001
-        return f"[extraction error: {exc}]", False, False, 0, False, False, False, False, False, {}
+        return (
+            f"[extraction error: {exc}]",
+            False,
+            False,
+            0,
+            False,
+            False,
+            False,
+            False,
+            False,
+            False,
+            False,
+            {},
+        )
 
 
 def _is_noise(rel: str) -> bool:
@@ -665,10 +694,11 @@ _REQUIREMENTS_NAMES = frozenset(
 
 def _build_diff(
     old_map: dict[str, Path], new_map: dict[str, Path]
-) -> tuple[str, bool, bool, int, bool, bool, bool, bool]:
+) -> tuple[str, bool, bool, int, bool, bool, bool, bool, bool, bool]:
     """Return (diff_text, install_script_added, install_script_changed,
     new_dependency_count, network_calls_in_lib, binary_data_added,
-    git_url_dependency_added, obfuscated_code)."""
+    git_url_dependency_added, obfuscated_code, persistence_mechanism_added,
+    worm_propagation_pattern)."""
     old_keys = set(old_map)
     new_keys = set(new_map)
 
@@ -686,6 +716,8 @@ def _build_diff(
     binary_data_added = False
     git_url_dependency_added = False
     obfuscated_code = False
+    persistence_mechanism_added = False
+    worm_propagation_pattern = False
 
     for rel in new_files:
         p = Path(rel)
@@ -701,8 +733,10 @@ def _build_diff(
             regular_new_files.append(
                 f"+ {rel} [SUSPICIOUS: should not appear in a package archive]"
             )
-        # Zero-width Unicode steganography in AI editor config files (TrapDoor attack)
-        if name in {"CLAUDE.md", ".cursorrules"} and _has_zero_width_unicode(new_map[rel]):
+        # Zero-width Unicode steganography extended to all text source files (TrapDoor attack)
+        if (
+            name in {"CLAUDE.md", ".cursorrules"} or suffix in _ZERO_WIDTH_SOURCE_EXTENSIONS
+        ) and _has_zero_width_unicode(new_map[rel]):
             obfuscated_code = True
         if suffix in DANGEROUS_BINARY_SUFFIXES:
             dangerous_new.append(rel)
@@ -730,6 +764,17 @@ def _build_diff(
             if not obfuscated_code and suffix in {".py", ".js", ".php", ".rb", ".ts"}:
                 if _has_gzip_b64_payload(new_map[rel]):
                     obfuscated_code = True
+            # Check install hooks for persistence mechanisms (LaunchAgent, pm2, systemd, etc.)
+            if not persistence_mechanism_added and (
+                name in INSTALL_HOOK_NAMES or rel in INSTALL_HOOK_NAMES
+            ):
+                if _has_persistence_mechanism(_read_text(new_map[rel])):
+                    persistence_mechanism_added = True
+            # Check new JS/PY files for npm worm self-propagation pattern
+            if not worm_propagation_pattern and suffix in {".js", ".py", ".ts", ".cjs", ".mjs"}:
+                text = _read_text(new_map[rel])
+                if _NPM_CRED_READ_RE.search(text) and _NPM_PUBLISH_RE.search(text):
+                    worm_propagation_pattern = True
 
     high_signal_changed: list[tuple[str, str]] = []
     other_changed: list[str] = []
@@ -798,6 +843,17 @@ def _build_diff(
             if _added_lines_have_net_calls(added, suffix):
                 network_calls_in_lib = True
 
+        # Check changed install hooks for persistence mechanisms
+        if not persistence_mechanism_added and (
+            name in INSTALL_HOOK_NAMES or rel in INSTALL_HOOK_NAMES
+        ):
+            if _has_persistence_mechanism(new_text):
+                persistence_mechanism_added = True
+        # Check changed files for npm worm propagation pattern
+        if not worm_propagation_pattern and suffix in {".js", ".py", ".ts", ".cjs", ".mjs"}:
+            if _NPM_CRED_READ_RE.search(new_text) and _NPM_PUBLISH_RE.search(new_text):
+                worm_propagation_pattern = True
+
         if name in HIGH_SIGNAL_NAMES or p.suffix in HIGH_SIGNAL_SUFFIXES:
             patch = _unified_diff(old_text, new_text, rel)
             high_signal_changed.append((rel, patch))
@@ -847,6 +903,8 @@ def _build_diff(
             binary_data_added,
             git_url_dependency_added,
             obfuscated_code,
+            persistence_mechanism_added,
+            worm_propagation_pattern,
         )
 
     result = "\n\n".join(sections)
@@ -865,6 +923,8 @@ def _build_diff(
         binary_data_added,
         git_url_dependency_added,
         obfuscated_code,
+        persistence_mechanism_added,
+        worm_propagation_pattern,
     )
 
 
@@ -1223,6 +1283,16 @@ def _has_gzip_b64_payload(path: Path) -> bool:
         return bool(_GZIP_B64_RE.search(text))
     except Exception:  # noqa: BLE001
         return False
+
+
+def _has_persistence_mechanism(text: str) -> bool:
+    """Return True if the text contains known OS-level persistence installation patterns.
+
+    Checks for: macOS LaunchAgent drops, systemd user service registration, pm2 daemon
+    setup, Bun runtime bootstrap, home-directory wipe trigger, and secrets-scanner weaponisation.
+    Any match in a lifecycle script (install/preinstall/postinstall/setup.py) is a strong RED signal.
+    """
+    return any(p.search(text) for p in _PERSISTENCE_PATTERNS)
 
 
 def _read_text(path: Path) -> str:
