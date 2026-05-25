@@ -232,7 +232,7 @@ async def test_classify_llm_returns_verdict(base_signals, monkeypatch):
         }
     )
     env = ActivityEnvironment()
-    with patch("classifiers.claude.anthropic.AsyncAnthropic", return_value=mock_client):
+    with patch("classifiers.anthropic.anthropic.AsyncAnthropic", return_value=mock_client):
         verdict = await env.run(classify, base_signals)
 
     assert verdict.classification == "green"
@@ -253,7 +253,7 @@ async def test_classify_llm_passes_release_age_through_when_not_set(base_signals
         }
     )
     env = ActivityEnvironment()
-    with patch("classifiers.claude.anthropic.AsyncAnthropic", return_value=mock_client):
+    with patch("classifiers.anthropic.anthropic.AsyncAnthropic", return_value=mock_client):
         verdict = await env.run(classify, base_signals)
 
     assert verdict.release_age_hours == 48.0
@@ -278,7 +278,7 @@ async def test_classify_auth_error_raises_non_retryable(base_signals, monkeypatc
     client.messages.create = AsyncMock(side_effect=exc)
 
     env = ActivityEnvironment()
-    with patch("classifiers.claude.anthropic.AsyncAnthropic", return_value=client):
+    with patch("classifiers.anthropic.anthropic.AsyncAnthropic", return_value=client):
         with pytest.raises(ApplicationError) as exc_info:
             await env.run(classify, base_signals)
 
@@ -294,7 +294,7 @@ async def test_classify_bad_request_raises_non_retryable(base_signals, monkeypat
     client.messages.create = AsyncMock(side_effect=exc)
 
     env = ActivityEnvironment()
-    with patch("classifiers.claude.anthropic.AsyncAnthropic", return_value=client):
+    with patch("classifiers.anthropic.anthropic.AsyncAnthropic", return_value=client):
         with pytest.raises(ApplicationError) as exc_info:
             await env.run(classify, base_signals)
 
@@ -308,7 +308,7 @@ async def test_classify_generic_exception_falls_back_to_rule_based(base_signals,
     client.messages.create = AsyncMock(side_effect=RuntimeError("service unavailable"))
 
     env = ActivityEnvironment()
-    with patch("classifiers.claude.anthropic.AsyncAnthropic", return_value=client):
+    with patch("classifiers.anthropic.anthropic.AsyncAnthropic", return_value=client):
         verdict = await env.run(classify, base_signals)
 
     # Falls back gracefully — still returns a valid verdict
@@ -333,7 +333,7 @@ async def test_claude_classifier_falls_back_to_rule_based_on_error(base_signals,
 
     client = MagicMock()
     client.messages.create = AsyncMock(side_effect=RuntimeError("outage"))
-    with patch("classifiers.claude.anthropic.AsyncAnthropic", return_value=client):
+    with patch("classifiers.anthropic.anthropic.AsyncAnthropic", return_value=client):
         verdict = await ClaudeClassifier().classify(base_signals)
     assert verdict.classification in ("green", "yellow", "red")
 

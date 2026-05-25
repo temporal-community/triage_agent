@@ -30,7 +30,7 @@ from temporalio import activity
 
 from models import PackageChecks, Verdict
 from classifiers._helpers import _build_message, _rule_based  # noqa: F401 — kept for back-compat
-from classifiers.claude import ClaudeClassifier
+from classifiers.anthropic import ClaudeClassifier
 from classifiers.openai import OpenAIClassifier
 from classifiers.ollama import OllamaClassifier
 
