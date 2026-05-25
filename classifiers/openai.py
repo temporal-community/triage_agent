@@ -11,13 +11,13 @@ from classifiers._helpers import _build_message, _rule_based
 
 
 class OpenAIClassifier:
-    """Uses the OpenAI chat completions API (gpt-4o by default). No extra packages required."""
+    """Uses the OpenAI chat completions API (gpt-5.5 by default). No extra packages required."""
 
     async def classify(self, signals: PackageChecks) -> Verdict:
         import httpx as _httpx
 
         api_key = os.environ.get("OPENAI_API_KEY", "")
-        model = os.environ.get("OPENAI_MODEL", "gpt-4o")
+        model = os.environ.get("OPENAI_MODEL", "gpt-5.5")
         try:
             async with _httpx.AsyncClient(timeout=60.0) as client:
                 resp = await client.post(

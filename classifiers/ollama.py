@@ -17,7 +17,7 @@ class OllamaClassifier:
         import httpx as _httpx
 
         host = os.environ.get("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
-        model = os.environ.get("OLLAMA_MODEL", "llama3.2")
+        model = os.environ.get("OLLAMA_MODEL", "llama4")
         # Ollama doesn't universally support tool calling; ask for JSON output directly.
         schema_hint = json.dumps(Verdict.model_json_schema(), indent=2)
         system = (
