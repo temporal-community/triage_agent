@@ -31,7 +31,7 @@ import anthropic
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
-from activities.models import PackageSignals, Verdict
+from models import PackageSignals, Verdict
 from helpers.prompts import CLASSIFIER_SYSTEM
 
 _logger = logging.getLogger(__name__)
@@ -529,8 +529,7 @@ def _rule_based(signals: PackageSignals) -> Verdict:
             classification="red",
             confidence=0.88,
             reasoning=f"Socket package score is critically low ({signals.socket.socket_score}/100)",
-            flags=[f"critically low socket score ({signals.socket.socket_score}/100)"]
-            + flags,
+            flags=[f"critically low socket score ({signals.socket.socket_score}/100)"] + flags,
             release_age_hours=signals.age.release_age_hours,
             new_dependency_count=signals.diff.new_dependency_count,
         )

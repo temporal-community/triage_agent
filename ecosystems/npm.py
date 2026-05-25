@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 import httpx
 from temporalio.exceptions import ApplicationError
 
-from activities.ecosystems import (
+from ecosystems import (
     build_release_signals,
     fetch_vcs_account_age,
     fetch_vcs_ci_workflow_changes,
@@ -21,7 +21,7 @@ from activities.ecosystems import (
     safe_tar_extractall,
     validate_archive_url,
 )
-from activities.models import (
+from models import (
     AttestationSignals,
     MaintainerSignals,
     PyPISignals,
@@ -294,7 +294,7 @@ async def _fetch_npm_account_age(client: httpx.AsyncClient, username: str) -> in
         created_raw = data.get("created") or data.get("date")
         if not created_raw:
             return None
-        from activities.ecosystems import parse_upload_time
+        from ecosystems import parse_upload_time
         from datetime import datetime, timezone
 
         created = parse_upload_time(created_raw)

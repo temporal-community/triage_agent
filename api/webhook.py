@@ -28,8 +28,8 @@ from temporalio.client import Client
 from temporalio.common import WorkflowIDReusePolicy
 from temporalio.contrib.pydantic import pydantic_data_converter
 
-from activities.ecosystems import get_name_re
-from activities.models import PRContext
+from ecosystems import get_name_re
+from models import PRContext
 from helpers.bot_parsers import get_bot_parser
 from workflows.pr_action_workflow import PRActionWorkflow
 

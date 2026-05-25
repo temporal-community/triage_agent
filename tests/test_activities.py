@@ -239,14 +239,14 @@ async def test_pypi_metadata_pypistats_network_error_returns_none():
 
 
 def test_pypi_is_major_non_semver_returns_false():
-    from activities.ecosystems import is_major
+    from ecosystems import is_major
 
     assert is_major("not-a-version", "also-not") is False
     assert is_major("", "") is False
 
 
 def test_is_major_equal_versions_returns_false():
-    from activities.ecosystems import is_major
+    from ecosystems import is_major
 
     assert is_major("2.0.0", "2.0.0") is False
     assert is_major("v1.0.0", "v1.0.0") is False
@@ -287,7 +287,7 @@ async def test_release_age_missing_timestamp_returns_none():
 
 
 def test_release_age_naive_datetime_gets_utc():
-    from activities.ecosystems import parse_upload_time
+    from ecosystems import parse_upload_time
 
     # No Z and no +00:00 → naive datetime → should be treated as UTC
     dt = parse_upload_time("2024-06-01T12:00:00")

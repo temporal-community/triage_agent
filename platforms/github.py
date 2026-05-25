@@ -7,7 +7,7 @@ import os
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
-from activities.models import PRContext, PRFilesSignals, Verdict
+from models import PRContext, PRFilesSignals, Verdict
 from helpers.comment_formatter import format_comment
 from helpers.http import get_client
 

@@ -2,9 +2,9 @@
 Ecosystem abstraction layer.
 
 To add a new ecosystem:
-  1. Create activities/ecosystems/{name}.py implementing EcosystemProvider
+  1. Create ecosystems/{name}.py implementing EcosystemProvider
      (set ecosystem_name = "<key>" as a class attribute — get_provider() discovers it automatically)
-  2. Add the ecosystem name to the Literal types in activities/models.py
+  2. Add the ecosystem name to the Literal types in models/__init__.py
   3. Add the branch slug to helpers/pr_parser.py's _DEPENDABOT_ECOSYSTEM_MAP
   4. Add a name-validation regex entry in api/webhook.py's _NAME_RE_BY_ECOSYSTEM
 """
@@ -30,7 +30,7 @@ from temporalio.exceptions import ApplicationError
 import re as _re
 from helpers.http import get_client
 
-from activities.models import (
+from models import (
     AttestationSignals,
     MaintainerSignals,
     PyPISignals,
@@ -79,7 +79,7 @@ _PROVIDERS: dict[str, EcosystemProvider] | None = None
 def _build_provider_registry() -> dict[str, EcosystemProvider]:
     """Scan built-in providers then entry points for classes with an ecosystem_name attribute.
 
-    Built-in providers: activities/ecosystems/*.py (pkgutil scan).
+    Built-in providers: ecosystems/*.py (pkgutil scan).
     External plugins: declare an entry point in group "dependency_scout.ecosystems":
         [project.entry-points."dependency_scout.ecosystems"]
         my_ecosystem = "my_package:MyProvider"
@@ -88,11 +88,11 @@ def _build_provider_registry() -> dict[str, EcosystemProvider]:
     module load time (providers import helpers from this same __init__.py).
     Built-in providers take precedence over plugins with the same ecosystem_name.
     """
-    import activities.ecosystems as _pkg
+    import ecosystems as _pkg
 
     registry: dict[str, EcosystemProvider] = {}
 
-    for mod_info in pkgutil.iter_modules(_pkg.__path__, prefix="activities.ecosystems."):
+    for mod_info in pkgutil.iter_modules(_pkg.__path__, prefix="ecosystems."):
         mod = importlib.import_module(mod_info.name)
         for _, obj in inspect.getmembers(mod, inspect.isclass):
             name = getattr(obj, "ecosystem_name", None)

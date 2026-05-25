@@ -10,7 +10,7 @@ Structural tests that catch two classes of wiring bugs:
 
 import inspect
 
-from activities.models import PackageSignals
+from models import PackageSignals
 
 
 def test_all_signal_activities_registered_with_worker():
@@ -32,7 +32,7 @@ def test_all_signal_activities_registered_with_worker():
 def test_all_signal_sub_models_used_in_classifier():
     """Every PackageSignals sub-model field has at least one field access in classifier.py."""
     import re
-    import activities.classifier as classifier_module
+    import classifiers as classifier_module
 
     source = inspect.getsource(classifier_module)
     # Strip single-line comments so a field mentioned only in a comment isn't counted as used.

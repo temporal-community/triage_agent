@@ -3,7 +3,7 @@ import os
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
-from activities.models import SocketSignals
+from models import SocketSignals
 from helpers.cache import ActivityCache
 from helpers.http import get_client
 

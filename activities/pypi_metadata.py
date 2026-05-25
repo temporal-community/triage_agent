@@ -1,5 +1,5 @@
-from activities.ecosystems import get_provider
-from activities.models import PyPISignals
+from ecosystems import get_provider
+from models import PyPISignals
 from temporalio import activity
 
 

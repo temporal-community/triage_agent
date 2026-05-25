@@ -22,13 +22,13 @@ import httpx
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
-from activities.ecosystems import (
+from ecosystems import (
     fetch_vcs_file_at_tag,
     get_provider,
     parse_vcs_repo,
     validate_archive_url,
 )
-from activities.models import DiffSignals
+from models import DiffSignals
 from helpers.cache import ActivityCache
 from helpers.http import get_client
 

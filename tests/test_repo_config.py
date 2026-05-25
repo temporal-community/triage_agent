@@ -6,7 +6,7 @@ import respx
 from temporalio.testing import ActivityEnvironment
 
 from activities.platform_activities import fetch_repo_config as fetch
-from activities.models import PRContext, RepoConfig
+from models import PRContext, RepoConfig
 from helpers.config_provider import EnvConfigProvider
 
 GITHUB_CONTENTS_URL = (

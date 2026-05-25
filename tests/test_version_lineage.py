@@ -9,9 +9,9 @@ import pytest
 import respx
 from temporalio.testing import ActivityEnvironment
 
-from activities.ecosystems import detect_stale_version_line
+from ecosystems import detect_stale_version_line
 from activities.version_lineage import check as lineage_check
-from activities.models import (
+from models import (
     VersionLineSignals,
     PackageSignals,
     ReleaseAgeSignals,
@@ -249,7 +249,7 @@ async def test_rubygems_stale_version_line_detected():
 
 
 def test_rule_based_stale_version_line_is_yellow():
-    from activities.classifier import _rule_based
+    from classifiers import _rule_based
 
     signals = PackageSignals(
         ecosystem="pip",

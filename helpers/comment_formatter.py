@@ -1,6 +1,6 @@
 import os
 import re
-from activities.models import PRContext, PackageSignals, Verdict
+from models import PRContext, PackageSignals, Verdict
 
 
 def _config_url(pr: PRContext) -> str:

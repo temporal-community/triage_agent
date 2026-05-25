@@ -1,7 +1,7 @@
 from temporalio import activity
 
-from activities.ecosystems import get_provider
-from activities.models import ReleaseSignals
+from ecosystems import get_provider
+from models import ReleaseSignals
 
 
 @activity.defn(name="activities.release_notes.check")

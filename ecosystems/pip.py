@@ -11,7 +11,7 @@ from pathlib import Path
 import httpx
 from temporalio.exceptions import ApplicationError
 
-from activities.ecosystems import (
+from ecosystems import (
     build_release_signals,
     fetch_vcs_account_age,
     fetch_vcs_ci_workflow_changes,
@@ -24,7 +24,7 @@ from activities.ecosystems import (
     safe_zip_extractall,
     validate_archive_url,
 )
-from activities.models import (
+from models import (
     AttestationSignals,
     MaintainerSignals,
     PyPISignals,

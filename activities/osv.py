@@ -1,7 +1,7 @@
 from temporalio import activity
 
-from activities.ecosystems import get_provider
-from activities.models import OSVSignals
+from ecosystems import get_provider
+from models import OSVSignals
 from helpers.cache import ActivityCache
 from helpers.http import get_client
 

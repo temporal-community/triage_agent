@@ -21,11 +21,11 @@ from temporalio.testing import ActivityEnvironment
 
 import json as _json
 
-import activities.ecosystems as ecosystems_module
+import ecosystems as ecosystems_module
 import activities.package_diff as pkg_diff_module
-from activities.ecosystems import safe_zip_extractall as _safe_zip_extractall
-from activities.ecosystems import validate_archive_url as _validate_archive_url
-from activities.models import PackageSignals, DiffSignals, ReleaseAgeSignals
+from ecosystems import safe_zip_extractall as _safe_zip_extractall
+from ecosystems import validate_archive_url as _validate_archive_url
+from models import PackageSignals, DiffSignals, ReleaseAgeSignals
 from activities.package_diff import (
     _SUSPICIOUS_PACKAGE_FILES,
     _added_lines_have_net_calls,
@@ -402,7 +402,7 @@ def test_get_file_map_filters_noise(tmp_path):
 
 
 def test_extract_and_diff_bad_archive_returns_error_string():
-    from activities.ecosystems.pip import PipProvider
+    from ecosystems.pip import PipProvider
 
     result, added, changed, _dep_count, *_ = _extract_and_diff(
         b"not a real archive", "bad.tar.gz", b"also bad", "bad2.tar.gz", PipProvider()
@@ -413,7 +413,7 @@ def test_extract_and_diff_bad_archive_returns_error_string():
 
 
 def test_extract_and_diff_unsupported_format_returns_error_string():
-    from activities.ecosystems.pip import PipProvider
+    from ecosystems.pip import PipProvider
 
     result, added, changed, _dep_count, *_ = _extract_and_diff(
         b"data", "pkg.rpm", b"data", "pkg2.rpm", PipProvider()
@@ -796,7 +796,7 @@ def _rubygems_versions_response(package: str, versions: list[tuple[str, str]]) -
 
 
 def test_extract_gem_to_dir(tmp_path):
-    from activities.ecosystems.rubygems import RubyGemsProvider
+    from ecosystems.rubygems import RubyGemsProvider
 
     gem_bytes = _make_gem({"lib/my_gem.rb": "puts 'hello'"})
     RubyGemsProvider().extract_archive(gem_bytes, "mygem-1.0.0.gem", str(tmp_path))
@@ -804,7 +804,7 @@ def test_extract_gem_to_dir(tmp_path):
 
 
 def test_extract_gem_no_data_tarball_raises():
-    from activities.ecosystems.rubygems import RubyGemsProvider
+    from ecosystems.rubygems import RubyGemsProvider
     import tempfile
 
     # Build outer tar with no data.tar.gz member
@@ -951,7 +951,7 @@ def test_build_diff_dep_count_zero_when_deps_removed(tmp_path):
 
 
 def test_classifier_flags_large_dep_increase():
-    from activities.classifier import _rule_based
+    from classifiers import _rule_based
 
     signals = PackageSignals(
         ecosystem="npm",
@@ -969,7 +969,7 @@ def test_classifier_flags_large_dep_increase():
 
 
 def test_classifier_no_flag_for_small_dep_increase():
-    from activities.classifier import _rule_based
+    from classifiers import _rule_based
 
     signals = PackageSignals(
         ecosystem="npm",
@@ -988,7 +988,7 @@ def test_classifier_no_flag_for_small_dep_increase():
 
 def test_compute_returns_new_dependency_count_field():
     """DiffSignals has new_dependency_count defaulting to 0."""
-    from activities.models import DiffSignals
+    from models import DiffSignals
 
     sig = DiffSignals(diff_summary="ok", diff_size_bytes=10, new_dependency_count=4)
     assert sig.new_dependency_count == 4
@@ -1112,7 +1112,7 @@ def test_diff_added_lines_extracts_only_additions():
 
 
 def test_classifier_flags_network_calls_in_lib():
-    from activities.classifier import _rule_based
+    from classifiers import _rule_based
 
     signals = PackageSignals(
         ecosystem="rubygems",
@@ -1205,7 +1205,7 @@ def test_has_binary_content_high_non_ascii(tmp_path):
 
 
 def test_classifier_flags_binary_data_added():
-    from activities.classifier import _rule_based
+    from classifiers import _rule_based
 
     signals = PackageSignals(
         ecosystem="rubygems",
@@ -1326,7 +1326,7 @@ def test_build_diff_flags_git_url_dep(tmp_path):
 
 
 def test_classifier_flags_git_url_dependency():
-    from activities.classifier import _rule_based
+    from classifiers import _rule_based
 
     signals = PackageSignals(
         ecosystem="npm",
@@ -1440,7 +1440,7 @@ def test_build_diff_flags_obfuscated_new_file(tmp_path):
 
 
 def test_classifier_flags_obfuscated_code():
-    from activities.classifier import _rule_based
+    from classifiers import _rule_based
 
     signals = PackageSignals(
         ecosystem="npm",
@@ -2479,9 +2479,7 @@ async def test_get_vcs_repo_for_package_npm():
     respx.get("https://registry.npmjs.org/lodash/4.17.21").mock(
         return_value=httpx.Response(
             200,
-            json={
-                "repository": {"type": "git", "url": "https://github.com/lodash/lodash.git"}
-            },
+            json={"repository": {"type": "git", "url": "https://github.com/lodash/lodash.git"}},
         )
     )
     import httpx as _httpx
@@ -2515,9 +2513,7 @@ async def test_compare_artifact_to_source_no_files():
 @respx.mock
 async def test_compare_artifact_to_source_no_vcs_repo():
     """PyPI 404 for metadata → VCS lookup fails → (False, []) gracefully."""
-    respx.get("https://pypi.org/pypi/private-pkg/1.0/json").mock(
-        return_value=httpx.Response(404)
-    )
+    respx.get("https://pypi.org/pypi/private-pkg/1.0/json").mock(return_value=httpx.Response(404))
     import httpx as _httpx
 
     async with _httpx.AsyncClient() as client:

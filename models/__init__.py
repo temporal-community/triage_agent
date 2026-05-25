@@ -4,9 +4,9 @@ from pydantic import BaseModel, Field, field_validator
 
 def _validate_ecosystem_name(v: str) -> str:
     try:
-        from activities.ecosystems import get_provider
+        from ecosystems import get_provider
     except Exception:
-        # The Temporal workflow sandbox blocks httpx (imported by activities.ecosystems).
+        # The Temporal workflow sandbox blocks httpx (imported by ecosystems).
         # Skip validation — the ecosystem name was already validated at the webhook boundary.
         return v
     try:

@@ -13,8 +13,8 @@ import respx
 from temporalio.exceptions import ApplicationError
 from temporalio.testing import ActivityEnvironment
 
-from activities.platform.github import GitHubPlatformClient, _is_ci_infra_file
-from activities.models import PRContext, PRFilesSignals, Verdict
+from platforms.github import GitHubPlatformClient, _is_ci_infra_file
+from models import PRContext, PRFilesSignals, Verdict
 
 
 # ---------------------------------------------------------------------------

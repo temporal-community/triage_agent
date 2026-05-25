@@ -24,7 +24,7 @@ Ecosystem detection (in priority order):
 import re
 from dataclasses import dataclass
 
-from activities.ecosystems import get_dependabot_slug_map
+from ecosystems import get_dependabot_slug_map
 
 # Renovate embeds manager/datasource names in branch prefixes when users customize
 # branchName templates (e.g. renovate/npm-lodash-4.x, renovate/python-requests-2.x).

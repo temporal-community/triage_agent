@@ -13,7 +13,7 @@ import respx
 from temporalio.exceptions import ApplicationError
 from temporalio.testing import ActivityEnvironment
 
-from activities.ecosystems.cargo import CargoProvider
+from ecosystems.cargo import CargoProvider
 
 _API = "https://crates.io/api/v1/crates"
 _NOW = datetime.now(timezone.utc)
@@ -266,7 +266,7 @@ async def test_fetch_release_non_200_returns_empty():
 
 
 def test_cargo_provider_auto_discovered():
-    from activities.ecosystems import get_provider
+    from ecosystems import get_provider
 
     provider = get_provider("cargo")
     assert isinstance(provider, CargoProvider)

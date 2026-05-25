@@ -14,7 +14,7 @@ import respx
 from temporalio.exceptions import ApplicationError
 from temporalio.testing import ActivityEnvironment
 
-from activities.ecosystems.maven import MavenProvider, _parse_pom
+from ecosystems.maven import MavenProvider, _parse_pom
 
 _CENTRAL = "https://repo1.maven.org/maven2"
 _SEARCH = "https://search.maven.org/solrsearch/select"

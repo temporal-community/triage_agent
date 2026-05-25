@@ -21,7 +21,7 @@ from typing import Protocol
 
 import httpx
 
-from activities.models import PRContext, PackageSignals, Verdict
+from models import PRContext, PackageSignals, Verdict
 
 
 class NotificationChannel(Protocol):
@@ -44,7 +44,7 @@ class PlatformCommentChannel:
         verdict: Verdict,
         signals: PackageSignals | None = None,
     ) -> None:
-        from activities.platform import get_platform_client
+        from platforms import get_platform_client
 
         await get_platform_client(pr).comment(pr, verdict)
 

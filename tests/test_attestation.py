@@ -10,7 +10,7 @@ import respx
 from temporalio.testing import ActivityEnvironment
 
 from activities.attestation import check as attestation_check
-from activities.models import (
+from models import (
     AttestationSignals,
     PackageSignals,
     DiffSignals,
@@ -343,7 +343,7 @@ async def test_rubygems_attestation_returns_empty():
 
 
 def test_rule_based_classifier_flags_publisher_changed():
-    from activities.classifier import _rule_based
+    from classifiers import _rule_based
 
     signals = PackageSignals(
         ecosystem="pip",
@@ -422,7 +422,7 @@ async def test_publisher_account_age_none_without_token(monkeypatch):
 
 
 def test_rule_based_classifier_flags_young_publisher_account():
-    from activities.classifier import _rule_based
+    from classifiers import _rule_based
 
     signals = PackageSignals(
         ecosystem="npm",
@@ -442,7 +442,7 @@ def test_rule_based_classifier_flags_young_publisher_account():
 
 
 def test_rule_based_classifier_install_script_added_is_red():
-    from activities.classifier import _rule_based
+    from classifiers import _rule_based
 
     signals = PackageSignals(
         ecosystem="pip",
@@ -457,7 +457,7 @@ def test_rule_based_classifier_install_script_added_is_red():
 
 
 def test_rule_based_classifier_install_script_changed_is_yellow():
-    from activities.classifier import _rule_based
+    from classifiers import _rule_based
 
     signals = PackageSignals(
         ecosystem="pip",
@@ -586,7 +586,7 @@ def _signals_with_attestation(**overrides):
 
 def test_rule_based_repo_mismatch_is_red():
     """publisher_repo != metadata_repo with attestation → automatic RED."""
-    from activities.classifier import _rule_based
+    from classifiers import _rule_based
 
     signals = _signals_with_attestation(
         publisher_repo="attacker/evil-fork",
@@ -602,7 +602,7 @@ def test_rule_based_repo_mismatch_is_red():
 
 def test_rule_based_repo_mismatch_case_insensitive():
     """Comparison ignores case — same repo spelled differently is not a mismatch."""
-    from activities.classifier import _rule_based
+    from classifiers import _rule_based
 
     signals = _signals_with_attestation(
         publisher_repo="PSF/Requests",
@@ -614,7 +614,7 @@ def test_rule_based_repo_mismatch_case_insensitive():
 
 def test_rule_based_no_mismatch_when_metadata_repo_none():
     """No mismatch flag when metadata_repo is absent (no GitHub URL in registry metadata)."""
-    from activities.classifier import _rule_based
+    from classifiers import _rule_based
 
     signals = _signals_with_attestation(metadata_repo=None)
     verdict = _rule_based(signals)
@@ -623,7 +623,7 @@ def test_rule_based_no_mismatch_when_metadata_repo_none():
 
 def test_rule_based_no_mismatch_when_no_attestation():
     """Mismatch check is skipped when has_attestation=False — no provenance to compare against."""
-    from activities.classifier import _rule_based
+    from classifiers import _rule_based
 
     signals = _signals_with_attestation(
         has_attestation=False,
@@ -636,7 +636,7 @@ def test_rule_based_no_mismatch_when_no_attestation():
 
 def test_rule_based_non_tag_source_ref_is_yellow():
     """source_ref pointing to a branch (not a tag) with attestation → YELLOW flag."""
-    from activities.classifier import _rule_based
+    from classifiers import _rule_based
 
     signals = _signals_with_attestation(source_ref="refs/heads/main")
     verdict = _rule_based(signals)
@@ -647,7 +647,7 @@ def test_rule_based_non_tag_source_ref_is_yellow():
 
 def test_rule_based_tag_source_ref_not_flagged():
     """Proper refs/tags/... source_ref should not be flagged."""
-    from activities.classifier import _rule_based
+    from classifiers import _rule_based
 
     signals = _signals_with_attestation(source_ref="refs/tags/v1.1.0")
     verdict = _rule_based(signals)
@@ -656,7 +656,7 @@ def test_rule_based_tag_source_ref_not_flagged():
 
 def test_rule_based_non_tag_source_ref_no_flag_without_attestation():
     """source_ref check is skipped when has_attestation=False."""
-    from activities.classifier import _rule_based
+    from classifiers import _rule_based
 
     signals = _signals_with_attestation(
         has_attestation=False,
@@ -668,7 +668,7 @@ def test_rule_based_non_tag_source_ref_no_flag_without_attestation():
 
 def test_rule_based_publisher_changed_same_repo_is_lower_concern():
     """publisher_changed=True where new repo matches metadata_repo → 'CI migration' flag text."""
-    from activities.classifier import _rule_based
+    from classifiers import _rule_based
 
     signals = _signals_with_attestation(
         publisher_changed=True,

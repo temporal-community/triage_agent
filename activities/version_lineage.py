@@ -14,8 +14,8 @@ from datetime import datetime, timezone
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
-from activities.ecosystems import detect_stale_version_line, parse_upload_time
-from activities.models import VersionLineSignals
+from ecosystems import detect_stale_version_line, parse_upload_time
+from models import VersionLineSignals
 from helpers.cache import ActivityCache
 from helpers.http import get_client
 

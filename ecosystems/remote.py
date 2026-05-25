@@ -9,7 +9,7 @@ own stack. The core project defines the HTTP protocol; bridge packages are ~10 l
 
     # dependency_scout_drupal/__init__.py
     import re
-    from activities.ecosystems.remote import RemoteEcosystemProvider
+    from ecosystems.remote import RemoteEcosystemProvider
 
     class DrupalProvider(RemoteEcosystemProvider):
         ecosystem_name  = "drupal"
@@ -35,8 +35,8 @@ from typing import Any
 import httpx
 from temporalio.exceptions import ApplicationError
 
-from activities.ecosystems import MAX_EXTRACT_BYTES, validate_archive_url
-from activities.models import (
+from ecosystems import MAX_EXTRACT_BYTES, validate_archive_url
+from models import (
     AttestationSignals,
     MaintainerSignals,
     PyPISignals,

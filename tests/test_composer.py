@@ -15,7 +15,7 @@ import respx
 from temporalio.exceptions import ApplicationError
 from temporalio.testing import ActivityEnvironment
 
-from activities.ecosystems.composer import ComposerProvider
+from ecosystems.composer import ComposerProvider
 
 _PACKAGIST = "https://packagist.org"
 _CODELOAD = "https://codeload.github.com"

@@ -17,7 +17,7 @@ from temporalio.contrib.pydantic import pydantic_data_converter
 from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Worker
 
-from activities.models import (
+from models import (
     AttestationSignals,
     DepsDevSignals,
     DiffSignals,

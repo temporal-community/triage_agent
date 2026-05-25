@@ -9,7 +9,7 @@ from temporalio.testing import ActivityEnvironment
 
 from activities.depsdev import fetch as depsdev_fetch
 from activities.scorecard import fetch as scorecard_fetch
-from activities.models import (
+from models import (
     PackageSignals,
     PyPISignals,
     SocketSignals,
@@ -216,7 +216,7 @@ def _base_signals(**overrides):
 
 def test_classifier_deprecated_is_yellow():
     """is_deprecated=True → YELLOW flag containing 'deprecated'."""
-    from activities.classifier import _rule_based
+    from classifiers import _rule_based
 
     signals = _base_signals(is_deprecated=True, deprecated_reason="Use newpkg instead")
     verdict = _rule_based(signals)
@@ -227,7 +227,7 @@ def test_classifier_deprecated_is_yellow():
 
 def test_classifier_scorecard_maintained_zero_is_yellow():
     """scorecard_maintained=0 → YELLOW flag containing 'unmaintained'."""
-    from activities.classifier import _rule_based
+    from classifiers import _rule_based
 
     signals = _base_signals(scorecard_maintained=0, scorecard_repo="owner/repo")
     verdict = _rule_based(signals)
@@ -238,7 +238,7 @@ def test_classifier_scorecard_maintained_zero_is_yellow():
 
 def test_classifier_scorecard_dangerous_workflow_zero_is_yellow():
     """scorecard_dangerous_workflow=0 → YELLOW flag containing 'dangerous'."""
-    from activities.classifier import _rule_based
+    from classifiers import _rule_based
 
     signals = _base_signals(scorecard_dangerous_workflow=0)
     verdict = _rule_based(signals)
@@ -248,7 +248,7 @@ def test_classifier_scorecard_dangerous_workflow_zero_is_yellow():
 
 def test_classifier_scorecard_token_permissions_low_is_yellow():
     """scorecard_token_permissions < 5 → YELLOW flag."""
-    from activities.classifier import _rule_based
+    from classifiers import _rule_based
 
     signals = _base_signals(scorecard_token_permissions=3)
     verdict = _rule_based(signals)
@@ -258,7 +258,7 @@ def test_classifier_scorecard_token_permissions_low_is_yellow():
 
 def test_classifier_scorecard_token_permissions_at_boundary():
     """scorecard_token_permissions=5 → not flagged."""
-    from activities.classifier import _rule_based
+    from classifiers import _rule_based
 
     signals = _base_signals(scorecard_token_permissions=5)
     verdict = _rule_based(signals)
@@ -267,7 +267,7 @@ def test_classifier_scorecard_token_permissions_at_boundary():
 
 def test_classifier_scorecard_maintained_nonzero_not_flagged():
     """scorecard_maintained=5 → not flagged as unmaintained."""
-    from activities.classifier import _rule_based
+    from classifiers import _rule_based
 
     signals = _base_signals(scorecard_maintained=5)
     verdict = _rule_based(signals)
@@ -276,7 +276,7 @@ def test_classifier_scorecard_maintained_nonzero_not_flagged():
 
 def test_classifier_deprecated_no_reason():
     """is_deprecated=True with no reason → still YELLOW, no colon/None in flag."""
-    from activities.classifier import _rule_based
+    from classifiers import _rule_based
 
     signals = _base_signals(is_deprecated=True)
     verdict = _rule_based(signals)

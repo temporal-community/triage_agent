@@ -13,7 +13,7 @@ from __future__ import annotations
 import os
 from typing import Any, Protocol
 
-from activities.models import PRContext, RepoConfig
+from models import PRContext, RepoConfig
 
 
 class ConfigProvider(Protocol):

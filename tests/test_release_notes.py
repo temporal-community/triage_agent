@@ -8,9 +8,9 @@ import pytest
 import respx
 from temporalio.testing import ActivityEnvironment
 
-from activities.ecosystems import parse_github_repo
+from ecosystems import parse_github_repo
 from activities.release_notes import check as release_check
-from activities.models import (
+from models import (
     ReleaseSignals,
     PackageSignals,
     ReleaseAgeSignals,
@@ -571,7 +571,7 @@ async def test_release_tag_no_regression_when_both_unsigned():
 
 
 def test_rule_based_flags_possible_rerelease():
-    from activities.classifier import _rule_based
+    from classifiers import _rule_based
 
     signals = PackageSignals(
         ecosystem="pip",
@@ -587,7 +587,7 @@ def test_rule_based_flags_possible_rerelease():
 
 
 def test_rule_based_flags_large_timestamp_skew():
-    from activities.classifier import _rule_based
+    from classifiers import _rule_based
 
     signals = PackageSignals(
         ecosystem="pip",
@@ -603,7 +603,7 @@ def test_rule_based_flags_large_timestamp_skew():
 
 
 def test_rule_based_flags_tag_signing_regression():
-    from activities.classifier import _rule_based
+    from classifiers import _rule_based
 
     signals = PackageSignals(
         ecosystem="pip",

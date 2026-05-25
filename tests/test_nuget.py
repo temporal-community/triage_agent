@@ -14,7 +14,7 @@ import respx
 from temporalio.exceptions import ApplicationError
 from temporalio.testing import ActivityEnvironment
 
-from activities.ecosystems.nuget import NuGetProvider, _fetch_catalog_entry, _parse_owners
+from ecosystems.nuget import NuGetProvider, _fetch_catalog_entry, _parse_owners
 
 _REG = "https://api.nuget.org/v3/registration5"
 _FLAT = "https://api.nuget.org/v3-flatcontainer"
@@ -544,7 +544,7 @@ async def test_nuget_version_lineage_404_raises():
 
 
 def test_nuget_name_accepted_by_webhook_validator():
-    from activities.ecosystems.nuget import NuGetProvider
+    from ecosystems.nuget import NuGetProvider
 
     name_re = NuGetProvider.name_re
     assert name_re.match("Newtonsoft.Json")

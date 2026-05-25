@@ -4,7 +4,7 @@ from urllib.parse import quote
 
 from temporalio import activity
 
-from activities.models import ScorecardSignals
+from models import ScorecardSignals
 from helpers.cache import ActivityCache
 from helpers.http import get_client
 
@@ -32,7 +32,7 @@ def _find_vcs_repo(data: dict) -> tuple[str, str] | None:
 
     Scorecard API only supports GitHub; non-GitHub repos return None for graceful degradation.
     """
-    from activities.ecosystems import parse_vcs_repo
+    from ecosystems import parse_vcs_repo
 
     for entry in data.get("relatedProjects", []):
         project_id = entry.get("projectKey", {}).get("id", "")

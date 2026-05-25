@@ -12,8 +12,8 @@ import os
 
 from temporalio import activity
 
-from activities.platform import get_platform_client
-from activities.models import PRContext, PRFilesSignals, RepoConfig, Verdict
+from platforms import get_platform_client
+from models import PRContext, PRFilesSignals, RepoConfig, Verdict
 from helpers.config_provider import get_config_provider
 from helpers.notification import get_notification_channels
 

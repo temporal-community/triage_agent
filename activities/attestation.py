@@ -1,5 +1,5 @@
-from activities.ecosystems import get_provider
-from activities.models import AttestationSignals
+from ecosystems import get_provider
+from models import AttestationSignals
 from helpers.cache import ActivityCache
 from temporalio import activity
 

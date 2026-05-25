@@ -13,7 +13,7 @@ import respx
 from temporalio.exceptions import ApplicationError
 from temporalio.testing import ActivityEnvironment
 
-from activities.ecosystems.remote import RemoteEcosystemProvider
+from ecosystems.remote import RemoteEcosystemProvider
 
 _BASE = "https://bridge.example.com/triage/v1"
 
@@ -233,7 +233,7 @@ async def test_fetch_release_exists():
 
 
 def test_remote_base_class_not_in_registry():
-    from activities.ecosystems import _build_provider_registry
+    from ecosystems import _build_provider_registry
 
     registry = _build_provider_registry()
     # The base class has no ecosystem_name value, so it must not be registered

@@ -1,6 +1,6 @@
 import pytest
 from helpers.comment_formatter import format_comment, _sanitize_reasoning
-from activities.models import (
+from models import (
     PRContext,
     PackageSignals,
     Verdict,

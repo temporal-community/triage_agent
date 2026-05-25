@@ -3,7 +3,7 @@ PlatformClient Protocol and factory.
 
 A PlatformClient handles all PR-management operations for a specific platform
 (GitHub, GitLab, …).  Add a new platform by:
-  1. Implementing PlatformClient in activities/platform/{name}.py
+  1. Implementing PlatformClient in platforms/{name}.py
   2. Adding a branch to get_platform_client() below
 """
 
@@ -12,7 +12,7 @@ from __future__ import annotations
 import os
 from typing import Protocol
 
-from activities.models import PRContext, PRFilesSignals, Verdict
+from models import PRContext, PRFilesSignals, Verdict
 
 
 class PlatformClient(Protocol):
@@ -26,11 +26,11 @@ class PlatformClient(Protocol):
 
 def get_platform_client(pr: PRContext) -> PlatformClient:
     if pr.platform == "github":
-        from activities.platform.github import GitHubPlatformClient
+        from platforms.github import GitHubPlatformClient
 
         return GitHubPlatformClient(installation_id=pr.installation_id)
     if pr.platform == "gitlab":
-        from activities.platform.gitlab import GitLabPlatformClient
+        from platforms.gitlab import GitLabPlatformClient
 
         base_url = os.environ.get("GITLAB_BASE_URL", "https://gitlab.com")
         return GitLabPlatformClient(base_url=base_url)

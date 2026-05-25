@@ -12,7 +12,7 @@ import respx
 from temporalio.exceptions import ApplicationError
 from temporalio.testing import ActivityEnvironment
 
-from activities.ecosystems.gomod import GoModulesProvider, _escape
+from ecosystems.gomod import GoModulesProvider, _escape
 
 _PROXY = "https://proxy.golang.org"
 _NOW = datetime.now(timezone.utc)
@@ -245,12 +245,12 @@ def test_name_re_rejects_invalid(name):
 
 
 def test_go_provider_auto_discovered():
-    from activities.ecosystems import get_provider
+    from ecosystems import get_provider
 
     assert isinstance(get_provider("go"), GoModulesProvider)
 
 
 def test_dependabot_slug_map_includes_go():
-    from activities.ecosystems import get_dependabot_slug_map
+    from ecosystems import get_dependabot_slug_map
 
     assert get_dependabot_slug_map().get("go_modules") == "go"

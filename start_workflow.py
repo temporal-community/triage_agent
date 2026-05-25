@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 from temporalio.client import Client, TLSConfig
 from temporalio.contrib.pydantic import pydantic_data_converter
 
-from activities.models import PRContext
+from models import PRContext
 from workflows.pr_action_workflow import PRActionWorkflow
 
 load_dotenv()

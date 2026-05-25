@@ -4,7 +4,7 @@ from urllib.parse import quote
 
 from temporalio import activity
 
-from activities.models import DepsDevSignals
+from models import DepsDevSignals
 from helpers.cache import ActivityCache
 from helpers.http import get_client
 
