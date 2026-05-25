@@ -4,10 +4,10 @@ Each ecosystem provider translates a package registry's APIs into the seven sign
 
 ## Coverage
 
-| Ecosystem | `ecosystem_name` | Language(s) | Registry | Attestations | Notes |
+| Ecosystem | `ecosystem_name` | Language(s) | Registry | Build-origin verified? | Notes |
 |---|---|---|---|---|---|
-| pip (PyPI) | `pip` | Python | pypi.org | Yes | Cryptographic proof of where the package was built, verified via Sigstore |
-| npm | `npm` | JavaScript / TypeScript / Node.js | registry.npmjs.org | Yes | Same provenance scheme as pip |
+| pip (PyPI) | `pip` | Python | pypi.org | Yes | Registry can prove the package was built by a specific CI pipeline, not uploaded manually |
+| npm | `npm` | JavaScript / TypeScript / Node.js | registry.npmjs.org | Yes | Same build-origin verification as pip |
 | Cargo | `cargo` | Rust | crates.io | No | |
 | RubyGems | `rubygems` | Ruby | rubygems.org | No | Archive is nested `.gem` → `data.tar.gz` |
 | Go modules | `go` | Go | proxy.golang.org | No | GOPROXY URL encoding (`!` escaping for uppercase) |
@@ -15,7 +15,7 @@ Each ecosystem provider translates a package registry's APIs into the seven sign
 | NuGet | `nuget` | C# / .NET / F# | api.nuget.org | No | Registration pages may be paginated |
 | Composer | `composer` | PHP | packagist.org | No | Archives fetched from GitHub codeload |
 
-All eight providers implement all seven signal methods. "Attestations: No" means `fetch_attestations` returns `AttestationChecks(has_attestation=False)` — it doesn't fail, it just signals absence.
+All eight providers implement all seven signal methods. "Build-origin verified: No" means `fetch_attestations` returns `AttestationChecks(has_attestation=False)` — the registry simply doesn't support this yet, it's not a red flag.
 
 ## Signal methods
 
@@ -28,7 +28,7 @@ Each provider must implement:
 | `fetch_maintainer` | `MaintainerChecks` — whether a new maintainer was added for this version | Registry maintainer list |
 | `get_archive_url` | `(url, filename, sha256)` or `None` | Registry file index |
 | `extract_archive` | _(void)_ — extracts bytes to a dest dir | Archive bytes from `get_archive_url` |
-| `fetch_attestations` | `AttestationChecks` — SLSA/Sigstore provenance | Registry provenance endpoint |
+| `fetch_attestations` | `AttestationChecks` — whether the registry can prove which CI pipeline built this version | Registry provenance endpoint |
 | `fetch_release` | `ReleaseChecks` — GitHub release, tag signature, timing skew | GitHub/GitLab API |
 
 ## Adding a new built-in ecosystem
