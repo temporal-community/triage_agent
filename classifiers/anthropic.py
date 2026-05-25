@@ -1,4 +1,4 @@
-"""ClaudeClassifier — uses the Anthropic API to classify package signals."""
+"""AnthropicClassifier — uses the Anthropic API to classify package signals."""
 
 import os
 
@@ -11,7 +11,7 @@ from helpers.prompts import CLASSIFIER_SYSTEM
 from classifiers._helpers import _build_message, _rule_based
 
 
-class ClaudeClassifier:
+class AnthropicClassifier:
     """Uses the Anthropic API to classify with the configured Claude model."""
 
     async def classify(self, signals: PackageChecks) -> Verdict:

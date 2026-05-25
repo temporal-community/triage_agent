@@ -116,9 +116,7 @@ async def test_comment_body_contains_verdict_badge(client, pr, verdict, with_tok
 
 @respx.mock
 async def test_comment_401_raises_non_retryable(client, pr, verdict, with_token):
-    respx.post(f"{BASE_URL}/merge_requests/{PR_NUM}/notes").mock(
-        return_value=httpx.Response(401)
-    )
+    respx.post(f"{BASE_URL}/merge_requests/{PR_NUM}/notes").mock(return_value=httpx.Response(401))
     env = ActivityEnvironment()
     with pytest.raises(ApplicationError) as exc_info:
         await env.run(client.comment, pr, verdict)
@@ -291,7 +289,7 @@ async def test_request_review_resolves_usernames_and_updates_mr(client, pr, with
 async def test_request_review_skips_unknown_users(client, pr, with_token):
     respx.get(USERS_URL).mock(
         side_effect=[
-            httpx.Response(200, json=[]),          # nobody → no match
+            httpx.Response(200, json=[]),  # nobody → no match
             httpx.Response(200, json=[{"id": 202}]),  # bob → found
         ]
     )
@@ -352,10 +350,12 @@ async def test_check_pr_files_clean_mr_returns_empty(client, pr, with_token):
     respx.get(f"{BASE_URL}/merge_requests/{PR_NUM}/changes").mock(
         return_value=httpx.Response(
             200,
-            json={"changes": [
-                {"new_path": "requirements.txt"},
-                {"new_path": "requirements-dev.txt"},
-            ]},
+            json={
+                "changes": [
+                    {"new_path": "requirements.txt"},
+                    {"new_path": "requirements-dev.txt"},
+                ]
+            },
         )
     )
     env = ActivityEnvironment()
@@ -368,10 +368,12 @@ async def test_check_pr_files_detects_ci_yaml(client, pr, with_token):
     respx.get(f"{BASE_URL}/merge_requests/{PR_NUM}/changes").mock(
         return_value=httpx.Response(
             200,
-            json={"changes": [
-                {"new_path": "requirements.txt"},
-                {"new_path": ".gitlab-ci.yml"},
-            ]},
+            json={
+                "changes": [
+                    {"new_path": "requirements.txt"},
+                    {"new_path": ".gitlab-ci.yml"},
+                ]
+            },
         )
     )
     env = ActivityEnvironment()
@@ -384,11 +386,13 @@ async def test_check_pr_files_detects_multiple_suspicious_files(client, pr, with
     respx.get(f"{BASE_URL}/merge_requests/{PR_NUM}/changes").mock(
         return_value=httpx.Response(
             200,
-            json={"changes": [
-                {"new_path": "package.json"},
-                {"new_path": "Dockerfile"},
-                {"new_path": "deploy.sh"},
-            ]},
+            json={
+                "changes": [
+                    {"new_path": "package.json"},
+                    {"new_path": "Dockerfile"},
+                    {"new_path": "deploy.sh"},
+                ]
+            },
         )
     )
     env = ActivityEnvironment()
@@ -398,9 +402,7 @@ async def test_check_pr_files_detects_multiple_suspicious_files(client, pr, with
 
 @respx.mock
 async def test_check_pr_files_401_raises_non_retryable(client, pr, with_token):
-    respx.get(f"{BASE_URL}/merge_requests/{PR_NUM}/changes").mock(
-        return_value=httpx.Response(401)
-    )
+    respx.get(f"{BASE_URL}/merge_requests/{PR_NUM}/changes").mock(return_value=httpx.Response(401))
     env = ActivityEnvironment()
     with pytest.raises(ApplicationError) as exc_info:
         await env.run(client.check_pr_files, pr)
@@ -412,42 +414,48 @@ async def test_check_pr_files_401_raises_non_retryable(client, pr, with_token):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("path", [
-    ".gitlab-ci.yml",
-    ".gitlab-ci.yaml",
-    ".gitlab/pipeline.yml",
-    ".github/workflows/ci.yml",
-    ".circleci/config.yml",
-    ".buildkite/pipeline.yml",
-    "Jenkinsfile",
-    ".travis.yml",
-    "Makefile",
-    "makefile",
-    "GNUmakefile",
-    "deploy.sh",
-    "build.bash",
-    "install.ps1",
-    "run.bat",
-    "run.cmd",
-    "Dockerfile",
-    "Dockerfile.prod",
-    "dockerfile",
-    "docker-compose.yml",
-    ".dockerignore",
-])
+@pytest.mark.parametrize(
+    "path",
+    [
+        ".gitlab-ci.yml",
+        ".gitlab-ci.yaml",
+        ".gitlab/pipeline.yml",
+        ".github/workflows/ci.yml",
+        ".circleci/config.yml",
+        ".buildkite/pipeline.yml",
+        "Jenkinsfile",
+        ".travis.yml",
+        "Makefile",
+        "makefile",
+        "GNUmakefile",
+        "deploy.sh",
+        "build.bash",
+        "install.ps1",
+        "run.bat",
+        "run.cmd",
+        "Dockerfile",
+        "Dockerfile.prod",
+        "dockerfile",
+        "docker-compose.yml",
+        ".dockerignore",
+    ],
+)
 def test_is_ci_infra_file_detects_suspicious(path):
     assert _is_ci_infra_file(path) is True
 
 
-@pytest.mark.parametrize("path", [
-    "requirements.txt",
-    "package.json",
-    "Gemfile",
-    "pyproject.toml",
-    "src/main.py",
-    "lib/utils.js",
-    "README.md",
-])
+@pytest.mark.parametrize(
+    "path",
+    [
+        "requirements.txt",
+        "package.json",
+        "Gemfile",
+        "pyproject.toml",
+        "src/main.py",
+        "lib/utils.js",
+        "README.md",
+    ],
+)
 def test_is_ci_infra_file_passes_dep_files(path):
     assert _is_ci_infra_file(path) is False
 
@@ -487,6 +495,7 @@ async def test_platform_activity_comment_delegates(pr, verdict, with_token):
         return_value=httpx.Response(201, json={})
     )
     from activities.platform_activities import comment
+
     env = ActivityEnvironment()
     await env.run(comment, pr, verdict)
 
@@ -500,6 +509,7 @@ async def test_platform_activity_merge_pr_delegates(pr, with_token):
         return_value=httpx.Response(200, json={})
     )
     from activities.platform_activities import merge_pr
+
     env = ActivityEnvironment()
     await env.run(merge_pr, pr)
 
@@ -509,20 +519,18 @@ async def test_platform_activity_close_pr_delegates(pr, with_token):
     respx.post(f"{BASE_URL}/merge_requests/{PR_NUM}/notes").mock(
         return_value=httpx.Response(201, json={})
     )
-    respx.put(f"{BASE_URL}/merge_requests/{PR_NUM}").mock(
-        return_value=httpx.Response(200, json={})
-    )
+    respx.put(f"{BASE_URL}/merge_requests/{PR_NUM}").mock(return_value=httpx.Response(200, json={}))
     from activities.platform_activities import close_pr
+
     env = ActivityEnvironment()
     await env.run(close_pr, pr, "test reason")
 
 
 @respx.mock
 async def test_platform_activity_label_delegates(pr, with_token):
-    respx.put(f"{BASE_URL}/merge_requests/{PR_NUM}").mock(
-        return_value=httpx.Response(200, json={})
-    )
+    respx.put(f"{BASE_URL}/merge_requests/{PR_NUM}").mock(return_value=httpx.Response(200, json={}))
     from activities.platform_activities import label
+
     env = ActivityEnvironment()
     await env.run(label, pr, "triage-red")
 
@@ -530,10 +538,9 @@ async def test_platform_activity_label_delegates(pr, with_token):
 @respx.mock
 async def test_platform_activity_request_review_delegates(pr, with_token):
     respx.get(USERS_URL).mock(return_value=httpx.Response(200, json=[{"id": 1}]))
-    respx.put(f"{BASE_URL}/merge_requests/{PR_NUM}").mock(
-        return_value=httpx.Response(200, json={})
-    )
+    respx.put(f"{BASE_URL}/merge_requests/{PR_NUM}").mock(return_value=httpx.Response(200, json={}))
     from activities.platform_activities import request_review
+
     env = ActivityEnvironment()
     await env.run(request_review, pr, ["alice"])
 
@@ -544,6 +551,7 @@ async def test_platform_activity_check_pr_files_delegates(pr, with_token):
         return_value=httpx.Response(200, json={"changes": []})
     )
     from activities.platform_activities import check_pr_files
+
     env = ActivityEnvironment()
     result = await env.run(check_pr_files, pr)
     assert result.unexpected_files == []

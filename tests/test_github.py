@@ -569,9 +569,7 @@ async def test_slack_channel_uses_gitlab_url_for_gitlab_pr(verdict):
     route = respx.post("https://hooks.slack.com/test").mock(return_value=httpx.Response(200))
     env = ActivityEnvironment()
     await env.run(
-        lambda: SlackWebhookChannel("https://hooks.slack.com/test").send_verdict(
-            gitlab_pr, verdict
-        )
+        lambda: SlackWebhookChannel("https://hooks.slack.com/test").send_verdict(gitlab_pr, verdict)
     )
     assert route.called
     body = route.calls[0].request.content.decode()
@@ -586,9 +584,7 @@ async def test_webhook_channel_posts_json_payload(pr, verdict):
 
     route = respx.post("https://example.com/hook").mock(return_value=httpx.Response(200))
     env = ActivityEnvironment()
-    await env.run(
-        lambda: WebhookChannel("https://example.com/hook").send_verdict(pr, verdict)
-    )
+    await env.run(lambda: WebhookChannel("https://example.com/hook").send_verdict(pr, verdict))
     assert route.called
     import json
 
@@ -606,9 +602,7 @@ async def test_webhook_channel_failure_is_non_fatal(pr, verdict):
     respx.post("https://example.com/hook").mock(return_value=httpx.Response(503))
     env = ActivityEnvironment()
     # Should not raise
-    await env.run(
-        lambda: WebhookChannel("https://example.com/hook").send_verdict(pr, verdict)
-    )
+    await env.run(lambda: WebhookChannel("https://example.com/hook").send_verdict(pr, verdict))
 
 
 @respx.mock
@@ -619,10 +613,10 @@ async def test_multi_channel_fans_out_to_all_channels(pr, verdict, with_pat):
     comment_route = respx.post(f"{BASE_URL}/issues/{PR_NUM}/comments").mock(
         return_value=httpx.Response(201, json={})
     )
-    slack_route = respx.post("https://hooks.slack.com/test").mock(
-        return_value=httpx.Response(200)
+    slack_route = respx.post("https://hooks.slack.com/test").mock(return_value=httpx.Response(200))
+    ch = MultiChannel(
+        [PlatformCommentChannel(), SlackWebhookChannel("https://hooks.slack.com/test")]
     )
-    ch = MultiChannel([PlatformCommentChannel(), SlackWebhookChannel("https://hooks.slack.com/test")])
     env = ActivityEnvironment()
     await env.run(lambda: ch.send_verdict(pr, verdict))
     assert comment_route.called

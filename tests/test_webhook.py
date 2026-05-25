@@ -525,9 +525,11 @@ async def test_webhook_no_github_secret_returns_500(monkeypatch):
 
     mock_tc = AsyncMock()
     import api.webhook as webhook_module
+
     monkeypatch.setattr(webhook_module, "_temporal_client", mock_tc)
 
     from api.webhook import app
+
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
         body = _dependabot_payload()

@@ -46,6 +46,14 @@
   desc: credential fabrication - chmod on .gem/credentials (GemStuffer May 2026)
 - pattern: Dir\.home[^\n]{0,60}(?:\.aws|\.ssh|\.npmrc)
   desc: credential file read via Dir.home in extconf.rb (BufferZoneCorp/GemStuffer Ruby gem install-time harvest)
+- pattern: 'system\('
+  desc: Ruby shell execution via system() in install hooks (extconf.rb attacks)
+- pattern: 'exec\s*\('
+  desc: Ruby exec() shell execution
+- pattern: 'Open3\.(capture|popen|pipeline)'
+  desc: Open3 shell execution (subprocess with captured I/O)
+- pattern: '\bIO\.popen\b'
+  desc: IO.popen shell execution
 .py:
 - pattern: \brequests\.(get|post|put|delete|head|patch|request)\s*\(
   desc: requests library HTTP call
@@ -101,6 +109,10 @@
   desc: public IP oracle used to fingerprint victim before C2 beacon (Coruna art-template May 2026)
 - pattern: api\.svix\.com/ingest
   desc: Svix webhook SaaS as C2 dead-drop (TanStack brandsquat Apr 2026)
+- pattern: '\bos\.system\s*\('
+  desc: os.system() shell execution in library code
+- pattern: '\bctypes\.cdll\.LoadLibrary\b'
+  desc: loading native library at runtime (malware loading via ctypes)
 .js:
 - pattern: \bfetch\s*\(
   desc: fetch API outbound network call
@@ -264,6 +276,16 @@
   desc: PHP subprocess staging (Laravel Lang May 2026)
 - pattern: sys_get_temp_dir\s*\(\s*\)\s*\.\s*['\"]\/\.
   desc: write to hidden path inside sys_get_temp_dir() - payload staging (Laravel Lang May 2026)
+- pattern: '\beval\s*\('
+  desc: PHP eval() arbitrary code execution
+- pattern: '\bsystem\s*\('
+  desc: PHP system() shell execution
+- pattern: '\bpassthru\s*\('
+  desc: PHP passthru() shell execution with output
+- pattern: '\bshell_exec\s*\('
+  desc: PHP shell_exec() shell execution
+- pattern: '\bproc_open\s*\('
+  desc: PHP proc_open() shell process with I/O pipes
 .java:
 - pattern: \bHttpClient\b
   desc: Java HttpClient
@@ -275,6 +297,10 @@
   desc: Spring RestTemplate
 - pattern: \bWebClient\b
   desc: Spring WebClient
+- pattern: 'Runtime\.getRuntime\(\)\.exec\b'
+  desc: Java runtime exec - shell execution from library code
+- pattern: '\bProcessBuilder\b'
+  desc: Java ProcessBuilder - subprocess spawning
 .go:
 - pattern: \bhttp\.(Get|Post|Head)\s*\(
   desc: net/http outbound calls
@@ -310,6 +336,8 @@
   desc: disable checksum verification for all modules
 - pattern: \bos\.Setenv\s*\(\s*"GOMODCACHE"
   desc: redirect module cache to attacker-controlled path
+- pattern: '\bsyscall\.Exec\b'
+  desc: Go syscall.Exec - replaces process with new executable
 .rs:
 - pattern: \breqwest::(get|post|Client|blocking)\b
   desc: reqwest - most common Rust HTTP client

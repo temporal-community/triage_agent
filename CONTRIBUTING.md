@@ -191,7 +191,7 @@ Commit the updated files in `tests/fixtures/`. The CI `pytest` run will catch an
 
 ## Swapping the classifier
 
-The built-in classifiers (`ClaudeClassifier`, `RuleBasedClassifier`) are selected automatically based on whether `ANTHROPIC_API_KEY` is set. You can override either choice or supply your own engine.
+The built-in classifiers (`AnthropicClassifier`, `RuleBasedClassifier`) are selected automatically based on whether `ANTHROPIC_API_KEY` is set. You can override either choice or supply your own engine.
 
 **Force a built-in by name** (useful to pin rule-based even when a key is present):
 

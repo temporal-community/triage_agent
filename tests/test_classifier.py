@@ -329,12 +329,12 @@ async def test_rule_based_classifier_classifies(base_signals):
 
 async def test_claude_classifier_falls_back_to_rule_based_on_error(base_signals, monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
-    from classifiers import ClaudeClassifier
+    from classifiers import AnthropicClassifier
 
     client = MagicMock()
     client.messages.create = AsyncMock(side_effect=RuntimeError("outage"))
     with patch("classifiers.anthropic.anthropic.AsyncAnthropic", return_value=client):
-        verdict = await ClaudeClassifier().classify(base_signals)
+        verdict = await AnthropicClassifier().classify(base_signals)
     assert verdict.classification in ("green", "yellow", "red")
 
 
@@ -352,11 +352,11 @@ def test_get_classifier_defaults_to_rule_based_without_api_key(monkeypatch):
 
 
 def test_get_classifier_returns_claude_when_api_key_set(monkeypatch):
-    from classifiers import ClaudeClassifier, get_classifier
+    from classifiers import AnthropicClassifier, get_classifier
 
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
     monkeypatch.delenv("CLASSIFIER", raising=False)
-    assert isinstance(get_classifier(), ClaudeClassifier)
+    assert isinstance(get_classifier(), AnthropicClassifier)
 
 
 def test_get_classifier_builtin_rule_based_name(monkeypatch):
@@ -368,11 +368,11 @@ def test_get_classifier_builtin_rule_based_name(monkeypatch):
 
 
 def test_get_classifier_builtin_claude_name(monkeypatch):
-    from classifiers import ClaudeClassifier, get_classifier
+    from classifiers import AnthropicClassifier, get_classifier
 
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
     monkeypatch.setenv("CLASSIFIER", "claude")
-    assert isinstance(get_classifier(), ClaudeClassifier)
+    assert isinstance(get_classifier(), AnthropicClassifier)
 
 
 def test_get_classifier_unknown_name_falls_back(monkeypatch):
@@ -411,9 +411,9 @@ def test_get_classifier_returns_rule_based_without_key(monkeypatch):
 
 def test_get_classifier_returns_claude_with_key(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
-    from classifiers import get_classifier, ClaudeClassifier
+    from classifiers import get_classifier, AnthropicClassifier
 
-    assert isinstance(get_classifier(), ClaudeClassifier)
+    assert isinstance(get_classifier(), AnthropicClassifier)
 
 
 def test_rule_based_artifact_source_mismatch_is_red(base_signals):

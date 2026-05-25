@@ -245,9 +245,7 @@ async def test_fetch_tag_signature_compat_alias():
     # backward-compat alias should delegate to fetch_vcs_tag_signature("github", ...)
     from activities.ecosystems import fetch_tag_signature
 
-    respx.get(re.compile(r"https://api\.github\.com/.*")).mock(
-        return_value=httpx.Response(404)
-    )
+    respx.get(re.compile(r"https://api\.github\.com/.*")).mock(return_value=httpx.Response(404))
     result = await fetch_tag_signature("owner", "repo", "1.0.0", None)
     assert result is None
 
@@ -273,7 +271,7 @@ def test_build_release_signals_invalid_skew_date_caught():
 def test_build_release_signals_invalid_published_at_caught():
     release = {
         "created_at": "2024-01-15T12:00:00Z",
-        "published_at": "not-a-valid-date",   # different from created_at
+        "published_at": "not-a-valid-date",  # different from created_at
         "body": "",
         "author": {"login": "alice"},
     }
@@ -322,9 +320,7 @@ async def test_fetch_vcs_account_age_gitlab_no_token(monkeypatch):
 @respx.mock
 async def test_fetch_vcs_account_age_gitlab_empty_user_list(monkeypatch):
     monkeypatch.setenv("GITLAB_TOKEN", "test-token")
-    respx.get("https://gitlab.com/api/v4/users").mock(
-        return_value=httpx.Response(200, json=[])
-    )
+    respx.get("https://gitlab.com/api/v4/users").mock(return_value=httpx.Response(200, json=[]))
     result = await fetch_vcs_account_age("gitlab", "nobody")
     assert result is None
 

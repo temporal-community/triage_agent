@@ -6,7 +6,7 @@ A classifier takes all the checks gathered by `PackageTriageWorkflow` and produc
 
 | File | Class | What drives it | Required config |
 |---|---|---|---|
-| `anthropic.py` | `ClaudeClassifier` | Anthropic API | `ANTHROPIC_API_KEY`; optionally `ANTHROPIC_MODEL` (default: `claude-sonnet-4-6`) |
+| `anthropic.py` | `AnthropicClassifier` | Anthropic API | `ANTHROPIC_API_KEY`; optionally `ANTHROPIC_MODEL` (default: `claude-sonnet-4-6`) |
 | `openai.py` | `OpenAIClassifier` | OpenAI API | `OPENAI_API_KEY` and `OPENAI_MODEL` |
 | `ollama.py` | `OllamaClassifier` | Local [Ollama](https://ollama.com) instance — no API key needed | `OLLAMA_HOST` (default: `http://localhost:11434`) and `OLLAMA_MODEL` (default: `llama3.2`) |
 | `_helpers.py` | `RuleBasedClassifier` (via `__init__.py`) | Deterministic threshold rules — zero API keys, zero cost | Nothing |
@@ -16,7 +16,7 @@ A classifier takes all the checks gathered by `PackageTriageWorkflow` and produc
 At startup, `get_classifier()` in `__init__.py` picks one in this order:
 
 1. `CLASSIFIER` env var — matched against the `dependency_scout.classifiers` entry point group first, then built-in names (`claude`, `openai`, `ollama`, `rule_based`)
-2. `ANTHROPIC_API_KEY` is set → `ClaudeClassifier`
+2. `ANTHROPIC_API_KEY` is set → `AnthropicClassifier`
 3. Fallback → `RuleBasedClassifier`
 
 So zero config gets you a working (rule-based) system, and adding `ANTHROPIC_API_KEY` upgrades it to LLM classification automatically.
@@ -45,7 +45,7 @@ In `classifiers/__init__.py`, add an entry to `_BUILTIN_CLASSIFIERS`:
 
 ```python
 _BUILTIN_CLASSIFIERS: dict[str, type] = {
-    "claude":      ClaudeClassifier,
+    "claude":      AnthropicClassifier,
     "openai":      OpenAIClassifier,
     "ollama":      OllamaClassifier,
     "rule_based":  RuleBasedClassifier,

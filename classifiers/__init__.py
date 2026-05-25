@@ -2,7 +2,7 @@
 Classifier protocol — abstracts the decision engine that turns PackageChecks into a Verdict.
 
 Built-in classifiers:
-  ClaudeClassifier      — Anthropic API (ANTHROPIC_API_KEY + optional ANTHROPIC_MODEL)
+  AnthropicClassifier      — Anthropic API (ANTHROPIC_API_KEY + optional ANTHROPIC_MODEL)
   OpenAIClassifier      — OpenAI API via httpx (OPENAI_API_KEY + optional OPENAI_MODEL)
   OllamaClassifier      — local Ollama instance (OLLAMA_HOST + OLLAMA_MODEL, no key needed)
   RuleBasedClassifier   — deterministic threshold rules, zero API keys required
@@ -10,7 +10,7 @@ Built-in classifiers:
 Selection order:
   1. CLASSIFIER env var — name of a dependency_scout.classifiers entry point or a built-in name
      (claude, openai, ollama, rule_based)
-  2. ANTHROPIC_API_KEY set → ClaudeClassifier
+  2. ANTHROPIC_API_KEY set → AnthropicClassifier
   3. Fallback → RuleBasedClassifier
 
 Third-party classifiers register via entry point:
@@ -30,7 +30,7 @@ from temporalio import activity
 
 from models import PackageChecks, Verdict
 from classifiers._helpers import _build_message, _rule_based  # noqa: F401 — kept for back-compat
-from classifiers.anthropic import ClaudeClassifier
+from classifiers.anthropic import AnthropicClassifier
 from classifiers.openai import OpenAIClassifier
 from classifiers.ollama import OllamaClassifier
 
@@ -51,7 +51,7 @@ class RuleBasedClassifier:
 
 
 _BUILTIN_CLASSIFIERS: dict[str, type] = {
-    "claude": ClaudeClassifier,
+    "claude": AnthropicClassifier,
     "openai": OpenAIClassifier,
     "ollama": OllamaClassifier,
     "rule_based": RuleBasedClassifier,
@@ -63,7 +63,7 @@ def get_classifier() -> Classifier:
 
     Selection order:
     1. CLASSIFIER env var → look up in dependency_scout.classifiers entry points, then built-in names.
-    2. Default: ClaudeClassifier when ANTHROPIC_API_KEY is set, else RuleBasedClassifier.
+    2. Default: AnthropicClassifier when ANTHROPIC_API_KEY is set, else RuleBasedClassifier.
     """
     name = os.environ.get("CLASSIFIER")
     if name:
@@ -83,7 +83,7 @@ def get_classifier() -> Classifier:
 
     if not os.environ.get("ANTHROPIC_API_KEY"):
         return RuleBasedClassifier()
-    return ClaudeClassifier()
+    return AnthropicClassifier()
 
 
 @activity.defn(name="activities.classifier.classify")
