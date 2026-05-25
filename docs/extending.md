@@ -27,7 +27,7 @@ Inherit `EcosystemProviderBase` and register via entry points:
 ```toml
 # pyproject.toml in your plugin package
 [project.entry-points."dependency_scout.ecosystems"]
-drupal = "my_package:DrupalProvider"
+django = "my_package:DjangoProvider"
 ```
 
 ```python
@@ -35,11 +35,11 @@ import re
 from ecosystems import EcosystemProviderBase, validate_archive_url
 from models import AttestationChecks, MaintainerChecks, MetadataChecks, ReleaseAgeChecks, ReleaseChecks
 
-class DrupalProvider(EcosystemProviderBase):
-    ecosystem_name  = "drupal"
-    osv_name        = "Packagist"      # Drupal modules are indexed by OSV as Packagist packages
-    dependabot_slug = "drupal"         # Requires Renovate custom datasource — Dependabot has no native drupal ecosystem
-    name_re         = re.compile(r"^drupal/[a-z][a-z0-9_]*$")  # e.g. drupal/views, drupal/token
+class DjangoProvider(EcosystemProviderBase):
+    ecosystem_name  = "django"
+    osv_name        = "PyPI"           # Django packages are indexed by OSV as PyPI packages
+    dependabot_slug = "django"         # Requires Renovate custom datasource — Dependabot has no native django ecosystem
+    name_re         = re.compile(r"^django-[a-z][a-z0-9-]*$")  # e.g. django-crispy-forms, django-debug-toolbar
 
     async def fetch_metadata(self, package, old_version, new_version) -> MetadataChecks: ...
     async def fetch_release_age(self, package, new_version) -> ReleaseAgeChecks: ...
@@ -75,11 +75,39 @@ class DrupalProvider(RemoteEcosystemProvider):
 
 Your service must expose `POST {base_url}/{method_name}` endpoints. Each endpoint receives the method parameters as a JSON body and responds with the corresponding check model fields as JSON. The full request/response spec is in the docstrings in `ecosystems/remote.py`.
 
-**Note for Drupal specifically:** Drupal module source lives on [git.drupalcode.org](https://git.drupalcode.org), a self-hosted GitLab instance. Set `GITLAB_BASE_URL=https://git.drupalcode.org` and the built-in release-note and tag-signature checks will resolve against it automatically — no custom code needed for that part.
+```php
+<?php
+// PHP service (pseudo-code) — any framework works
+$router->post('/triage/v1/{method}', function (string $method, array $body): array {
+    return match ($method) {
+        'fetch_metadata'     => fetch_metadata($body),
+        'fetch_release_age'  => fetch_release_age($body),
+        'fetch_maintainer'   => fetch_maintainer($body),
+        'get_archive_url'    => get_archive_url($body),
+        'fetch_attestations' => fetch_attestations($body),
+        'fetch_release'      => fetch_release($body),
+        default              => throw new \RuntimeException("unknown method: $method"),
+    };
+});
+
+// Example: one method wrapping api.drupal.org
+function fetch_metadata(array $p): array {
+    $info = drupal_api("/api/projects/{$p['package']}");
+    return [
+        'download_count'     => $info['downloads']['total'],
+        'latest_version'     => $info['releases'][0]['version'],
+        'first_published_at' => $info['created'],
+        // ... other MetadataChecks fields; omit fields you can't fill — they default to null
+    ];
+}
+// ... remaining methods follow the same pattern
+```
+
+**Self-hosted GitLab:** if your ecosystem hosts source on a self-hosted GitLab instance (like Drupal modules on [git.drupalcode.org](https://git.drupalcode.org)), set `GITLAB_BASE_URL=https://your-gitlab-host` and the built-in release-note and tag-signature checks will resolve against it automatically — no custom code needed for that part.
 
 ### Notes on both paths
 
-Once installed, `get_provider("drupal")` returns your provider automatically — no changes to this repo needed. Built-in providers take precedence over plugins with the same `ecosystem_name`, so core ecosystems cannot be shadowed.
+Once installed, `get_provider("django")` returns your provider automatically — no changes to this repo needed. Built-in providers take precedence over plugins with the same `ecosystem_name`, so core ecosystems cannot be shadowed.
 
 **Security note:** plugin code loads into the same process as the core worker. This is the same trust boundary as any `pip install` dependency — the operator deploying Dependency Scout implicitly trusts the packages they install.
 
