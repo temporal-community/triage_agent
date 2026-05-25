@@ -39,6 +39,7 @@ from activities.package_diff import (
     _composer_plugin_api_added,
     _composer_plugin_type_added,
     _count_extra_lines,
+    _count_new_pip_deps,
     _diff_added_lines,
     _extract_and_diff,
     _get_file_map,
@@ -4291,3 +4292,86 @@ async def test_compute_cache_hit_returns_same_result():
     # (they were already consumed above). The cache hit path returns immediately.
     result2 = await env.run(compute, "npm", "cachepkg", "1.0.0", "1.1.0")
     assert result1 == result2
+
+
+# ---------------------------------------------------------------------------
+# _count_new_pip_deps: continue branch for blank/comment lines (line 756)
+# ---------------------------------------------------------------------------
+
+
+def test_count_new_pip_deps_skips_blank_and_comment_lines(tmp_path):
+    """_count_new_pip_deps ignores empty lines, comments, and -r includes."""
+    old = tmp_path / "old.txt"
+    new = tmp_path / "new.txt"
+    old.write_text("requests>=2.0\n")
+    # new has blank lines, a comment, a -r line, and one genuinely new dep
+    new.write_text(
+        "requests>=2.0\n"
+        "\n"
+        "# this is a comment\n"
+        "-r base.txt\n"
+        "boto3>=1.0\n"
+    )
+    assert _count_new_pip_deps(old, new) == 1
+
+
+# ---------------------------------------------------------------------------
+# _npm_lockfile_integrity_downgraded: skip non-sha512 old entries (line 850)
+# ---------------------------------------------------------------------------
+
+
+def test_npm_lockfile_integrity_old_sha1_entry_skipped(tmp_path):
+    """Old entries that are already sha1 (not sha512) are skipped — not a downgrade."""
+    old_data = {
+        "packages": {
+            "node_modules/old-pkg": {"integrity": "sha1-alreadyold=="},
+            "node_modules/secure-pkg": {"integrity": "sha512-safe=="},
+        }
+    }
+    new_data = {
+        "packages": {
+            "node_modules/old-pkg": {"integrity": "sha1-alreadyold=="},
+            "node_modules/secure-pkg": {"integrity": "sha512-safe=="},
+        }
+    }
+    old = tmp_path / "old.json"
+    new = tmp_path / "new.json"
+    old.write_text(_json.dumps(old_data))
+    new.write_text(_json.dumps(new_data))
+    assert _npm_lockfile_integrity_downgraded(old, new) is False
+
+
+# ---------------------------------------------------------------------------
+# _compare_artifact_to_source: non-string result from VCS fetch (line 1134)
+# ---------------------------------------------------------------------------
+
+
+@respx.mock
+async def test_compare_artifact_to_source_vcs_fetch_exception_skipped(monkeypatch):
+    """When fetch_vcs_file_at_tag raises, the file is skipped (line 1134 continue)."""
+    respx.get("https://pypi.org/pypi/mypkg/2.0/json").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "info": {
+                    "project_urls": {"Source Code": "https://github.com/owner/mypkg"},
+                    "home_page": "",
+                }
+            },
+        )
+    )
+
+    async def raise_fetch(platform, owner, repo, version, path, token):
+        raise RuntimeError("network error")
+
+    monkeypatch.setattr("activities.package_diff.fetch_vcs_file_at_tag", raise_fetch)
+
+    import httpx as _httpx
+
+    async with _httpx.AsyncClient() as client:
+        mismatch, files = await _compare_artifact_to_source(
+            client, "pip", "mypkg", "2.0", {"mypkg/__init__.py": "import evil\n" * 10}
+        )
+    # Exception from VCS fetch → file skipped → no mismatch reported
+    assert mismatch is False
+    assert files == []
