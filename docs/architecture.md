@@ -245,12 +245,13 @@ api/            FastAPI webhook receiver. Parses incoming Dependabot and Renovat
                 webhook payloads and starts a PackageTriageWorkflow via the Temporal
                 client. Entry point for production traffic.
 
-detections/     YAML files containing every regex pattern used for supply chain
+checks/signatures/
+                YAML files containing every regex pattern used for supply chain
                 attack detection: network calls (160 patterns across 11 languages),
                 obfuscation/gzip/zero-width tricks, OS persistence mechanisms,
                 worm propagation signatures, and suspicious file type lists.
                 Edit these to add coverage for new attacks — no Python required.
-                detections/__init__.py loads all YAML at startup and exports
+                checks/signatures/__init__.py loads all YAML at startup and exports
                 typed constants that the rest of the code uses.
 
 tests/          pytest test suite — one file per module, plus test_workflow_replay.py
@@ -258,9 +259,9 @@ tests/          pytest test suite — one file per module, plus test_workflow_re
                 to catch non-deterministic workflow changes.
 ```
 
-The split between `checks/` + `platform/` and the top-level packages is intentional: `ecosystems/`, `platforms/`, `classifiers/`, and `detections/` are stable public extension points. Plugin authors import from them directly without needing to know anything about Temporal.
+The split between `checks/` + `platform/` and the top-level packages is intentional: `ecosystems/`, `platforms/`, and `classifiers/` are stable public extension points. Plugin authors import from them directly without needing to know anything about Temporal.
 
-`detections/` is the lowest-barrier extension point: adding a new network-call signature for a language you know is a two-line YAML edit.
+`checks/signatures/` is the lowest-barrier extension point: adding a new network-call signature for a language you know is a two-line YAML edit.
 
 ---
 

@@ -20,9 +20,9 @@ Ecosystems implemented: pip, npm, RubyGems, Maven, NuGet, Cargo, Go modules, Com
 | `workflows/` | `PackageTriageWorkflow` and `PRActionWorkflow` |
 | `helpers/` | GitHub App auth, comment formatting, config providers, HTTP client |
 | `api/` | FastAPI webhook receiver |
-| `detections/` | YAML pattern store for `package_diff.py` — add attack signatures here, no Python needed |
+| `checks/signatures/` | YAML pattern store for `package_diff.py` — add attack signatures here, no Python needed |
 
-`ecosystems/`, `platforms/`, `classifiers/`, and `detections/` are the stable public extension points. Plugin authors import from them directly without touching Temporal.
+`ecosystems/`, `platforms/`, and `classifiers/` are the stable public extension points. Plugin authors import from them directly without touching Temporal.
 
 ## Non-obvious conventions
 
@@ -56,7 +56,7 @@ uv run mypy .             # type check
 uv run pytest             # all tests
 uv run pytest \
   --cov=activities --cov=ecosystems --cov=platforms --cov=classifiers \
-  --cov=models --cov=workflows --cov=helpers --cov=api --cov=detections \
+  --cov=models --cov=workflows --cov=helpers --cov=api --cov=checks \
   --cov-report=term-missing          # coverage (target ≥95%)
 uv run pytest tests/test_workflow_replay.py -v   # replay/determinism tests
 ```

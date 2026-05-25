@@ -26,7 +26,7 @@ import checks.package_diff as pkg_diff_module
 from ecosystems import safe_zip_extractall as _safe_zip_extractall
 from ecosystems import validate_archive_url as _validate_archive_url
 from models import PackageChecks, PackageDiffChecks, ReleaseAgeChecks
-from detections import (
+from checks.signatures import (
     SUSPICIOUS_PACKAGE_FILES as _SUSPICIOUS_PACKAGE_FILES,
     SUSPICIOUS_PACKAGE_PREFIXES as _SUSPICIOUS_PACKAGE_PREFIXES,
 )

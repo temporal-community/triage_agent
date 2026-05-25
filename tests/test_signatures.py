@@ -1,5 +1,5 @@
 """
-Sanity checks for the detections/ YAML-based pattern package.
+Sanity checks for the checks/signatures/ YAML-based pattern package.
 
 Verifies that:
 - All YAML files load without error
@@ -16,7 +16,7 @@ from pathlib import Path
 
 import yaml
 
-from detections import (
+from checks.signatures import (
     DANGEROUS_BINARY_SUFFIXES,
     GZIP_B64_EXTENSIONS,
     GZIP_B64_RE,
@@ -34,7 +34,7 @@ from detections import (
     ZERO_WIDTH_SOURCE_EXTENSIONS,
 )
 
-_DETECTIONS_DIR = Path(__file__).parent.parent / "detections"
+_SIGNATURES_DIR = Path(__file__).parent.parent / "checks" / "signatures"
 
 
 # ---------------------------------------------------------------------------
@@ -43,14 +43,14 @@ _DETECTIONS_DIR = Path(__file__).parent.parent / "detections"
 
 
 def test_net_calls_yaml_loads() -> None:
-    with open(_DETECTIONS_DIR / "net_calls.yaml") as f:
+    with open(_SIGNATURES_DIR / "net_calls.yaml") as f:
         data = yaml.safe_load(f)
     assert isinstance(data, dict)
     assert len(data) > 0
 
 
 def test_obfuscation_yaml_loads() -> None:
-    with open(_DETECTIONS_DIR / "obfuscation.yaml") as f:
+    with open(_SIGNATURES_DIR / "obfuscation.yaml") as f:
         data = yaml.safe_load(f)
     assert isinstance(data, dict)
     assert "patterns" in data
@@ -60,7 +60,7 @@ def test_obfuscation_yaml_loads() -> None:
 
 
 def test_persistence_yaml_loads() -> None:
-    with open(_DETECTIONS_DIR / "persistence.yaml") as f:
+    with open(_SIGNATURES_DIR / "persistence.yaml") as f:
         data = yaml.safe_load(f)
     assert isinstance(data, dict)
     assert "patterns" in data
@@ -68,7 +68,7 @@ def test_persistence_yaml_loads() -> None:
 
 
 def test_file_types_yaml_loads() -> None:
-    with open(_DETECTIONS_DIR / "file_types.yaml") as f:
+    with open(_SIGNATURES_DIR / "file_types.yaml") as f:
         data = yaml.safe_load(f)
     assert isinstance(data, dict)
     assert "suspicious_filenames" in data

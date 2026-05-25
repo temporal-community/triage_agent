@@ -31,7 +31,7 @@ from ecosystems import (
 from models import PackageDiffChecks
 from helpers.cache import ActivityCache
 from helpers.http import get_client
-from detections import (
+from checks.signatures import (
     NET_CALL_PATTERNS as _NET_CALL_PATTERNS,
     OBFUSCATION_PATTERNS as _OBFUSCATION_PATTERNS,
     OBFUSCATION_LINE_THRESHOLD as _OBFUSCATION_LINE_THRESHOLD,
