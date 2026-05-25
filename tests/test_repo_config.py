@@ -212,7 +212,7 @@ _GITLAB_FILE_URL = (
     "https://gitlab.com/api/v4/projects/"
     + _quote("owner/repo", safe="")
     + "/repository/files/"
-    + _quote(".gitlab/triage-agent.yml", safe="")
+    + _quote(".gitlab/dependency-scout.yml", safe="")
     + "/raw"
 )
 

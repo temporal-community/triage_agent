@@ -468,7 +468,7 @@ def test_ecosystem_validator_rejects_unknown():
     """PRContext rejects unknown ecosystem names via _validate_ecosystem_name."""
     import pytest
     from pydantic import ValidationError
-    from activities.models import PRContext
+    from models import PRContext
 
     with pytest.raises(ValidationError, match="Unknown ecosystem"):
         PRContext(

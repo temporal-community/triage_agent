@@ -16,15 +16,15 @@ import httpx
 import pytest
 import respx
 
-from activities.ecosystems import (
-    build_release_signals,
+from ecosystems import (
+    build_release_checks as build_release_signals,
     detect_stale_version_line,
     fetch_vcs_account_age,
     fetch_vcs_release,
     fetch_vcs_tag_signature,
     parse_vcs_repo,
 )
-from activities.models import VersionLineSignals
+from models import VersionLineageChecks as VersionLineSignals
 
 # ---------------------------------------------------------------------------
 # parse_vcs_repo
@@ -89,7 +89,7 @@ def test_detect_stale_version_line_no_stable_versions():
 
 
 def test_get_provider_raises_for_unknown_ecosystem():
-    from activities.ecosystems import get_provider
+    from ecosystems import get_provider
 
     with pytest.raises(ValueError, match="Unknown ecosystem"):
         get_provider("unknown_ecosystem_xyz_abc")
@@ -101,7 +101,7 @@ def test_get_provider_raises_for_unknown_ecosystem():
 
 
 def test_get_dependabot_slug_map_reinitializes_if_none(monkeypatch):
-    import activities.ecosystems as eco
+    import ecosystems as eco
 
     monkeypatch.setattr(eco, "_PROVIDERS", None)
     result = eco.get_dependabot_slug_map()
@@ -110,7 +110,7 @@ def test_get_dependabot_slug_map_reinitializes_if_none(monkeypatch):
 
 
 def test_get_name_re_reinitializes_if_none(monkeypatch):
-    import activities.ecosystems as eco
+    import ecosystems as eco
 
     monkeypatch.setattr(eco, "_PROVIDERS", None)
     result = eco.get_name_re("pip")
@@ -118,7 +118,7 @@ def test_get_name_re_reinitializes_if_none(monkeypatch):
 
 
 def test_get_name_re_returns_none_for_unknown(monkeypatch):
-    import activities.ecosystems as eco
+    import ecosystems as eco
 
     monkeypatch.setattr(eco, "_PROVIDERS", None)
     result = eco.get_name_re("unknown_eco")
@@ -243,7 +243,7 @@ async def test_tag_sig_non_github_platform_returns_none():
 @respx.mock
 async def test_fetch_tag_signature_compat_alias():
     # backward-compat alias should delegate to fetch_vcs_tag_signature("github", ...)
-    from activities.ecosystems import fetch_tag_signature
+    from ecosystems import fetch_tag_signature
 
     respx.get(re.compile(r"https://api\.github\.com/.*")).mock(return_value=httpx.Response(404))
     result = await fetch_tag_signature("owner", "repo", "1.0.0", None)
@@ -332,7 +332,7 @@ async def test_fetch_vcs_account_age_unknown_platform():
 
 async def test_fetch_github_account_age_compat_alias(monkeypatch):
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
-    from activities.ecosystems import fetch_github_account_age
+    from ecosystems import fetch_github_account_age
 
     result = await fetch_github_account_age("owner")
     assert result is None

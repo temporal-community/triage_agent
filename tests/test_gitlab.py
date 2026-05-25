@@ -16,8 +16,8 @@ import respx
 from temporalio.exceptions import ApplicationError
 from temporalio.testing import ActivityEnvironment
 
-from activities.platform.gitlab import GitLabPlatformClient, _is_ci_infra_file
-from activities.models import PRContext, PRFilesSignals, Verdict
+from platforms.gitlab import GitLabPlatformClient, _is_ci_infra_file
+from models import PRContext, PRFilesChecks as PRFilesSignals, Verdict
 
 REPO = "owner/repo"
 PR_NUM = 42
@@ -467,7 +467,7 @@ def test_is_ci_infra_file_passes_dep_files(path):
 
 def test_get_platform_client_returns_gitlab_client(pr, monkeypatch):
     monkeypatch.setenv("GITLAB_BASE_URL", "https://gitlab.example.com")
-    from activities.platform import get_platform_client
+    from platforms import get_platform_client
 
     c = get_platform_client(pr)
     assert isinstance(c, GitLabPlatformClient)
@@ -476,7 +476,7 @@ def test_get_platform_client_returns_gitlab_client(pr, monkeypatch):
 
 def test_get_platform_client_unknown_platform_raises():
     from unittest.mock import MagicMock
-    from activities.platform import get_platform_client
+    from platforms import get_platform_client
 
     unknown_pr = MagicMock()
     unknown_pr.platform = "bitbucket"
