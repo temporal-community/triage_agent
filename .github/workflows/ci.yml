@@ -37,7 +37,9 @@ jobs:
       - name: Coverage
         run: |
           uv run pytest \
-            --cov=activities --cov=workflows --cov=helpers \
+            --cov=activities --cov=ecosystems --cov=platforms \
+            --cov=classifiers --cov=models \
+            --cov=workflows --cov=helpers --cov=api \
             --cov-report=term-missing \
             --cov-fail-under=95 \
             -q
