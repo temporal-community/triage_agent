@@ -39,6 +39,23 @@ _CI_INFRA_PATH_PREFIXES: tuple[str, ...] = (
     ".circleci/",
     ".buildkite/",
 )
+# AI assistant and IDE config files that can execute code on open/load.
+# A dep-bump PR has no legitimate reason to touch these.
+_AI_IDE_HOOK_EXACT: frozenset[str] = frozenset(
+    {
+        ".claude/settings.json",  # Claude Code SessionStart hooks
+        ".claude/settings.local.json",
+        ".cursor/rules",  # Cursor AI rules (also checked in diff for zero-width chars)
+        ".cursorrules",
+        ".vscode/tasks.json",  # VSCode folderOpen / onStartupFinished task triggers
+        ".vscode/launch.json",
+        ".vscode/extensions.json",
+        ".idea/workspace.xml",  # JetBrains auto-run configs
+        ".idea/runConfigurations",
+        ".devcontainer/devcontainer.json",
+        ".devcontainer.json",
+    }
+)
 _CI_INFRA_SCRIPT_SUFFIXES: tuple[str, ...] = (
     ".sh",
     ".bash",
@@ -55,6 +72,8 @@ _CI_INFRA_SCRIPT_SUFFIXES: tuple[str, ...] = (
 def _is_ci_infra_file(path: str) -> bool:
     name = path.rsplit("/", 1)[-1]
     if name in _CI_INFRA_EXACT:
+        return True
+    if path in _AI_IDE_HOOK_EXACT:
         return True
     if any(path.startswith(p) for p in _CI_INFRA_PATH_PREFIXES):
         return True

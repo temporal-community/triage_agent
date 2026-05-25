@@ -49,11 +49,28 @@ _CI_INFRA_SCRIPT_SUFFIXES: tuple[str, ...] = (
     ".bat",
     ".cmd",
 )
+_AI_IDE_HOOK_EXACT: frozenset[str] = frozenset(
+    {
+        ".claude/settings.json",
+        ".claude/settings.local.json",
+        ".cursor/rules",
+        ".cursorrules",
+        ".vscode/tasks.json",
+        ".vscode/launch.json",
+        ".vscode/extensions.json",
+        ".idea/workspace.xml",
+        ".idea/runConfigurations",
+        ".devcontainer/devcontainer.json",
+        ".devcontainer.json",
+    }
+)
 
 
 def _is_ci_infra_file(path: str) -> bool:
     name = path.rsplit("/", 1)[-1]
     if name in _CI_INFRA_EXACT:
+        return True
+    if path in _AI_IDE_HOOK_EXACT:
         return True
     if any(path.startswith(p) for p in _CI_INFRA_PATH_PREFIXES):
         return True

@@ -374,6 +374,18 @@ async def test_close_pr_422_raises_non_retryable(client, pr, with_pat):
         "build.ps1",
         "install.bat",
         "run.cmd",
+        # AI assistant / IDE hook files that can run code on load
+        ".claude/settings.json",
+        ".claude/settings.local.json",
+        ".cursor/rules",
+        ".cursorrules",
+        ".vscode/tasks.json",
+        ".vscode/launch.json",
+        ".vscode/extensions.json",
+        ".idea/workspace.xml",
+        ".idea/runConfigurations",
+        ".devcontainer/devcontainer.json",
+        ".devcontainer.json",
     ],
 )
 def test_is_ci_infra_file_detects_suspicious(path):
