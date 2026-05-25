@@ -3809,3 +3809,110 @@ def test_net_calls_svix_ingest_py(tmp_path):
     )
     _, _, _, _, net_calls, *_ = _build_diff(old, new)
     assert net_calls is True
+
+
+# ── TrapDoor Crates.io: cargo-build-helper XOR key ───────────────────────────
+
+
+def test_obfuscation_rs_cargo_build_helper_key(tmp_path):
+    """'cargo-build-helper-YYYY' in Rust build.rs triggers obfuscated_code (TrapDoor XOR key)."""
+    old = _write_files(tmp_path / "old", {})
+    new = _write_files(
+        tmp_path / "new",
+        {
+            "build.rs": (
+                "fn main() {\n"
+                "    let key = 'cargo-build-helper-2026';\n"
+                "    let enc: Vec<u8> = data.iter().zip(key.bytes().cycle()).map(|(b, k)| b ^ k).collect();\n"
+                "}\n"
+            )
+        },
+    )
+    _, _, _, _, _, _, _, obfuscated, *_ = _build_diff(old, new)
+    assert obfuscated is True
+
+
+def test_obfuscation_rs_cargo_key_not_in_py(tmp_path):
+    """cargo-build-helper string in a .py file (not in .rs obfuscation patterns) is not flagged."""
+    old = _write_files(tmp_path / "old", {})
+    new = _write_files(
+        tmp_path / "new",
+        {"setup.py": "KEY = 'cargo-build-helper-2026'\n"},
+    )
+    _, _, _, _, _, _, _, obfuscated, *_ = _build_diff(old, new)
+    assert obfuscated is False
+
+
+# ── GemStuffer: placeholder gemspec summary as exfil gem marker ───────────────
+
+
+def test_obfuscation_gemspec_placeholder_summary(tmp_path):
+    """s.summary = 'result' in .gemspec triggers obfuscated_code (auto-generated exfil gem)."""
+    old = _write_files(tmp_path / "old", {})
+    new = _write_files(
+        tmp_path / "new",
+        {
+            "stolen-data-20240512-1234.gemspec": (
+                "Gem::Specification.new do |s|\n"
+                "  s.name = 'stolen-data-20240512-1234'\n"
+                "  s.version = '0.1.0'\n"
+                "  s.summary = 'result'\n"
+                "  s.authors = ['x']\n"
+                "end\n"
+            )
+        },
+    )
+    _, _, _, _, _, _, _, obfuscated, *_ = _build_diff(old, new)
+    assert obfuscated is True
+
+
+def test_obfuscation_gemspec_real_summary_not_flagged(tmp_path):
+    """A .gemspec with a real summary is not flagged."""
+    old = _write_files(tmp_path / "old", {})
+    new = _write_files(
+        tmp_path / "new",
+        {
+            "mylib.gemspec": (
+                "Gem::Specification.new do |s|\n"
+                "  s.summary = 'A well-documented Ruby library for parsing JSON'\n"
+                "end\n"
+            )
+        },
+    )
+    _, _, _, _, _, _, _, obfuscated, *_ = _build_diff(old, new)
+    assert obfuscated is False
+
+
+# ── BufferZoneCorp/GemStuffer: Dir.home credential path reads ────────────────
+
+
+def test_net_calls_rb_dir_home_aws(tmp_path):
+    """Dir.home + .aws credential path in Ruby triggers network_calls_in_lib."""
+    old = _write_files(tmp_path / "old", {"lib/harvest.rb": "# nothing\n"})
+    new = _write_files(
+        tmp_path / "new",
+        {
+            "lib/harvest.rb": (
+                "# nothing\n"
+                "creds = File.read(File.join(Dir.home, '.aws/credentials'))\n"
+            )
+        },
+    )
+    _, _, _, _, net_calls, *_ = _build_diff(old, new)
+    assert net_calls is True
+
+
+def test_net_calls_rb_dir_home_ssh(tmp_path):
+    """Dir.home + .ssh in Ruby library code triggers network_calls_in_lib."""
+    old = _write_files(tmp_path / "old", {"lib/utils.rb": "# nothing\n"})
+    new = _write_files(
+        tmp_path / "new",
+        {
+            "lib/utils.rb": (
+                "# nothing\n"
+                "key = File.read(File.join(Dir.home, '.ssh/id_rsa'))\n"
+            )
+        },
+    )
+    _, _, _, _, net_calls, *_ = _build_diff(old, new)
+    assert net_calls is True

@@ -196,6 +196,7 @@ _NET_CALL_PATTERNS: dict[str, list[re.Pattern[str]]] = {
             r"\.gem/credentials",  # credential theft — RubyGems API key file (BufferZoneCorp May 2026)
             r"\.config/gh/hosts\.yml",  # credential theft — GitHub CLI auth token (BufferZoneCorp May 2026)
             r"File\.chmod\s*\(\s*0600\s*,[^\n]*\.gem[/\\]credentials",  # credential fabrication — chmod on .gem/credentials (GemStuffer May 2026)
+            r"Dir\.home[^\n]{0,60}(?:\.aws|\.ssh|\.npmrc)",  # credential file read via Dir.home in extconf.rb (BufferZoneCorp/GemStuffer Ruby gem install-time harvest)
         ],
         ".py": [
             r"\brequests\.(get|post|put|delete|head|patch|request)\s*\(",
@@ -418,6 +419,12 @@ _OBFUSCATION_PATTERNS: dict[str, list[re.Pattern[str]]] = {
             r"\bclrjit\b",  # direct reference to CLR JIT library — only present when patching the JIT compiler (NuGet IR.* campaign May 2026)
             r'"[A-Z][a-z]+\s+"\.Trim\(\)\s*\+\s*"[A-Z][a-z]+',  # Win32 API name split across trimmed string literals to evade static scanning (NuGet Chinese UI campaign May 2026)
             r"ProgramData\\Microsoft OneDrive\\keys\.dat",  # credential staging path used by NuGet IR.* to store harvested secrets before C2 upload (May 2026)
+        ],
+        ".rs": [
+            r"""['"']cargo-build-helper-\d{4}['"']""",  # TrapDoor campaign XOR key — no legitimate Rust crate embeds a year-stamped helper key (TrapDoor Crates.io May 2026)
+        ],
+        ".gemspec": [
+            r"""s\.(?:summary|description)\s*=\s*['"](?:result|o|x|data)['"]""",  # auto-generated placeholder metadata in exfiltration gem (GemStuffer May 2026)
         ],
     }.items()
 }
