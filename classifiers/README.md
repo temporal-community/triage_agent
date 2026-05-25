@@ -65,12 +65,66 @@ Add a test file under `tests/` following the patterns in `tests/test_classifier.
 
 ## Adding an external plugin classifier
 
-For classifiers distributed as separate packages, use the entry point path instead:
+If you don't want to fork this repo, ship your classifier as its own Python package. Here's a complete example for a Gemini-backed classifier.
 
-```toml
-# pyproject.toml of your plugin package
-[project.entry-points."dependency_scout.classifiers"]
-my_gemini = "my_package:GeminiClassifier"
+**`my_gemini_classifier/__init__.py`:**
+
+```python
+import json
+import os
+import httpx
+from dependency_scout.models import PackageChecks, Verdict
+from dependency_scout.classifiers import _build_message, _rule_based
+
+class GeminiClassifier:
+    async def classify(self, signals: PackageChecks) -> Verdict:
+        api_key = os.environ.get("GEMINI_API_KEY", "")
+        model = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
+        prompt = _build_message(signals)  # reuse the same prompt all built-in classifiers use
+
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                resp = await client.post(
+                    f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+                    headers={"X-Goog-Api-Key": api_key},
+                    json={
+                        "contents": [{"parts": [{"text": prompt}]}],
+                        "generationConfig": {"responseMimeType": "application/json"},
+                    },
+                )
+                resp.raise_for_status()
+            text = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+            return Verdict(**json.loads(text))
+        except Exception:
+            return _rule_based(signals)  # always fall back gracefully
 ```
 
-Then set `CLASSIFIER=my_gemini` in `.env`. The class must implement `async def classify(self, signals: PackageChecks) -> Verdict`.
+`Verdict` has four fields your classifier must populate:
+
+| Field | Type | Description |
+|---|---|---|
+| `classification` | `"green"` / `"yellow"` / `"red"` | The risk verdict |
+| `confidence` | `float` (0–1) | How confident the classifier is (e.g. `0.85`) |
+| `reasoning` | `str` | One paragraph explaining the verdict |
+| `flags` | `list[str]` | Specific concerns, one per item (empty list for green) |
+
+**`pyproject.toml`:**
+
+```toml
+[project]
+name = "my-gemini-classifier"
+dependencies = ["dependency-scout", "httpx"]
+
+[project.entry-points."dependency_scout.classifiers"]
+gemini = "my_gemini_classifier:GeminiClassifier"
+```
+
+**Install and activate:**
+
+```bash
+pip install -e .          # or uv add my-gemini-classifier
+echo "CLASSIFIER=gemini" >> .env
+echo "GEMINI_API_KEY=..." >> .env
+```
+
+That's it — no changes to this repo needed. `get_classifier()` discovers the entry point automatically at startup.
