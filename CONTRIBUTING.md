@@ -238,6 +238,13 @@ extra_signal_activities:
 
 Results land in `PackageSignals.custom_signals` and are surfaced to the LLM in a sandboxed `<untrusted_custom>` block — the same way package descriptions and diff content are handled. They cannot override or poison the core trusted signals.
 
+**How the classifier handles your signal results:**
+
+- **LLM classifiers (Claude, OpenAI, Ollama)** — your results appear automatically in the prompt as labeled JSON. The LLM reasons over them without any code changes on your part. No schema registration needed; the LLM infers meaning from the key names and values.
+- **Rule-based classifier** — ignores `custom_signals` by design. Deterministic threshold rules can only be written for signals whose structure is known at compile time. If you need rule-based support for your signal, contribute it as a built-in signal (see "Adding a new signal" above) rather than a plugin activity.
+
+This means plugins work best when an LLM classifier is configured. The rule-based fallback will still run and post a verdict — it just won't factor in your custom signal.
+
 ### In both cases
 
 Once installed, `get_provider("drupal")` returns your provider and `check` is registered with the worker automatically — no changes to this repo needed. Built-in providers take precedence over plugins with the same `ecosystem_name`, so core ecosystems cannot be shadowed.
