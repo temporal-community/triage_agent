@@ -4,7 +4,7 @@ Guidance for Claude Code when working in this repo. See [ARCHITECTURE.md](ARCHIT
 
 ## What this is
 
-**dependabot-supply-chain-scout** — vets Dependabot/Renovate PRs by gathering supply chain risk signals in parallel, classifying GREEN/YELLOW/RED, and acting on the verdict. Key principle: graceful degradation — zero API keys works (rule-based, log-only); gets smarter as keys are added.
+**dependency-scout** — vets Dependabot/Renovate PRs by gathering supply chain risk signals in parallel, classifying GREEN/YELLOW/RED, and acting on the verdict. Key principle: graceful degradation — zero API keys works (rule-based, log-only); gets smarter as keys are added.
 
 Ecosystems: pip (production), npm (implemented, deployment pending).
 
@@ -25,7 +25,7 @@ This is required for determinism. Never import activity functions directly into 
 
 **Non-retryable errors:** use `ApplicationError(..., non_retryable=True)` for permanent failures (404, auth errors). Retryable errors just raise normally.
 
-**Config filename:** `.github/triage-agent.yml` in user repos was intentionally NOT renamed when the project was renamed — that would be a breaking change for existing installs.
+**Config filename:** `.github/dependency-scout.yml` in user repos was intentionally NOT renamed when the project was renamed — that would be a breaking change for existing installs.
 
 ## Commands
 

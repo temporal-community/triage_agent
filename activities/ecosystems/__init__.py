@@ -78,8 +78,8 @@ def _build_provider_registry() -> dict[str, EcosystemProvider]:
     """Scan built-in providers then entry points for classes with an ecosystem_name attribute.
 
     Built-in providers: activities/ecosystems/*.py (pkgutil scan).
-    External plugins: declare an entry point in group "triage_agent.ecosystems":
-        [project.entry-points."triage_agent.ecosystems"]
+    External plugins: declare an entry point in group "dependency_scout.ecosystems":
+        [project.entry-points."dependency_scout.ecosystems"]
         my_ecosystem = "my_package:MyProvider"
 
     Called lazily on first get_provider() call to avoid circular imports at
@@ -100,7 +100,7 @@ def _build_provider_registry() -> dict[str, EcosystemProvider]:
     try:
         from importlib.metadata import entry_points
 
-        for ep in entry_points(group="triage_agent.ecosystems"):
+        for ep in entry_points(group="dependency_scout.ecosystems"):
             try:
                 cls = ep.load()
                 name = getattr(cls, "ecosystem_name", None)

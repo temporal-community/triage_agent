@@ -1,6 +1,6 @@
 # Architecture
 
-How the Dependabot Supply Chain Scout works under the hood.
+How the Dependency Scout works under the hood.
 
 ---
 
@@ -31,7 +31,7 @@ FastAPI receiver (api/webhook.py)
       ▼
 PRActionWorkflow
       │
-      ├─ (parallel) fetch .github/triage-agent.yml from the repo
+      ├─ (parallel) fetch .github/dependency-scout.yml from the repo
       │
       ├─ (parallel) check PR for unexpected files
       │   (CI scripts, Dockerfiles in a dep-bump = suspicious)

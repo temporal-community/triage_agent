@@ -4,10 +4,10 @@ This lets non-Python teams (PHP, Go, Rust, …) implement ecosystem-specific log
 own stack. The core project defines the HTTP protocol; bridge packages are ~10 lines:
 
     # pyproject.toml
-    [project.entry-points."triage_agent.ecosystems"]
-    drupal = "triage_agent_drupal:DrupalProvider"
+    [project.entry-points."dependency_scout.ecosystems"]
+    drupal = "dependency_scout_drupal:DrupalProvider"
 
-    # triage_agent_drupal/__init__.py
+    # dependency_scout_drupal/__init__.py
     import re
     from activities.ecosystems.remote import RemoteEcosystemProvider
 

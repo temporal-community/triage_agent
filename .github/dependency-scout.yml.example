@@ -1,13 +1,13 @@
-# .github/triage-agent.yml
+# .github/dependency-scout.yml
 #
-# Copy this file to .github/triage-agent.yml in any repo where you want
+# Copy this file to .github/dependency-scout.yml in any repo where you want
 # the Scout to do more than post comments.
 #
 # ALL FIELDS ARE OPTIONAL. The Scout is safe to install with no config:
 # it will post a verdict comment on every Dependabot/Renovate PR but
 # never merge, close, or request review.
 #
-# See the full reference: https://github.com/temporal-community/dependabot-supply-chain-scout#full-config-reference
+# See the full reference: https://github.com/temporal-community/dependency-scout#full-config-reference
 
 
 # ---------------------------------------------------------------------------

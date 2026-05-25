@@ -2,8 +2,8 @@
 ConfigProvider protocol — abstracts where triage configuration comes from.
 
 Default routing is by platform:
-  github  → GitHubConfigProvider reads .github/triage-agent.yml via GitHub API
-  gitlab  → GitLabConfigProvider reads .gitlab/triage-agent.yml via GitLab Files API
+  github  → GitHubConfigProvider reads .github/dependency-scout.yml via GitHub API
+  gitlab  → GitLabConfigProvider reads .gitlab/dependency-scout.yml via GitLab Files API
 
 Override for all platforms via TRIAGE_CONFIG_PROVIDER=env (reads TRIAGE_CONFIG_* vars).
 """
@@ -23,7 +23,7 @@ class ConfigProvider(Protocol):
 
 
 class GitHubConfigProvider:
-    """Reads .github/triage-agent.yml from the target repo via GitHub Contents API."""
+    """Reads .github/dependency-scout.yml from the target repo via GitHub Contents API."""
 
     async def fetch(self, pr: PRContext) -> RepoConfig:
         import base64
@@ -33,7 +33,7 @@ class GitHubConfigProvider:
         from temporalio import activity
         from temporalio.exceptions import ApplicationError
 
-        url = f"https://api.github.com/repos/{pr.repo}/contents/.github/triage-agent.yml"
+        url = f"https://api.github.com/repos/{pr.repo}/contents/.github/dependency-scout.yml"
         headers = {"Accept": "application/vnd.github+json"}
 
         if token := os.environ.get("GITHUB_TOKEN"):
@@ -49,7 +49,7 @@ class GitHubConfigProvider:
 
         if resp.status_code == 404:
             activity.logger.info(
-                f"No .github/triage-agent.yml in {pr.repo} — "
+                f"No .github/dependency-scout.yml in {pr.repo} — "
                 "using observe-only defaults (comment on every PR, no auto-merge, no review requests, no blocking)"
             )
             return RepoConfig()
@@ -63,7 +63,7 @@ class GitHubConfigProvider:
         data = yaml.safe_load(raw) or {}
         known = {k: v for k, v in data.items() if k in RepoConfig.model_fields}
         config = RepoConfig(**known)
-        activity.logger.info(f"Loaded .github/triage-agent.yml from {pr.repo}: {config}")
+        activity.logger.info(f"Loaded .github/dependency-scout.yml from {pr.repo}: {config}")
         return config
 
 
@@ -120,7 +120,7 @@ class EnvConfigProvider:
 
 
 class GitLabConfigProvider:
-    """Reads .gitlab/triage-agent.yml from the target repo via GitLab Files API."""
+    """Reads .gitlab/dependency-scout.yml from the target repo via GitLab Files API."""
 
     async def fetch(self, pr: PRContext) -> RepoConfig:
         from urllib.parse import quote
@@ -132,7 +132,7 @@ class GitLabConfigProvider:
 
         base_url = os.environ.get("GITLAB_BASE_URL", "https://gitlab.com").rstrip("/")
         encoded_path = quote(pr.repo, safe="")
-        file_path = quote(".gitlab/triage-agent.yml", safe="")
+        file_path = quote(".gitlab/dependency-scout.yml", safe="")
         url = f"{base_url}/api/v4/projects/{encoded_path}/repository/files/{file_path}/raw"
 
         headers: dict = {}
@@ -144,7 +144,7 @@ class GitLabConfigProvider:
 
         if resp.status_code == 404:
             activity.logger.info(
-                f"No .gitlab/triage-agent.yml in {pr.repo} — using observe-only defaults"
+                f"No .gitlab/dependency-scout.yml in {pr.repo} — using observe-only defaults"
             )
             return RepoConfig()
 
@@ -155,7 +155,7 @@ class GitLabConfigProvider:
         data = yaml.safe_load(resp.text) or {}
         known = {k: v for k, v in data.items() if k in RepoConfig.model_fields}
         config = RepoConfig(**known)
-        activity.logger.info(f"Loaded .gitlab/triage-agent.yml from {pr.repo}: {config}")
+        activity.logger.info(f"Loaded .gitlab/dependency-scout.yml from {pr.repo}: {config}")
         return config
 
 

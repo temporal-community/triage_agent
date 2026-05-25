@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-One-command setup for Dependabot Supply Chain Scout.
+One-command setup for Dependency Scout.
 
 Checks prerequisites, collects credentials interactively, writes .env,
 and prints the repo config snippet to paste into your target repo.
@@ -169,8 +169,8 @@ def collect_github_credentials() -> dict[str, str]:
      (or https://github.com/organizations/YOUR-ORG/settings/apps/new for an org)
 
   2. Fill in:
-       App name:        dependabot-supply-chain-scout (or any name)
-       Homepage URL:    https://github.com/temporal-community/triage-agent
+       App name:        dependency-scout (or any name)
+       Homepage URL:    https://github.com/temporal-community/dependency-scout
        Webhook URL:     https://placeholder.example.com/webhook  (you'll update this in step 5 below)
        Webhook secret:  (generate one below — copy it into this form)
 
@@ -250,7 +250,7 @@ def collect_optional_keys() -> dict[str, str]:
             ("Ollama  (local)    ", "free, runs on your machine, no data leaves"),
             (
                 "Other              ",
-                "any triage_agent.classifiers plugin — set CLASSIFIER manually",
+                "any dependency_scout.classifiers plugin — set CLASSIFIER manually",
             ),
         ],
     )
@@ -521,7 +521,7 @@ def collect_temporal_config() -> tuple[dict[str, str], str]:
 
 
 def main() -> None:
-    print(f"\n{BOLD}Dependabot Supply Chain Scout — setup{RESET}")
+    print(f"\n{BOLD}Dependency Scout — setup{RESET}")
     print("=" * 42)
 
     if ENV_FILE.exists():

@@ -1,5 +1,5 @@
 [project]
-name = "dependabot-supply-chain-scout"
+name = "dependency-scout"
 version = "0.1.0"
 description = "Supply chain risk analysis for Dependabot and Renovate PRs, built on Temporal"
 readme = "README.md"
@@ -19,13 +19,13 @@ dependencies = [
     "packaging>=23.0",
 ]
 
-[project.entry-points."triage_agent.classifiers"]
+[project.entry-points."dependency_scout.classifiers"]
 claude = "activities.classifier:ClaudeClassifier"
 openai = "activities.classifier:OpenAIClassifier"
 ollama = "activities.classifier:OllamaClassifier"
 rule_based = "activities.classifier:RuleBasedClassifier"
 
-[project.entry-points."triage_agent.ecosystems"]
+[project.entry-points."dependency_scout.ecosystems"]
 # Built-in providers are discovered via file scan in activities/ecosystems/__init__.py.
 # Third-party providers register here.
 

@@ -64,6 +64,7 @@ HIGH_SIGNAL_NAMES = {
     "Rakefile",
     "Gemfile",
     "Cargo.toml",
+    "go.sum",
     "pom.xml",
     "composer.json",
     # AI editor config files — no legitimate reason to ship these in a package archive
@@ -160,6 +161,8 @@ _NET_CALL_PATTERNS: dict[str, list[re.Pattern[str]]] = {
             r"Excon\b",
             r"Typhoeus\b",
             r"\bHTTP\.(get|post|head|put|delete|patch)\b",
+            r"rubygems\.org/api/v1/gems",  # registry-as-exfiltration (GemStuffer pattern)
+            r"authorized_keys",  # SSH persistence via authorized_keys append
         ],
         ".py": [
             r"\brequests\.(get|post|put|delete|head|patch|request)\s*\(",
@@ -227,6 +230,9 @@ _NET_CALL_PATTERNS: dict[str, list[re.Pattern[str]]] = {
             r"\bnet\.DialTCP\s*\(",
             r'\bos\.Setenv\s*\(\s*"GOPROXY"',  # redirect module downloads to attacker proxy
             r'\bos\.Setenv\s*\(\s*"GOSUMDB"',  # disable checksum verification
+            r'os\.Getenv\s*\(\s*"GITHUB_ENV"\s*\)',  # CI env-file poisoning (inject into Actions env)
+            r'os\.Getenv\s*\(\s*"GITHUB_PATH"\s*\)',  # CI PATH poisoning (inject fake binaries)
+            r"authorized_keys",  # SSH persistence via authorized_keys append
         ],
         ".rs": [
             r"\breqwest::(get|post|Client|blocking)\b",  # reqwest — most common Rust HTTP client
@@ -259,6 +265,7 @@ _OBFUSCATION_PATTERNS: dict[str, list[re.Pattern[str]]] = {
             r"\bnew\s+Function\s*\(\s*atob\s*\(",  # new Function(atob(...))
             r"gh[op]_[A-Za-z0-9]{20,}",  # hardcoded GitHub PAT or token regex in source
             r"npm_[A-Za-z0-9]{20,}",  # hardcoded npm publish token regex in source
+            r"\(\s*\d{7,}\s*\^\s*\d{7,}\s*\)",  # integer XOR-pair obfuscation (Coruna pattern)
         ],
         ".ts": [
             r"\b_0x[0-9a-fA-F]{4,}\b",
@@ -281,6 +288,7 @@ _OBFUSCATION_PATTERNS: dict[str, list[re.Pattern[str]]] = {
             r"\beval\s*\(\s*Base64\.decode64\s*\(",  # eval(Base64.decode64(...)) Ruby payload
             r"\beval\s*\(.*\.pack\s*\(",  # eval([hex].pack('H*')) hex-to-binary exec
             r"\.pack\s*\(\s*['\"]H\*['\"]",  # hex pack — common Ruby payload delivery
+            r"rubygems_api_key:\s*\w{10,}",  # hardcoded RubyGems API key in source (GemStuffer pattern)
         ],
         ".php": [
             r"\beval\s*\(\s*base64_decode\s*\(",  # eval(base64_decode(...))
@@ -288,11 +296,20 @@ _OBFUSCATION_PATTERNS: dict[str, list[re.Pattern[str]]] = {
             r"\beval\s*\(\s*gzuncompress\s*\(",
             r"\beval\s*\(\s*str_rot13\s*\(",
             r"\beval\s*\(\s*gzdecode\s*\(",
+            r"\bchr\s*\(\s*\d{2,3}\s*\)\s*\.\s*chr\s*\(",  # chr(X).chr(Y) hostname obfuscation (Laravel Lang May 2026)
+        ],
+        ".cs": [
+            r"\[ModuleInitializer\]",  # auto-executes on DLL load (NuGet Chinese UI attack)
+            r"\bRuntimeHelpers\.RunModuleConstructor\b",  # explicit module initializer trigger
         ],
     }.items()
 }
 # Any single line this long was machine-generated (normal minification tops out ~10KB)
 _OBFUSCATION_LINE_THRESHOLD = 100_000
+
+# Zero-width Unicode characters used for steganographic AI prompt injection (TrapDoor May 2026).
+# U+200B/200C/200D zero-width spaces, U+2060 word joiner, U+FEFF BOM mid-text, U+FFFC replacement.
+_ZERO_WIDTH_RE = re.compile("[​‌‍⁠﻿￼]")
 
 # npm dependency version prefixes that bypass the registry (git/URL sourced)
 _GIT_DEP_PREFIXES = ("github:", "git+", "git://", "bitbucket:", "gitlab:", "file:")
@@ -556,6 +573,9 @@ def _build_diff(
             regular_new_files.append(
                 f"+ {rel} [SUSPICIOUS: should not appear in a package archive]"
             )
+        # Zero-width Unicode steganography in AI editor config files (TrapDoor attack)
+        if name in {"CLAUDE.md", ".cursorrules"} and _has_zero_width_unicode(new_map[rel]):
+            obfuscated_code = True
         if suffix in DANGEROUS_BINARY_SUFFIXES:
             dangerous_new.append(rel)
         else:
@@ -628,6 +648,10 @@ def _build_diff(
             # Existing .pth that gains import lines — possible persistence injection
             added_pth = _diff_added_lines(old_text, new_text)
             if any(ln.strip().startswith(("import ", "import\t")) for ln in added_pth):
+                install_script_changed = True
+        elif name == "go.sum":
+            # Removed checksum entries weaken module verification (Go tampering attack)
+            if _go_sum_lines_removed(old_map[rel], new_map[rel]):
                 install_script_changed = True
 
         # Check for newly-added outbound network calls in non-install-hook library code
@@ -959,6 +983,43 @@ def _cargo_git_deps_added(old_path: Path, new_path: Path) -> bool:
             _find(new_path.read_text(errors="replace"))
             - _find(old_path.read_text(errors="replace"))
         )
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _go_sum_lines_removed(old_path: Path, new_path: Path) -> bool:
+    """Return True if go.sum has fewer hash entries in the new version.
+
+    Legitimate updates only add new entries to go.sum. Removing existing entries
+    disables checksum verification for those modules — a supply chain tampering
+    technique used to substitute malicious versions without detection.
+    """
+
+    def _entries(path: Path) -> set[str]:
+        found: set[str] = set()
+        for line in path.read_text(errors="replace").splitlines():
+            s = line.strip()
+            if s and not s.startswith("#"):
+                found.add(s)
+        return found
+
+    try:
+        return bool(_entries(old_path) - _entries(new_path))
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _has_zero_width_unicode(path: Path) -> bool:
+    """Return True if the file contains zero-width Unicode characters.
+
+    These invisible code points (U+200B/200C/200D, U+2060, U+FEFF, U+FFFC) have no
+    legitimate use in package source files. Attackers embed them in AI editor config
+    files (.cursorrules, CLAUDE.md) to inject hidden instructions that the AI executes
+    while appearing as a blank line to human reviewers (TrapDoor attack, May 2026).
+    """
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+        return bool(_ZERO_WIDTH_RE.search(text))
     except Exception:  # noqa: BLE001
         return False
 

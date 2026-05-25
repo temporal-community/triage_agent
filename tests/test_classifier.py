@@ -416,7 +416,7 @@ def test_get_classifier_unknown_name_falls_back(monkeypatch):
 
 
 def test_get_classifier_entry_point_plugin(monkeypatch):
-    """A triage_agent.classifiers entry point is discovered and instantiated."""
+    """A dependency_scout.classifiers entry point is discovered and instantiated."""
     from activities.classifier import RuleBasedClassifier, get_classifier
 
     monkeypatch.setenv("CLASSIFIER", "my_custom")

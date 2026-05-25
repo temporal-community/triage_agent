@@ -8,14 +8,14 @@ Built-in classifiers:
   RuleBasedClassifier   — deterministic threshold rules, zero API keys required
 
 Selection order:
-  1. CLASSIFIER env var — name of a triage_agent.classifiers entry point or a built-in name
+  1. CLASSIFIER env var — name of a dependency_scout.classifiers entry point or a built-in name
      (claude, openai, ollama, rule_based)
   2. ANTHROPIC_API_KEY set → ClaudeClassifier
   3. Fallback → RuleBasedClassifier
 
 Third-party classifiers register via entry point:
 
-    [project.entry-points."triage_agent.classifiers"]
+    [project.entry-points."dependency_scout.classifiers"]
     my_gemini = "my_package:GeminiClassifier"
 
 Then set CLASSIFIER=my_gemini in .env.
@@ -269,13 +269,13 @@ def get_classifier() -> Classifier:
     """Return the active Classifier.
 
     Selection order:
-    1. CLASSIFIER env var → look up in triage_agent.classifiers entry points, then built-in names.
+    1. CLASSIFIER env var → look up in dependency_scout.classifiers entry points, then built-in names.
     2. Default: ClaudeClassifier when ANTHROPIC_API_KEY is set, else RuleBasedClassifier.
     """
     name = os.environ.get("CLASSIFIER")
     if name:
         try:
-            for ep in entry_points(group="triage_agent.classifiers"):
+            for ep in entry_points(group="dependency_scout.classifiers"):
                 if ep.name == name:
                     return ep.load()()
         except Exception as exc:  # noqa: BLE001
@@ -283,7 +283,7 @@ def get_classifier() -> Classifier:
         if name in _BUILTIN_CLASSIFIERS:
             return _BUILTIN_CLASSIFIERS[name]()
         _logger.warning(
-            "CLASSIFIER=%r not found in triage_agent.classifiers entry points or built-in names "
+            "CLASSIFIER=%r not found in dependency_scout.classifiers entry points or built-in names "
             "('claude', 'rule_based') — falling back to default",
             name,
         )

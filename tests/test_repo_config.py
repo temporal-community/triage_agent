@@ -9,7 +9,7 @@ from activities.platform_activities import fetch_repo_config as fetch
 from activities.models import PRContext, RepoConfig
 from helpers.config_provider import EnvConfigProvider
 
-GITHUB_CONTENTS_URL = "https://api.github.com/repos/owner/repo/contents/.github/triage-agent.yml"
+GITHUB_CONTENTS_URL = "https://api.github.com/repos/owner/repo/contents/.github/dependency-scout.yml"
 
 PR = PRContext(
     repo="owner/repo",

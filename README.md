@@ -1,4 +1,4 @@
-# Dependabot Supply Chain Scout
+# Dependency Scout
 
 You have 47 unreviewed Dependabot PRs. You're going to merge most of them anyway. So did the maintainers of [XZ Utils](https://en.wikipedia.org/wiki/XZ_Utils_backdoor), [event-stream](https://blog.npmjs.org/post/180565383195/details-about-the-event-stream-incident), and dozens of other projects before a malicious update slipped through.
 
@@ -39,7 +39,7 @@ When a Dependabot or Renovate PR opens on **GitHub or GitLab**, the Scout:
 
 ### Safe by default
 
-**If you don't configure anything, the Scout only posts comments.** It never merges, closes, or requests review unless you explicitly enable it in `.github/triage-agent.yml`. This means installing it on a repo you haven't thought about yet is harmless.
+**If you don't configure anything, the Scout only posts comments.** It never merges, closes, or requests review unless you explicitly enable it in `.github/dependency-scout.yml`. This means installing it on a repo you haven't thought about yet is harmless.
 
 ### What the comment looks like
 
@@ -56,7 +56,7 @@ Every PR gets a comment like this:
 > **Flags:**
 > - very fresh release (18h old)
 >
-> [View workflow run](http://localhost:8233/...) · [Configure triage behavior](.github/triage-agent.yml)
+> [View workflow run](http://localhost:8233/...) · [Configure triage behavior](.github/dependency-scout.yml)
 
 ---
 
@@ -69,8 +69,8 @@ For a GREEN verdict, the comment is shorter — just the badge, reasoning, and a
 You need Python 3.10+, [`uv`](https://docs.astral.sh/uv/), and the [Temporal CLI](https://docs.temporal.io/cli).
 
 ```bash
-git clone https://github.com/temporal-community/dependabot-supply-chain-scout
-cd dependabot-supply-chain-scout
+git clone https://github.com/temporal-community/dependency-scout
+cd dependency-scout
 uv run python setup.py
 ```
 
@@ -117,9 +117,9 @@ Copy `.env.example` to `.env` and fill in what you have, or run `uv run python s
 
 ## Configuring your repo
 
-Add `.github/triage-agent.yml` to any repo where you want the Scout to do more than comment. All fields are optional — omitting the file entirely is safe (comment-only mode).
+Add `.github/dependency-scout.yml` to any repo where you want the Scout to do more than comment. All fields are optional — omitting the file entirely is safe (comment-only mode).
 
-A ready-to-copy template is at [`.github/triage-agent.yml.example`](.github/triage-agent.yml.example).
+A ready-to-copy template is at [`.github/dependency-scout.yml.example`](.github/dependency-scout.yml.example).
 
 ### Full config reference
 
@@ -137,7 +137,7 @@ A ready-to-copy template is at [`.github/triage-agent.yml.example`](.github/tria
 **Minimal "just auto-merge safe stuff" config:**
 
 ```yaml
-# .github/triage-agent.yml
+# .github/dependency-scout.yml
 auto_merge_enabled: true
 reviewers: [your-github-username]   # gets pinged on yellow
 ```
@@ -167,9 +167,9 @@ Everything that varies between deployments is pluggable via Python entry points 
 
 | What to extend | Entry point group | How |
 |---|---|---|
-| New package ecosystem | `triage_agent.ecosystems` | Implement `EcosystemProvider`, or use `RemoteEcosystemProvider` for non-Python stacks |
-| Custom classifier (OpenAI, Gemini, …) | `triage_agent.classifiers` | Implement `async def classify(signals) -> Verdict`, set `CLASSIFIER=name` |
-| Extra signal activities | `triage_agent.activities` | Decorate with `@activity.defn`, list in `extra_signal_activities` config |
+| New package ecosystem | `dependency_scout.ecosystems` | Implement `EcosystemProvider`, or use `RemoteEcosystemProvider` for non-Python stacks |
+| Custom classifier (OpenAI, Gemini, …) | `dependency_scout.classifiers` | Implement `async def classify(signals) -> Verdict`, set `CLASSIFIER=name` |
+| Extra signal activities | `dependency_scout.activities` | Decorate with `@activity.defn`, list in `extra_signal_activities` config |
 | New dependency bot (PyUp, etc.) | call `register_bot_parser()` | Implement `BotParser` with `bot_logins` and `parse()` |
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for full examples of each.
@@ -183,12 +183,12 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for full examples of each.
 - [x] LLM classifier with rule-based fallback
 - [x] GitHub and GitLab support
 - [x] FastAPI webhook receiver
-- [x] Per-repo config via `.github/triage-agent.yml`
+- [x] Per-repo config via `.github/dependency-scout.yml`
 - [x] Observe-only safe default (comment-only with no config file)
 - [x] Replay test fixtures (workflow determinism guarantee)
 - [x] Ecosystem plugin architecture — entry points + `RemoteEcosystemProvider` HTTP bridge for non-Python stacks
-- [x] Pluggable classifier — Claude, OpenAI, Ollama, or any `triage_agent.classifiers` plugin
-- [x] Signal activity plugin architecture — third-party signals via `triage_agent.activities` entry points, surfaced to LLM automatically
+- [x] Pluggable classifier — Claude, OpenAI, Ollama, or any `dependency_scout.classifiers` plugin
+- [x] Signal activity plugin architecture — third-party signals via `dependency_scout.activities` entry points, surfaced to LLM automatically
 - [x] Temporal Cloud support — TLS credentials in `.env`, no code changes needed vs local dev
 - [x] Renovate full support — title variants with/without `dependency` keyword, arrow and from/to body extraction, pre-release versions, false-positive prevention
 

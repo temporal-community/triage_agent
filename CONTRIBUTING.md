@@ -161,7 +161,7 @@ class OpenAIClassifier:
 
 ```toml
 # pyproject.toml
-[project.entry-points."triage_agent.classifiers"]
+[project.entry-points."dependency_scout.classifiers"]
 my_openai = "my_package:OpenAIClassifier"
 ```
 
@@ -180,7 +180,7 @@ The classifier receives the full `PackageSignals` object including `custom_signa
 - **Signals are nested, not flat** — `PackageSignals` holds typed sub-models (`signals.age.release_age_hours`, not `signals.release_age_hours`). Field name collisions between signals are structurally impossible.
 - **The registry is the source of truth** — `_SIGNAL_REGISTRY` in `package_triage_workflow.py` drives the gather order, the `SIGNAL_ACTIVITY_NAMES` constant, and the worker registration test. When adding a signal, the registry row is the one required workflow-layer edit.
 - **Worker registration is automatic** — `worker.py` scans `activities/*.py` at startup for `@activity.defn`-decorated functions. Creating a new activity file is sufficient; no manual entry in `ACTIVITIES` is needed.
-- **Ecosystem provider registration is automatic** — `get_provider()` scans `activities/ecosystems/*.py` for classes with an `ecosystem_name` attribute, then checks the `triage_agent.ecosystems` entry points group for installed plugins. Creating a new provider file (or installing a plugin package) is sufficient; no manual registration is needed.
+- **Ecosystem provider registration is automatic** — `get_provider()` scans `activities/ecosystems/*.py` for classes with an `ecosystem_name` attribute, then checks the `dependency_scout.ecosystems` entry points group for installed plugins. Creating a new provider file (or installing a plugin package) is sufficient; no manual registration is needed.
 
 ---
 
@@ -193,8 +193,8 @@ Third-party packages can register ecosystem providers without modifying this cod
 Declare an entry point in your `pyproject.toml`:
 
 ```toml
-[project.entry-points."triage_agent.ecosystems"]
-django_packages = "triage_agent_django:DjangoPackagesProvider"
+[project.entry-points."dependency_scout.ecosystems"]
+django_packages = "dependency_scout_django:DjangoPackagesProvider"
 ```
 
 `DjangoPackagesProvider` must implement the `EcosystemProvider` Protocol: the four class attributes (`ecosystem_name`, `osv_name`, `dependabot_slug`, `name_re`) and the seven async methods. See any built-in provider in `activities/ecosystems/` for a template.
@@ -204,7 +204,7 @@ django_packages = "triage_agent_django:DjangoPackagesProvider"
 If your logic lives in a non-Python stack, subclass `RemoteEcosystemProvider` from `activities/ecosystems/remote.py`. It implements all seven protocol methods by POSTing to your service — your bridge package is ~10 lines of Python that configure the URL and ecosystem metadata:
 
 ```python
-# triage_agent_drupal/__init__.py
+# dependency_scout_drupal/__init__.py
 import re
 from activities.ecosystems.remote import RemoteEcosystemProvider
 
@@ -223,17 +223,17 @@ Your service must expose `POST {base_url}/{method_name}` endpoints. Each endpoin
 Plugins can also contribute new signal-gathering activities. Declare them in `pyproject.toml`:
 
 ```toml
-[project.entry-points."triage_agent.activities"]
-drupal_signal = "triage_agent_drupal.activities:check"
+[project.entry-points."dependency_scout.activities"]
+drupal_signal = "dependency_scout_drupal.activities:check"
 ```
 
 `check` must be decorated with `@activity.defn`. It receives `(ecosystem, package, old_version, new_version)` and must return a JSON-serialisable dict. The worker loads it automatically at startup alongside built-in activities.
 
-To invoke it, the target repo adds the activity name to `.github/triage-agent.yml`:
+To invoke it, the target repo adds the activity name to `.github/dependency-scout.yml`:
 
 ```yaml
 extra_signal_activities:
-  - "triage_agent_drupal.activities:check"
+  - "dependency_scout_drupal.activities:check"
 ```
 
 Results land in `PackageSignals.custom_signals` and are surfaced to the LLM in a sandboxed `<untrusted_custom>` block — the same way package descriptions and diff content are handled. They cannot override or poison the core trusted signals.
@@ -249,4 +249,4 @@ This means plugins work best when an LLM classifier is configured. The rule-base
 
 Once installed, `get_provider("drupal")` returns your provider and `check` is registered with the worker automatically — no changes to this repo needed. Built-in providers take precedence over plugins with the same `ecosystem_name`, so core ecosystems cannot be shadowed.
 
-**Security note:** both entry point groups (`triage_agent.ecosystems` and `triage_agent.activities`) load plugin code into the same process as the core worker. This is the same trust boundary as any `pip install` dependency — the operator who deploys triage-agent is implicitly trusting the packages they install. Plugin results in `custom_signals` are rendered in the sandboxed `<untrusted_custom>` section of the LLM prompt and cannot influence the trusted signal block.
+**Security note:** both entry point groups (`dependency_scout.ecosystems` and `dependency_scout.activities`) load plugin code into the same process as the core worker. This is the same trust boundary as any `pip install` dependency — the operator who deploys triage-agent is implicitly trusting the packages they install. Plugin results in `custom_signals` are rendered in the sandboxed `<untrusted_custom>` section of the LLM prompt and cannot influence the trusted signal block.
