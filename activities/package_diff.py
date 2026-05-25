@@ -190,6 +190,7 @@ _NET_CALL_PATTERNS: dict[str, list[re.Pattern[str]]] = {
             r"authorized_keys",  # SSH persistence via authorized_keys append
             r"ENV\s*\[\s*['\"]HOME['\"]\s*\]\s*=\s*['\"]\/tmp\/",  # redirect HOME → /tmp (GemStuffer)
             r"File\.binwrite\s*\(\s*['\"]\/tmp\/\.",  # write hidden binary to /tmp (malware staging)
+            r"\bgem\s+push\s+[^\n]{0,60}\.gem",  # worm self-replication via fabricated gem publish (GemStuffer)
         ],
         ".py": [
             r"\brequests\.(get|post|put|delete|head|patch|request)\s*\(",
@@ -346,6 +347,7 @@ _OBFUSCATION_PATTERNS: dict[str, list[re.Pattern[str]]] = {
             r"gh[op]_[A-Za-z0-9]{20,}",  # hardcoded GitHub PAT or token regex in source
             r"npm_[A-Za-z0-9]{20,}",  # hardcoded npm publish token regex in source
             r"\(\s*\d{7,}\s*\^\s*\d{7,}\s*\)",  # integer XOR-pair obfuscation (Coruna pattern)
+            r"0xFEEDFACF",  # Mach-O ARM64 magic — iOS/macOS exploit kit architecture fingerprinting (Coruna art-template)
         ],
         ".ts": [
             r"\b_0x[0-9a-fA-F]{4,}\b",

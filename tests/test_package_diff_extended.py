@@ -3255,3 +3255,65 @@ def test_obfuscation_php_fileinode_file_detected(tmp_path):
     )
     _, _, _, _, _, _, _, obfuscated, *_ = _build_diff(old, new)
     assert obfuscated is True
+
+
+# ── GemStuffer worm: gem push self-replication ────────────────────────────────
+
+
+def test_net_calls_gem_push_detected(tmp_path):
+    """gem push *.gem in Ruby library code triggers network_calls_in_lib (GemStuffer worm self-replication)."""
+    old = _write_files(tmp_path / "old", {"lib/publisher.rb": "# nothing\n"})
+    new = _write_files(
+        tmp_path / "new",
+        {
+            "lib/publisher.rb": (
+                "# nothing\n"
+                "built = Gem::Package.build spec\n"
+                "system('gem push ' + built + '.gem')\n"
+            )
+        },
+    )
+    _, _, _, _, net_calls, *_ = _build_diff(old, new)
+    assert net_calls is True
+
+
+def test_net_calls_gem_push_not_in_non_rb(tmp_path):
+    """gem push string in a non-.rb file (e.g. Makefile) is not flagged."""
+    old = _write_files(tmp_path / "old", {})
+    new = _write_files(
+        tmp_path / "new",
+        {"Makefile": "publish:\n\tgem push *.gem\n"},
+    )
+    _, _, _, _, net_calls, *_ = _build_diff(old, new)
+    assert net_calls is False
+
+
+# ── Coruna art-template: Mach-O magic constant iOS targeting ─────────────────
+
+
+def test_obfuscation_feedfacf_detected(tmp_path):
+    """0xFEEDFACF (Mach-O ARM64 magic) in JS flags iOS exploit kit architecture fingerprinting."""
+    old = _write_files(tmp_path / "old", {})
+    new = _write_files(
+        tmp_path / "new",
+        {
+            "lib/arch.js": (
+                "// detect architecture\n"
+                "const MACHO_MAGIC = 0xFEEDFACF;\n"
+                "const isMachO = view.getUint32(0, false) === MACHO_MAGIC;\n"
+            )
+        },
+    )
+    _, _, _, _, _, _, _, obfuscated, *_ = _build_diff(old, new)
+    assert obfuscated is True
+
+
+def test_obfuscation_feedfacf_not_in_normal_comment(tmp_path):
+    """0xFEEDFACF in a comment in an unrelated non-.js file is not flagged."""
+    old = _write_files(tmp_path / "old", {})
+    new = _write_files(
+        tmp_path / "new",
+        {"README.md": "The Mach-O ARM64 magic number is 0xFEEDFACF.\n"},
+    )
+    _, _, _, _, _, _, _, obfuscated, *_ = _build_diff(old, new)
+    assert obfuscated is False
