@@ -523,6 +523,7 @@ def test_rule_based_young_maintainer_account_is_yellow(base_signals):
 
 def test_rule_based_ci_workflow_changed_is_yellow(base_signals):
     from models import ReleaseChecks
+
     base_signals.release = ReleaseChecks(ci_workflow_changed_days_ago=3)
     verdict = _rule_based(base_signals)
     assert verdict.classification == "yellow"
@@ -631,7 +632,12 @@ async def test_ollama_classifier_success(base_signals, monkeypatch):
             json={
                 "message": {
                     "content": json.dumps(
-                        {"classification": "green", "confidence": 0.85, "reasoning": "OK.", "flags": []}
+                        {
+                            "classification": "green",
+                            "confidence": 0.85,
+                            "reasoning": "OK.",
+                            "flags": [],
+                        }
                     )
                 }
             },

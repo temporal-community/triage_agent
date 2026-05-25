@@ -345,9 +345,7 @@ async def test_fetch_github_account_age_compat_alias(monkeypatch):
 @respx.mock
 async def test_fetch_vcs_account_age_github_exception(monkeypatch):
     monkeypatch.setenv("GITHUB_TOKEN", "tok")
-    respx.get("https://api.github.com/users/owner").mock(
-        side_effect=httpx.ConnectError("error")
-    )
+    respx.get("https://api.github.com/users/owner").mock(side_effect=httpx.ConnectError("error"))
     result = await fetch_vcs_account_age("github", "owner")
     assert result is None
 
@@ -355,9 +353,7 @@ async def test_fetch_vcs_account_age_github_exception(monkeypatch):
 @respx.mock
 async def test_fetch_vcs_account_age_gitlab_exception(monkeypatch):
     monkeypatch.setenv("GITLAB_TOKEN", "tok")
-    respx.get("https://gitlab.com/api/v4/users").mock(
-        side_effect=httpx.ConnectError("error")
-    )
+    respx.get("https://gitlab.com/api/v4/users").mock(side_effect=httpx.ConnectError("error"))
     result = await fetch_vcs_account_age("gitlab", "owner")
     assert result is None
 
@@ -377,9 +373,7 @@ async def test_fetch_github_release_compat_alias(monkeypatch):
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
     from ecosystems import fetch_github_release
 
-    respx.get(re.compile(r"https://api\.github\.com/.*")).mock(
-        return_value=httpx.Response(404)
-    )
+    respx.get(re.compile(r"https://api\.github\.com/.*")).mock(return_value=httpx.Response(404))
     result = await fetch_github_release("owner", "repo", "1.0.0", None)
     assert result is None
 
@@ -434,6 +428,7 @@ async def test_ci_workflow_no_date_returns_none(monkeypatch):
 async def test_ci_workflow_success_returns_days(monkeypatch):
     monkeypatch.setenv("GITHUB_TOKEN", "tok")
     from datetime import datetime, timezone
+
     recent_date = (datetime.now(timezone.utc).replace(microsecond=0)).isoformat()
     respx.get("https://api.github.com/repos/owner/repo/commits").mock(
         return_value=httpx.Response(
@@ -509,9 +504,15 @@ def test_get_platform_client_github_fallback():
     from models import PRContext
 
     pr = PRContext(
-        repo="owner/repo", pr_number=1, pr_author="dependabot[bot]",
-        installation_id=None, platform="github", ecosystem="pip",
-        package_name="requests", old_version="1.0.0", new_version="2.0.0",
+        repo="owner/repo",
+        pr_number=1,
+        pr_author="dependabot[bot]",
+        installation_id=None,
+        platform="github",
+        ecosystem="pip",
+        package_name="requests",
+        old_version="1.0.0",
+        new_version="2.0.0",
     )
     with patch("importlib.metadata.entry_points", return_value=[]):
         client = get_platform_client(pr)
@@ -525,9 +526,15 @@ def test_get_platform_client_gitlab_fallback():
     from models import PRContext
 
     pr = PRContext(
-        repo="owner/repo", pr_number=1, pr_author="renovate[bot]",
-        installation_id=None, platform="gitlab", ecosystem="pip",
-        package_name="requests", old_version="1.0.0", new_version="2.0.0",
+        repo="owner/repo",
+        pr_number=1,
+        pr_author="renovate[bot]",
+        installation_id=None,
+        platform="gitlab",
+        ecosystem="pip",
+        package_name="requests",
+        old_version="1.0.0",
+        new_version="2.0.0",
     )
     with patch("importlib.metadata.entry_points", return_value=[]):
         client = get_platform_client(pr)
@@ -540,9 +547,15 @@ def test_get_platform_client_entry_point_exception_falls_through():
     from models import PRContext
 
     pr = PRContext(
-        repo="owner/repo", pr_number=1, pr_author="dependabot[bot]",
-        installation_id=None, platform="github", ecosystem="pip",
-        package_name="requests", old_version="1.0.0", new_version="2.0.0",
+        repo="owner/repo",
+        pr_number=1,
+        pr_author="dependabot[bot]",
+        installation_id=None,
+        platform="github",
+        ecosystem="pip",
+        package_name="requests",
+        old_version="1.0.0",
+        new_version="2.0.0",
     )
     with patch("importlib.metadata.entry_points", side_effect=ImportError("broken")):
         client = get_platform_client(pr)

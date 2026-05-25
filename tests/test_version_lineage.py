@@ -508,7 +508,9 @@ async def test_pypi_bad_timestamp_skips_gracefully():
         return_value=httpx.Response(
             200,
             json={
-                "releases": {"1.0.1": [{"upload_time_iso_8601": "not-a-date", "filename": "x.tar.gz"}]},
+                "releases": {
+                    "1.0.1": [{"upload_time_iso_8601": "not-a-date", "filename": "x.tar.gz"}]
+                },
                 "info": {"name": "pkg"},
             },
         )

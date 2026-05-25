@@ -4305,13 +4305,7 @@ def test_count_new_pip_deps_skips_blank_and_comment_lines(tmp_path):
     new = tmp_path / "new.txt"
     old.write_text("requests>=2.0\n")
     # new has blank lines, a comment, a -r line, and one genuinely new dep
-    new.write_text(
-        "requests>=2.0\n"
-        "\n"
-        "# this is a comment\n"
-        "-r base.txt\n"
-        "boto3>=1.0\n"
-    )
+    new.write_text("requests>=2.0\n\n# this is a comment\n-r base.txt\nboto3>=1.0\n")
     assert _count_new_pip_deps(old, new) == 1
 
 
