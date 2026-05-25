@@ -63,6 +63,7 @@ HIGH_SIGNAL_NAMES = {
     "preinstall.js",
     "Rakefile",
     "Gemfile",
+    "Cargo.toml",
     "pom.xml",
     "composer.json",
 }
@@ -75,6 +76,9 @@ INSTALL_HOOK_NAMES = {
     "postinstall.js",  # npm: postinstall hook
     "preinstall.js",  # npm: preinstall hook
     "extconf.rb",  # rubygems: C-extension build script
+    "build.rs",  # cargo: build script, runs at compile time (used in TrapDoor-style attacks)
+    "tools/install.ps1",  # nuget: runs on package install (chocolatey convention)
+    "tools/init.ps1",  # nuget: runs on package init
 }
 # Keys in package.json scripts{} that run during install.
 NPM_INSTALL_SCRIPTS = {"install", "preinstall", "postinstall", "prepare"}
@@ -149,6 +153,8 @@ _NET_CALL_PATTERNS: dict[str, list[re.Pattern[str]]] = {
             r"\bhttpx\.(get|post|put|delete|head|patch|request|AsyncClient|Client)\b",
             r"\baiohttp\.(ClientSession|request)\b",
             r"\bhttp\.client\.(HTTPConnection|HTTPSConnection)\b",
+            r"\bsocket\.getaddrinfo\s*\(",  # DNS lookups (C2-over-DNS pattern)
+            r"\bsocket\.gethostbyname\s*\(",
         ],
         ".js": [
             r"\bfetch\s*\(",
@@ -158,6 +164,9 @@ _NET_CALL_PATTERNS: dict[str, list[re.Pattern[str]]] = {
             r"\bgot\s*[\.(]",
             r"\bsuperagent\b",
             r"\bnode-fetch\b",
+            r"\bdns\.resolveTxt\s*\(",  # DNS TXT C2 (node-ipc, Go decimal pattern)
+            r"\bdns\.resolve(?:Txt|Host|Mx|Ns)?\s*\(",
+            r"\bdns\.lookup\s*\(",
         ],
         ".ts": [
             r"\bfetch\s*\(",
@@ -184,8 +193,86 @@ _NET_CALL_PATTERNS: dict[str, list[re.Pattern[str]]] = {
             r"\bRestTemplate\b",
             r"\bWebClient\b",
         ],
+        ".go": [
+            r"\bhttp\.(Get|Post|Head)\s*\(",  # net/http outbound calls
+            r"\bhttp\.NewRequest\s*\(",
+            r"\bnet\.LookupTXT\s*\(",  # DNS TXT C2 (Go decimal typosquat pattern)
+            r"\bnet\.LookupHost\s*\(",
+            r"\bnet\.LookupIP\s*\(",
+            r"\bnet\.Dial\s*\(",
+            r"\bnet\.DialTCP\s*\(",
+        ],
+        ".rs": [
+            r"\breqwest::(get|post|Client|blocking)\b",  # reqwest — most common Rust HTTP client
+            r"\bTcpStream::connect\s*\(",  # raw TCP (data exfiltration)
+            r"\bstd::net::TcpStream\b",
+            r"\bUdpSocket::bind\b",
+        ],
+        ".cs": [
+            r"\bHttpClient\b",
+            r"\bWebClient\b",
+            r"\bHttpWebRequest\b",
+            r"\bWebRequest\.Create\s*\(",
+            r"\bTcpClient\b",
+            r"\bUdpClient\b",
+            r"\bDns\.GetHostEntry\s*\(",  # DNS lookup (C2-over-DNS)
+            r"\bDns\.Resolve\s*\(",
+        ],
     }.items()
 }
+
+# Obfuscation patterns by extension — matched against full file text of new files.
+# These are high-confidence fingerprints of machine-generated obfuscation, not normal code.
+_OBFUSCATION_PATTERNS: dict[str, list[re.Pattern[str]]] = {
+    ext: [re.compile(p) for p in patterns]
+    for ext, patterns in {
+        ".js": [
+            r"\b_0x[0-9a-fA-F]{4,}\b",  # javascript-obfuscator hex variable names
+            r"\beval\s*\(\s*atob\s*\(",  # eval(atob(...)) decode-then-exec chain
+            r"\beval\s*\(\s*Buffer\.from\s*\(",  # eval(Buffer.from(..., 'base64'))
+            r"\bnew\s+Function\s*\(\s*atob\s*\(",  # new Function(atob(...))
+        ],
+        ".ts": [
+            r"\b_0x[0-9a-fA-F]{4,}\b",
+            r"\beval\s*\(\s*atob\s*\(",
+            r"\bnew\s+Function\s*\(\s*atob\s*\(",
+        ],
+        ".mjs": [
+            r"\b_0x[0-9a-fA-F]{4,}\b",
+            r"\beval\s*\(\s*atob\s*\(",
+        ],
+        ".py": [
+            r"\bexec\s*\(\s*compile\s*\(",  # exec(compile(...)) obfuscation
+            r"\bexec\s*\(\s*base64\b",
+            r"\beval\s*\(\s*base64\b",
+            r"__import__\s*\(\s*['\"]base64['\"]\s*\)\s*\.\s*b64decode",
+        ],
+        ".rb": [
+            r"\beval\s*\(\s*Base64\.decode64\s*\(",  # eval(Base64.decode64(...)) Ruby payload
+            r"\beval\s*\(.*\.pack\s*\(",  # eval([hex].pack('H*')) hex-to-binary exec
+            r"\.pack\s*\(\s*['\"]H\*['\"]",  # hex pack — common Ruby payload delivery
+        ],
+        ".php": [
+            r"\beval\s*\(\s*base64_decode\s*\(",  # eval(base64_decode(...))
+            r"\beval\s*\(\s*gzinflate\s*\(",  # eval(gzinflate(...)) — Laravel Lang pattern
+            r"\beval\s*\(\s*gzuncompress\s*\(",
+            r"\beval\s*\(\s*str_rot13\s*\(",
+            r"\beval\s*\(\s*gzdecode\s*\(",
+        ],
+    }.items()
+}
+# Any single line this long was machine-generated (normal minification tops out ~10KB)
+_OBFUSCATION_LINE_THRESHOLD = 100_000
+
+# npm dependency version prefixes that bypass the registry (git/URL sourced)
+_GIT_DEP_PREFIXES = ("github:", "git+", "git://", "bitbucket:", "gitlab:", "file:")
+_HTTP_DEP_RE = re.compile(r"^https?://")
+
+# pip git-URL dependency patterns (PEP 508 URL reqs and -e editable installs)
+_PIP_GIT_DEP_RE = re.compile(r"git\+https?://|git\+ssh://|\s@\s+https?://\S+\.git\b", re.IGNORECASE)
+
+# Cargo.toml inline table git dependency: some-crate = { git = "https://..." }
+_CARGO_GIT_DEP_RE = re.compile(r'\bgit\s*=\s*["\']https?://', re.IGNORECASE)
 
 
 # ---------------------------------------------------------------------------
@@ -232,6 +319,8 @@ async def compute(ecosystem: str, package: str, old_version: str, new_version: s
         new_dep_count,
         net_calls,
         binary_data,
+        git_url_dep,
+        obfuscated,
     ) = await asyncio.to_thread(
         _extract_and_diff, old_bytes, old_filename, new_bytes, new_filename, provider
     )
@@ -244,6 +333,8 @@ async def compute(ecosystem: str, package: str, old_version: str, new_version: s
         new_dependency_count=new_dep_count,
         network_calls_in_lib=net_calls,
         binary_data_added=binary_data,
+        git_url_dependency_added=git_url_dep,
+        obfuscated_code=obfuscated,
     )
 
 
@@ -323,7 +414,7 @@ def _extract_and_diff(
     new_bytes: bytes,
     new_filename: str,
     provider,
-) -> tuple[str, bool, bool, int, bool, bool]:
+) -> tuple[str, bool, bool, int, bool, bool, bool, bool]:
     try:
         with tempfile.TemporaryDirectory() as old_dir, tempfile.TemporaryDirectory() as new_dir:
             provider.extract_archive(old_bytes, old_filename, old_dir)
@@ -332,7 +423,7 @@ def _extract_and_diff(
             new_map = _get_file_map(new_dir)
             return _build_diff(old_map, new_map)
     except Exception as exc:  # noqa: BLE001
-        return f"[extraction error: {exc}]", False, False, 0, False, False
+        return f"[extraction error: {exc}]", False, False, 0, False, False, False, False
 
 
 def _is_noise(rel: str) -> bool:
@@ -399,9 +490,10 @@ _REQUIREMENTS_NAMES = frozenset(
 
 def _build_diff(
     old_map: dict[str, Path], new_map: dict[str, Path]
-) -> tuple[str, bool, bool, int, bool, bool]:
+) -> tuple[str, bool, bool, int, bool, bool, bool, bool]:
     """Return (diff_text, install_script_added, install_script_changed,
-    new_dependency_count, network_calls_in_lib, binary_data_added)."""
+    new_dependency_count, network_calls_in_lib, binary_data_added,
+    git_url_dependency_added, obfuscated_code)."""
     old_keys = set(old_map)
     new_keys = set(new_map)
 
@@ -417,12 +509,14 @@ def _build_diff(
     new_dependency_count = 0
     network_calls_in_lib = False
     binary_data_added = False
+    git_url_dependency_added = False
+    obfuscated_code = False
 
     for rel in new_files:
         p = Path(rel)
         name = p.name
         suffix = p.suffix.lower()
-        if name in INSTALL_HOOK_NAMES:
+        if name in INSTALL_HOOK_NAMES or rel in INSTALL_HOOK_NAMES:
             install_script_added = True
         if suffix in DANGEROUS_BINARY_SUFFIXES:
             dangerous_new.append(rel)
@@ -434,10 +528,18 @@ def _build_diff(
             else:
                 regular_new_files.append(f"+ {rel}")
             # Check for outbound network calls in library code (not install hooks)
-            if suffix in _NET_CALL_PATTERNS and name not in INSTALL_HOOK_NAMES:
+            if (
+                suffix in _NET_CALL_PATTERNS
+                and name not in INSTALL_HOOK_NAMES
+                and rel not in INSTALL_HOOK_NAMES
+            ):
                 new_text = _read_text(new_map[rel])
                 if _added_lines_have_net_calls(new_text.splitlines(), suffix):
                     network_calls_in_lib = True
+            # Check for obfuscation in new files
+            if not obfuscated_code and suffix in _OBFUSCATION_PATTERNS:
+                if _has_obfuscation(new_map[rel], suffix):
+                    obfuscated_code = True
 
     high_signal_changed: list[tuple[str, str]] = []
     other_changed: list[str] = []
@@ -460,18 +562,34 @@ def _build_diff(
             continue
 
         name = p.name
-        if name in INSTALL_HOOK_NAMES:
+        if name in INSTALL_HOOK_NAMES or rel in INSTALL_HOOK_NAMES:
             install_script_changed = True
         elif name == "package.json" and _npm_install_scripts_added(old_map[rel], new_map[rel]):
             install_script_added = True
 
         if name == "package.json":
             new_dependency_count += _count_new_npm_deps(old_map[rel], new_map[rel])
+            if not git_url_dependency_added and _npm_git_url_deps_added(old_map[rel], new_map[rel]):
+                git_url_dependency_added = True
         elif name in _REQUIREMENTS_NAMES:
             new_dependency_count += _count_new_pip_deps(old_map[rel], new_map[rel])
+            if not git_url_dependency_added and _pip_git_url_deps_added(old_map[rel], new_map[rel]):
+                git_url_dependency_added = True
+        elif name == "pyproject.toml":
+            if not git_url_dependency_added and _pip_git_url_deps_added(old_map[rel], new_map[rel]):
+                git_url_dependency_added = True
+        elif name == "Cargo.toml":
+            if not git_url_dependency_added and _cargo_git_deps_added(old_map[rel], new_map[rel]):
+                git_url_dependency_added = True
+        elif name == "composer.json" and _composer_autoload_files_added(old_map[rel], new_map[rel]):
+            install_script_added = True
 
         # Check for newly-added outbound network calls in non-install-hook library code
-        if suffix in _NET_CALL_PATTERNS and name not in INSTALL_HOOK_NAMES:
+        if (
+            suffix in _NET_CALL_PATTERNS
+            and name not in INSTALL_HOOK_NAMES
+            and rel not in INSTALL_HOOK_NAMES
+        ):
             added = _diff_added_lines(old_text, new_text)
             if _added_lines_have_net_calls(added, suffix):
                 network_calls_in_lib = True
@@ -523,6 +641,8 @@ def _build_diff(
             new_dependency_count,
             network_calls_in_lib,
             binary_data_added,
+            git_url_dependency_added,
+            obfuscated_code,
         )
 
     result = "\n\n".join(sections)
@@ -539,6 +659,8 @@ def _build_diff(
         new_dependency_count,
         network_calls_in_lib,
         binary_data_added,
+        git_url_dependency_added,
+        obfuscated_code,
     )
 
 
@@ -640,6 +762,127 @@ def _count_new_pip_deps(old_path: Path, new_path: Path) -> int:
         return len(new_names - old_names)
     except Exception:  # noqa: BLE001
         return 0
+
+
+def _has_obfuscation(path: Path, suffix: str) -> bool:
+    """Return True if the file contains strong obfuscation patterns.
+
+    Checks for:
+    - javascript-obfuscator _0x hex variable names
+    - eval/atob decode-then-exec chains (Coruna, TanStack patterns)
+    - exec(compile(...)) Python obfuscation
+    - Any single line exceeding 100 KB (machine-generated, not hand-minified)
+    """
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except Exception:  # noqa: BLE001
+        return False
+    for line in text.splitlines():
+        if len(line) > _OBFUSCATION_LINE_THRESHOLD:
+            return True
+    for pattern in _OBFUSCATION_PATTERNS.get(suffix, []):
+        if pattern.search(text):
+            return True
+    return False
+
+
+def _npm_git_url_deps_added(old_path: Path, new_path: Path) -> bool:
+    """Return True if new npm deps pointing to git/GitHub URLs appear in package.json.
+
+    Catches the AntV/TanStack Mini Shai-Hulud pattern:
+      "optionalDependencies": {"@antv/setup": "github:antvis/G2#<commit>"}
+    These bypass the npm registry and its malware scanning.
+    """
+    try:
+        old_data = json.loads(old_path.read_text(errors="replace"))
+        new_data = json.loads(new_path.read_text(errors="replace"))
+        old_deps: dict[str, str] = {}
+        new_deps: dict[str, str] = {}
+        for section in (
+            "dependencies",
+            "devDependencies",
+            "optionalDependencies",
+            "peerDependencies",
+        ):
+            old_deps.update(old_data.get(section, {}))
+            new_deps.update(new_data.get(section, {}))
+        for pkg, version in new_deps.items():
+            if pkg in old_deps:
+                continue
+            if any(str(version).startswith(p) for p in _GIT_DEP_PREFIXES):
+                return True
+            if _HTTP_DEP_RE.match(str(version)):
+                return True
+        return False
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _composer_autoload_files_added(old_path: Path, new_path: Path) -> bool:
+    """Return True if new files appear in composer.json autoload.files or autoload-dev.files.
+
+    The autoload.files key executes PHP files on every require 'vendor/autoload.php' call,
+    making it a reliable execution hook (Laravel Lang compromise pattern).
+    """
+    try:
+        old_data = json.loads(old_path.read_text(errors="replace"))
+        new_data = json.loads(new_path.read_text(errors="replace"))
+        for key in ("autoload", "autoload-dev"):
+            old_files = set(old_data.get(key, {}).get("files", []))
+            new_files = set(new_data.get(key, {}).get("files", []))
+            if new_files - old_files:
+                return True
+        return False
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _pip_git_url_deps_added(old_path: Path, new_path: Path) -> bool:
+    """Return True if new git-URL dep specs appear in requirements.txt or pyproject.toml.
+
+    Catches git+https:// VCS URLs and PEP 508 `pkg @ https://...git` URL requirements
+    that install directly from a git repo rather than from PyPI.
+    """
+
+    def _find(text: str) -> set[str]:
+        found: set[str] = set()
+        for line in text.splitlines():
+            s = line.strip()
+            if s and not s.startswith("#") and _PIP_GIT_DEP_RE.search(s):
+                found.add(s.lower())
+        return found
+
+    try:
+        return bool(
+            _find(new_path.read_text(errors="replace"))
+            - _find(old_path.read_text(errors="replace"))
+        )
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _cargo_git_deps_added(old_path: Path, new_path: Path) -> bool:
+    """Return True if new git-sourced deps appear in Cargo.toml.
+
+    Catches: some-crate = { git = "https://github.com/..." }
+    These bypass crates.io and its malware scanning.
+    """
+
+    def _find(text: str) -> set[str]:
+        found: set[str] = set()
+        for line in text.splitlines():
+            s = line.strip()
+            if s and not s.startswith("#") and _CARGO_GIT_DEP_RE.search(s):
+                found.add(s.lower())
+        return found
+
+    try:
+        return bool(
+            _find(new_path.read_text(errors="replace"))
+            - _find(old_path.read_text(errors="replace"))
+        )
+    except Exception:  # noqa: BLE001
+        return False
 
 
 def _read_text(path: Path) -> str:

