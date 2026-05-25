@@ -1,6 +1,6 @@
 # Dependency Scout
 
-You have 47 unreviewed Dependabot PRs. You're going to merge most of them anyway. So did the maintainers of [XZ Utils](https://en.wikipedia.org/wiki/XZ_Utils_backdoor), [event-stream](https://blog.npmjs.org/post/180565383195/details-about-the-event-stream-incident), and dozens of other projects before a malicious update slipped through.
+You have 47 unreviewed Dependabot PRs. You're going to merge most of them anyway. The maintainers of [XZ Utils](https://en.wikipedia.org/wiki/XZ_Utils_backdoor), [event-stream](https://blog.npmjs.org/post/180565383195/details-about-the-event-stream-incident), and dozens of other projects were just as capable and well-intentioned — the attacks were sophisticated enough that no amount of careful eyeballing would have caught them.
 
 **This bot gives every dependency PR a real second opinion before it merges.**
 
