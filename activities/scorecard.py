@@ -6,6 +6,9 @@ import httpx
 from temporalio import activity
 
 from activities.models import ScorecardSignals
+from helpers.cache import ActivityCache
+
+_cache: ActivityCache = ActivityCache(ttl_seconds=86400)  # repo health changes slowly; 24h TTL
 
 _ECOSYSTEM_MAP = {
     "pip": "pypi",
@@ -49,6 +52,11 @@ def _find_vcs_repo(data: dict) -> tuple[str, str] | None:
 async def fetch(
     ecosystem: str, package: str, old_version: str, new_version: str
 ) -> ScorecardSignals:
+    key = (ecosystem, package)  # scorecard is per-repo, not per-version
+    if (hit := _cache.get(key)) is not None:
+        activity.logger.debug("scorecard cache hit: %s", package)
+        return hit
+
     system = _ECOSYSTEM_MAP.get(ecosystem)
     if system is None:
         return ScorecardSignals()
@@ -90,7 +98,7 @@ async def fetch(
                 # Score of -1 means "not applicable"
                 check_scores[field] = None if raw == -1 else raw
 
-        return ScorecardSignals(
+        result = ScorecardSignals(
             scorecard_score=scorecard_score,
             scorecard_repo=repo,
             scorecard_maintained=check_scores["scorecard_maintained"],
@@ -99,6 +107,8 @@ async def fetch(
             scorecard_branch_protection=check_scores["scorecard_branch_protection"],
             scorecard_signed_releases=check_scores["scorecard_signed_releases"],
         )
+        _cache.set(key, result)
+        return result
     except Exception as exc:
         activity.logger.warning(f"Scorecard fetch failed for {package}@{new_version}: {exc!r}")
         return ScorecardSignals()

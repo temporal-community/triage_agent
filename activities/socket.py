@@ -5,6 +5,9 @@ from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
 from activities.models import SocketSignals
+from helpers.cache import ActivityCache
+
+_cache: ActivityCache = ActivityCache(ttl_seconds=3600)  # scores can be updated; refresh hourly
 
 _ECOSYSTEM_MAP = {"pip": "pypi", "npm": "npm"}
 _INCLUDE_SEVERITIES = {"critical", "high"}
@@ -12,6 +15,11 @@ _INCLUDE_SEVERITIES = {"critical", "high"}
 
 @activity.defn(name="activities.socket.score")
 async def score(ecosystem: str, package: str, old_version: str, new_version: str) -> SocketSignals:
+    key = (ecosystem, package, new_version)
+    if (hit := _cache.get(key)) is not None:
+        activity.logger.debug("socket cache hit: %s %s", package, new_version)
+        return hit
+
     api_key = os.environ.get("SOCKET_API_KEY")
     if not api_key:
         activity.logger.info(
@@ -60,4 +68,6 @@ async def score(ecosystem: str, package: str, old_version: str, new_version: str
     activity.logger.info(
         f"Socket: {package}@{new_version} score={socket_score} alerts={len(alerts)}"
     )
-    return SocketSignals(socket_score=socket_score, socket_alerts=alerts)
+    result = SocketSignals(socket_score=socket_score, socket_alerts=alerts)
+    _cache.set(key, result)
+    return result

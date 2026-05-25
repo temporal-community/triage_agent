@@ -17,30 +17,43 @@ from temporalio.exceptions import ApplicationError
 
 from activities.ecosystems import detect_stale_version_line, parse_upload_time
 from activities.models import VersionLineSignals
+from helpers.cache import ActivityCache
+
+_cache: ActivityCache = ActivityCache(ttl_seconds=3600)  # new majors can be released; 1h TTL
 
 
 @activity.defn(name="activities.version_lineage.check")
 async def check(
     ecosystem: str, package: str, old_version: str, new_version: str
 ) -> VersionLineSignals:
+    key = (ecosystem, package, new_version)
+    if (hit := _cache.get(key)) is not None:
+        activity.logger.debug("version_lineage cache hit: %s %s", package, new_version)
+        return hit
+
+    result: VersionLineSignals
     try:
         if ecosystem == "pip":
-            return await _check_pypi(package, new_version)
-        if ecosystem == "npm":
-            return await _check_npm(package, new_version)
-        if ecosystem == "rubygems":
-            return await _check_rubygems(package, new_version)
-        if ecosystem == "maven":
-            return await _check_maven(package, new_version)
-        if ecosystem == "composer":
-            return await _check_composer(package, new_version)
-        if ecosystem == "nuget":
-            return await _check_nuget(package, new_version)
+            result = await _check_pypi(package, new_version)
+        elif ecosystem == "npm":
+            result = await _check_npm(package, new_version)
+        elif ecosystem == "rubygems":
+            result = await _check_rubygems(package, new_version)
+        elif ecosystem == "maven":
+            result = await _check_maven(package, new_version)
+        elif ecosystem == "composer":
+            result = await _check_composer(package, new_version)
+        elif ecosystem == "nuget":
+            result = await _check_nuget(package, new_version)
+        else:
+            return VersionLineSignals()
     except ApplicationError:
         raise
     except Exception:  # noqa: BLE001
-        pass
-    return VersionLineSignals()
+        return VersionLineSignals()
+
+    _cache.set(key, result)
+    return result
 
 
 async def _check_pypi(package: str, new_version: str) -> VersionLineSignals:

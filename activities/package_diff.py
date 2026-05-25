@@ -23,6 +23,9 @@ from temporalio.exceptions import ApplicationError
 
 from activities.ecosystems import get_provider, validate_archive_url
 from activities.models import DiffSignals
+from helpers.cache import ActivityCache
+
+_cache: ActivityCache = ActivityCache()  # archive contents are immutable after publish
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -329,6 +332,10 @@ _CARGO_GIT_DEP_RE = re.compile(r'\bgit\s*=\s*["\']https?://', re.IGNORECASE)
 
 @activity.defn(name="activities.package_diff.compute")
 async def compute(ecosystem: str, package: str, old_version: str, new_version: str) -> DiffSignals:
+    key = (ecosystem, package, old_version, new_version)
+    if (hit := _cache.get(key)) is not None:
+        activity.logger.debug("package_diff cache hit: %s %s→%s", package, old_version, new_version)
+        return hit
     activity.logger.info(f"Computing package diff for {package} {old_version} -> {new_version}")
 
     provider = get_provider(ecosystem)
@@ -372,7 +379,7 @@ async def compute(ecosystem: str, package: str, old_version: str, new_version: s
         _extract_and_diff, old_bytes, old_filename, new_bytes, new_filename, provider
     )
 
-    return DiffSignals(
+    result = DiffSignals(
         diff_summary=diff_summary,
         diff_size_bytes=len(diff_summary.encode()),
         install_script_added=install_script_added,
@@ -383,6 +390,8 @@ async def compute(ecosystem: str, package: str, old_version: str, new_version: s
         git_url_dependency_added=git_url_dep,
         obfuscated_code=obfuscated,
     )
+    _cache.set(key, result)
+    return result
 
 
 # ---------------------------------------------------------------------------

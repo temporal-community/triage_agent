@@ -6,6 +6,9 @@ import httpx
 from temporalio import activity
 
 from activities.models import DepsDevSignals
+from helpers.cache import ActivityCache
+
+_cache: ActivityCache = ActivityCache(ttl_seconds=86400)  # deprecation changes rarely; 24h TTL
 
 _ECOSYSTEM_MAP = {
     "pip": "pypi",
@@ -18,6 +21,11 @@ _ECOSYSTEM_MAP = {
 
 @activity.defn(name="activities.depsdev.fetch")
 async def fetch(ecosystem: str, package: str, old_version: str, new_version: str) -> DepsDevSignals:
+    key = (ecosystem, package, new_version)
+    if (hit := _cache.get(key)) is not None:
+        activity.logger.debug("depsdev cache hit: %s %s", package, new_version)
+        return hit
+
     system = _ECOSYSTEM_MAP.get(ecosystem)
     if system is None:
         return DepsDevSignals()
@@ -37,7 +45,9 @@ async def fetch(ecosystem: str, package: str, old_version: str, new_version: str
         is_deprecated = data.get("isDeprecated", False)
         deprecated_reason = data.get("deprecatedReason") or None
 
-        return DepsDevSignals(is_deprecated=is_deprecated, deprecated_reason=deprecated_reason)
+        result = DepsDevSignals(is_deprecated=is_deprecated, deprecated_reason=deprecated_reason)
+        _cache.set(key, result)
+        return result
     except Exception as exc:
         activity.logger.warning(f"deps.dev fetch failed for {package}@{new_version}: {exc!r}")
         return DepsDevSignals()
