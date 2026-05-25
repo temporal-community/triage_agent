@@ -17,9 +17,11 @@ Each ecosystem provider translates a package registry's APIs into the seven chec
 
 All eight providers implement all seven signal methods. "No" in the attestation column means the registry simply doesn't support build-origin verification yet — it's not a red flag for packages on those registries.
 
-## Checks
+## Required checks
 
-Each provider must implement:
+Each provider must implement all seven of the following. Note that the workflow runs 11 checks total — the other four (OSV vulnerability lookup, Socket.dev score, deps.dev deprecation status, OpenSSF Scorecard) are ecosystem-agnostic and handled by shared activities that don't touch the provider.
+
+`fetch_attestations` is required but can be a one-liner stub for registries that don't support build-origin verification yet — see the six "No" rows in the coverage table above.
 
 | Method | What it returns | Primary data source |
 |---|---|---|
