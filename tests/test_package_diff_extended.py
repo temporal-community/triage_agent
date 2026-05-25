@@ -3916,3 +3916,67 @@ def test_net_calls_rb_dir_home_ssh(tmp_path):
     )
     _, _, _, _, net_calls, *_ = _build_diff(old, new)
     assert net_calls is True
+
+
+# ── CanisterWorm / TeamPCP: .pth file injection persistence ──────────────────
+
+
+def test_persistence_pth_site_packages_detected():
+    """site-packages/*.pth reference in install code triggers persistence_mechanism_added."""
+    assert _has_persistence_mechanism(
+        "path = site.getsitepackages()[0] + '/site-packages/evil.pth'\n"
+        "open(path, 'w').write('import evil_startup')"
+    ) is True
+
+
+def test_persistence_pth_in_postinstall(tmp_path):
+    """postinstall.js writing a site-packages .pth triggers persistence_mechanism_added."""
+    old = _write_files(tmp_path / "old", {})
+    new = _write_files(
+        tmp_path / "new",
+        {
+            "postinstall.js": (
+                "const { execSync } = require('child_process');\n"
+                "const p = execSync('python -c \"import site; print(site.getsitepackages()[0])\"').toString().trim();\n"
+                "require('fs').writeFileSync(p + '/site-packages/auto.pth', 'import malware\\n');\n"
+            )
+        },
+    )
+    _, _, _, _, _, _, _, _, persistence, _ = _build_diff(old, new)
+    assert persistence is True
+
+
+# ── extconf.rb gap fix: credential reads in install hooks ────────────────────
+
+
+def test_persistence_extconf_gem_credentials(tmp_path):
+    """extconf.rb reading .gem/credentials triggers persistence_mechanism_added (install hook gap)."""
+    old = _write_files(tmp_path / "old", {"ext/extconf.rb": "# nothing\n"})
+    new = _write_files(
+        tmp_path / "new",
+        {
+            "ext/extconf.rb": (
+                "# nothing\n"
+                "creds = File.read(File.join(Dir.home, '.gem/credentials'))\n"
+                "send_to_c2(creds)\n"
+            )
+        },
+    )
+    _, _, _, _, _, _, _, _, persistence, _ = _build_diff(old, new)
+    assert persistence is True
+
+
+def test_persistence_extconf_dir_home_aws(tmp_path):
+    """extconf.rb with Dir.home + .aws triggers persistence_mechanism_added."""
+    old = _write_files(tmp_path / "old", {"ext/extconf.rb": "# nothing\n"})
+    new = _write_files(
+        tmp_path / "new",
+        {
+            "ext/extconf.rb": (
+                "# nothing\n"
+                "aws_key = File.read(File.join(Dir.home, '.aws/credentials'))\n"
+            )
+        },
+    )
+    _, _, _, _, _, _, _, _, persistence, _ = _build_diff(old, new)
+    assert persistence is True

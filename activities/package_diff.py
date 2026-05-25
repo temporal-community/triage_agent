@@ -453,6 +453,9 @@ _PERSISTENCE_PATTERNS: list[re.Pattern[str]] = [
         r"\btrufflehog\b|\bgitleaks\b|\bdetect-secrets\b",  # weaponised secrets scanner
         r"rm\s+-rf\s+(?:~/|~[/\\]|\$HOME[/\\])",  # home dir wipe (Mini Shai-Hulud scorched-earth)
         r"(?:writeFile|writeFileSync|open|write)\s*[(\s,]*['\"](?:\.cursorrules|CLAUDE\.md|\.cursor/rules|\.aider\.conf)",  # AI coding assistant context hijacking (TrapDoor May 2026)
+        r"site-packages[/\\][^\n]{0,80}\.pth",  # .pth file injection into site-packages for Python startup persistence (CanisterWorm/TeamPCP/LiteLLM Apr 2026)
+        r"Dir\.home[^\n]{0,60}(?:\.aws|\.ssh|\.npmrc)",  # credential file read via Dir.home in install hook (extconf.rb harvest gap — BufferZoneCorp May 2026)
+        r"\.gem/credentials",  # RubyGems API key file access in install hook (extconf.rb credential theft)
     ]
 ]
 
