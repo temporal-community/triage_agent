@@ -567,6 +567,41 @@ async def fetch_vcs_ci_workflow_changes(
         return None
 
 
+async def fetch_vcs_file_at_tag(
+    platform: str, owner: str, repo: str, version: str, path: str, token: str | None
+) -> str | None:
+    """Fetch the raw content of *path* at the release tag for *version*, or None.
+
+    Tries tag names `v{version}` then `{version}`. Returns decoded UTF-8 text, or None
+    on 404, auth error, binary file, or any other failure. Used to compare archive
+    content against what is committed in the source tree (XZ-style artifact mismatch).
+    """
+    if platform != "github":
+        return None
+    headers: dict[str, str] = {"Accept": "application/vnd.github+json"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    try:
+        client = get_client()
+        for tag in (f"v{version}", version):
+            resp = await client.get(
+                f"https://api.github.com/repos/{owner}/{repo}/contents/{path}",
+                headers=headers,
+                params={"ref": tag},
+                timeout=10.0,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                if data.get("encoding") == "base64" and data.get("content"):
+                    import base64 as _b64
+
+                    raw = _b64.b64decode(data["content"]).decode("utf-8", errors="replace")
+                    return raw
+        return None
+    except Exception:  # noqa: BLE001
+        return None
+
+
 # Backward-compat alias
 async def fetch_github_account_age(owner: str) -> int | None:
     return await fetch_vcs_account_age("github", owner)
