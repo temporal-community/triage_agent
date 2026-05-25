@@ -17,6 +17,7 @@ import os
 import pkgutil
 import re
 import stat
+import tarfile
 import urllib.parse
 import zipfile
 from datetime import datetime, timedelta, timezone
@@ -27,6 +28,7 @@ import httpx
 from temporalio.exceptions import ApplicationError
 
 import re as _re
+from helpers.http import get_client
 
 from activities.models import (
     AttestationSignals,
@@ -304,14 +306,15 @@ async def fetch_vcs_release(
         if token:
             headers["Authorization"] = f"Bearer {token}"
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                for tag in (f"v{version}", version):
-                    resp = await client.get(
-                        f"https://api.github.com/repos/{owner}/{repo}/releases/tags/{tag}",
-                        headers=headers,
-                    )
-                    if resp.status_code == 200:
-                        return resp.json()
+            client = get_client()
+            for tag in (f"v{version}", version):
+                resp = await client.get(
+                    f"https://api.github.com/repos/{owner}/{repo}/releases/tags/{tag}",
+                    headers=headers,
+                    timeout=10.0,
+                )
+                if resp.status_code == 200:
+                    return resp.json()
         except Exception:  # noqa: BLE001
             pass
         return None
@@ -326,22 +329,23 @@ async def fetch_vcs_release(
         if gl_token:
             headers["Authorization"] = f"Bearer {gl_token}"
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                for tag in (f"v{version}", version):
-                    resp = await client.get(
-                        f"{base_url}/api/v4/projects/{encoded}/releases/{_urlparse.quote(tag, safe='')}",
-                        headers=headers,
-                    )
-                    if resp.status_code == 200:
-                        data = resp.json()
-                        # Normalise GitLab release fields to GitHub shape
-                        released_at = data.get("released_at", "")
-                        return {
-                            "created_at": released_at,
-                            "published_at": released_at,
-                            "body": data.get("description", ""),
-                            "author": {"login": (data.get("author") or {}).get("username", "")},
-                        }
+            client = get_client()
+            for tag in (f"v{version}", version):
+                resp = await client.get(
+                    f"{base_url}/api/v4/projects/{encoded}/releases/{_urlparse.quote(tag, safe='')}",
+                    headers=headers,
+                    timeout=10.0,
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    # Normalise GitLab release fields to GitHub shape
+                    released_at = data.get("released_at", "")
+                    return {
+                        "created_at": released_at,
+                        "published_at": released_at,
+                        "body": data.get("description", ""),
+                        "author": {"login": (data.get("author") or {}).get("username", "")},
+                    }
         except Exception:  # noqa: BLE001
             pass
         return None
@@ -370,36 +374,38 @@ async def fetch_vcs_tag_signature(
     if token:
         headers["Authorization"] = f"Bearer {token}"
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            for tag_name in (f"v{version}", version):
-                ref_resp = await client.get(
-                    f"https://api.github.com/repos/{owner}/{repo}/git/refs/tags/{tag_name}",
-                    headers=headers,
-                )
-                if ref_resp.status_code != 200:
+        client = get_client()
+        for tag_name in (f"v{version}", version):
+            ref_resp = await client.get(
+                f"https://api.github.com/repos/{owner}/{repo}/git/refs/tags/{tag_name}",
+                headers=headers,
+                timeout=10.0,
+            )
+            if ref_resp.status_code != 200:
+                continue
+            data = ref_resp.json()
+            # A prefix match returns an array; an exact match returns a single object.
+            if isinstance(data, list):
+                matches = [r for r in data if r.get("ref") == f"refs/tags/{tag_name}"]
+                if not matches:
                     continue
-                data = ref_resp.json()
-                # A prefix match returns an array; an exact match returns a single object.
-                if isinstance(data, list):
-                    matches = [r for r in data if r.get("ref") == f"refs/tags/{tag_name}"]
-                    if not matches:
-                        continue
-                    data = matches[0]
-                obj = data.get("object", {})
-                if obj.get("type") != "tag":
-                    # Lightweight tag — points directly to a commit, no tag signature
-                    return None
-                sha = obj.get("sha", "")
-                if not sha:
-                    return None
-                tag_resp = await client.get(
-                    f"https://api.github.com/repos/{owner}/{repo}/git/tags/{sha}",
-                    headers=headers,
-                )
-                if tag_resp.status_code != 200:
-                    return None
-                verification = tag_resp.json().get("verification") or {}
-                return bool(verification.get("verified"))
+                data = matches[0]
+            obj = data.get("object", {})
+            if obj.get("type") != "tag":
+                # Lightweight tag — points directly to a commit, no tag signature
+                return None
+            sha = obj.get("sha", "")
+            if not sha:
+                return None
+            tag_resp = await client.get(
+                f"https://api.github.com/repos/{owner}/{repo}/git/tags/{sha}",
+                headers=headers,
+                timeout=10.0,
+            )
+            if tag_resp.status_code != 200:
+                return None
+            verification = tag_resp.json().get("verification") or {}
+            return bool(verification.get("verified"))
     except Exception:  # noqa: BLE001
         pass
     return None
@@ -480,13 +486,15 @@ async def fetch_vcs_account_age(platform: str, owner: str) -> int | None:
             "Authorization": f"Bearer {token}",
         }
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                resp = await client.get(f"https://api.github.com/users/{owner}", headers=headers)
-                if resp.status_code == 200:
-                    created_at = resp.json().get("created_at", "")
-                    if created_at:
-                        created = parse_upload_time(created_at)
-                        return max(0, (datetime.now(timezone.utc) - created).days)
+            client = get_client()
+            resp = await client.get(
+                f"https://api.github.com/users/{owner}", headers=headers, timeout=10.0
+            )
+            if resp.status_code == 200:
+                created_at = resp.json().get("created_at", "")
+                if created_at:
+                    created = parse_upload_time(created_at)
+                    return max(0, (datetime.now(timezone.utc) - created).days)
         except Exception:  # noqa: BLE001
             pass
         return None
@@ -498,17 +506,18 @@ async def fetch_vcs_account_age(platform: str, owner: str) -> int | None:
         base_url = os.environ.get("GITLAB_BASE_URL", "https://gitlab.com").rstrip("/")
         headers = {"Authorization": f"Bearer {token}"}
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                resp = await client.get(
-                    f"{base_url}/api/v4/users",
-                    headers=headers,
-                    params={"username": owner},
-                )
-                if resp.status_code == 200 and resp.json():
-                    created_at = resp.json()[0].get("created_at", "")
-                    if created_at:
-                        created = parse_upload_time(created_at)
-                        return max(0, (datetime.now(timezone.utc) - created).days)
+            client = get_client()
+            resp = await client.get(
+                f"{base_url}/api/v4/users",
+                headers=headers,
+                params={"username": owner},
+                timeout=10.0,
+            )
+            if resp.status_code == 200 and resp.json():
+                created_at = resp.json()[0].get("created_at", "")
+                if created_at:
+                    created = parse_upload_time(created_at)
+                    return max(0, (datetime.now(timezone.utc) - created).days)
         except Exception:  # noqa: BLE001
             pass
         return None
@@ -544,3 +553,22 @@ def safe_zip_extractall(zf: zipfile.ZipFile, dest: Path) -> None:
                 non_retryable=True,
             )
         zf.extract(member, dest)
+
+
+def safe_tar_extractall(tf: tarfile.TarFile, dest: str) -> None:
+    """Extract a tarball with path-traversal and decompression-bomb protection.
+
+    filter="data" (Python 3.12+) handles: absolute paths, ../  traversal, device
+    files, and symlink escapes. This wrapper adds a cumulative size cap so a
+    maximally-compressed archive (e.g. 19.9 MB compressed → many GB uncompressed)
+    cannot exhaust disk space.
+    """
+    total_extracted = 0
+    for member in tf.getmembers():
+        total_extracted += max(member.size, 0)
+        if total_extracted > MAX_EXTRACT_BYTES:
+            raise ApplicationError(
+                "Tar extraction size limit exceeded (possible tar bomb)",
+                non_retryable=True,
+            )
+        tf.extract(member, dest, filter="data")

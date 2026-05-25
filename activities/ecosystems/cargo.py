@@ -16,6 +16,7 @@ from activities.ecosystems import (
     is_major,
     parse_vcs_repo,
     parse_upload_time,
+    safe_tar_extractall,
     validate_archive_url,
 )
 from activities.models import (
@@ -25,6 +26,7 @@ from activities.models import (
     ReleaseAgeSignals,
     ReleaseSignals,
 )
+from helpers.http import get_client
 
 # crates.io requires a descriptive User-Agent per their crawling policy.
 _HEADERS = {
@@ -44,16 +46,16 @@ class CargoProvider:
     # ------------------------------------------------------------------
 
     async def fetch_metadata(self, package: str, old_version: str, new_version: str) -> PyPISignals:
-        async with httpx.AsyncClient(timeout=15.0, headers=_HEADERS) as client:
-            resp = await client.get(f"{_API_BASE}/crates/{package}")
-            if resp.status_code == 404:
-                raise ApplicationError(
-                    f"{package} not found on crates.io",
-                    type="PackageNotFound",
-                    non_retryable=True,
-                )
-            resp.raise_for_status()
-            data = resp.json()
+        client = get_client()
+        resp = await client.get(f"{_API_BASE}/crates/{package}", headers=_HEADERS, timeout=15.0)
+        if resp.status_code == 404:
+            raise ApplicationError(
+                f"{package} not found on crates.io",
+                type="PackageNotFound",
+                non_retryable=True,
+            )
+        resp.raise_for_status()
+        data = resp.json()
 
         crate = data.get("crate", {})
         description = (crate.get("description") or "")[:500] or None
@@ -70,16 +72,16 @@ class CargoProvider:
     # ------------------------------------------------------------------
 
     async def fetch_release_age(self, package: str, new_version: str) -> ReleaseAgeSignals:
-        async with httpx.AsyncClient(timeout=15.0, headers=_HEADERS) as client:
-            resp = await client.get(f"{_API_BASE}/crates/{package}")
-            if resp.status_code == 404:
-                raise ApplicationError(
-                    f"{package} not found on crates.io",
-                    type="PackageNotFound",
-                    non_retryable=True,
-                )
-            resp.raise_for_status()
-            data = resp.json()
+        client = get_client()
+        resp = await client.get(f"{_API_BASE}/crates/{package}", headers=_HEADERS, timeout=15.0)
+        if resp.status_code == 404:
+            raise ApplicationError(
+                f"{package} not found on crates.io",
+                type="PackageNotFound",
+                non_retryable=True,
+            )
+        resp.raise_for_status()
+        data = resp.json()
 
         for v in data.get("versions", []):
             if v.get("num") == new_version:
@@ -99,14 +101,14 @@ class CargoProvider:
     async def fetch_maintainer(
         self, package: str, old_version: str, new_version: str
     ) -> MaintainerSignals:
-        async with httpx.AsyncClient(timeout=15.0, headers=_HEADERS) as client:
-            try:
-                resp = await client.get(f"{_API_BASE}/crates/{package}")
-                if resp.status_code != 200:
-                    return MaintainerSignals(maintainer_changed=False)
-                versions = resp.json().get("versions", [])
-            except Exception:
+        client = get_client()
+        try:
+            resp = await client.get(f"{_API_BASE}/crates/{package}", headers=_HEADERS, timeout=15.0)
+            if resp.status_code != 200:
                 return MaintainerSignals(maintainer_changed=False)
+            versions = resp.json().get("versions", [])
+        except Exception:
+            return MaintainerSignals(maintainer_changed=False)
 
         # crates.io records the GitHub login of whoever published each version
         old_publisher: str | None = None
@@ -158,7 +160,7 @@ class CargoProvider:
         """Extract a .crate file (gzipped tarball) to dest."""
         buf = io.BytesIO(archive_bytes)
         with tarfile.open(fileobj=buf, mode="r:gz") as tf:
-            tf.extractall(dest, filter="data")
+            safe_tar_extractall(tf, dest)
 
     # ------------------------------------------------------------------
     # fetch_attestations
@@ -178,8 +180,8 @@ class CargoProvider:
         import os
 
         token = os.environ.get("GITHUB_TOKEN")
-        async with httpx.AsyncClient(timeout=15.0, headers=_HEADERS) as client:
-            resp = await client.get(f"{_API_BASE}/crates/{package}")
+        client = get_client()
+        resp = await client.get(f"{_API_BASE}/crates/{package}", headers=_HEADERS, timeout=15.0)
 
         if resp.status_code != 200:
             return ReleaseSignals()

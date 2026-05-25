@@ -19,6 +19,7 @@ from activities.ecosystems import (
     is_major,
     parse_vcs_repo,
     parse_upload_time,
+    safe_tar_extractall,
     safe_zip_extractall,
     validate_archive_url,
 )
@@ -29,6 +30,7 @@ from activities.models import (
     ReleaseAgeSignals,
     ReleaseSignals,
 )
+from helpers.http import get_client
 
 
 class PipProvider:
@@ -42,22 +44,22 @@ class PipProvider:
     # ------------------------------------------------------------------
 
     async def fetch_metadata(self, package: str, old_version: str, new_version: str) -> PyPISignals:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.get(f"https://pypi.org/pypi/{package}/{new_version}/json")
-            if resp.status_code == 404:
-                raise ApplicationError(
-                    f"{package}=={new_version} not found on PyPI",
-                    type="PackageNotFound",
-                    non_retryable=True,
-                )
-            resp.raise_for_status()
-            data = resp.json()
+        client = get_client()
+        resp = await client.get(f"https://pypi.org/pypi/{package}/{new_version}/json", timeout=15.0)
+        if resp.status_code == 404:
+            raise ApplicationError(
+                f"{package}=={new_version} not found on PyPI",
+                type="PackageNotFound",
+                non_retryable=True,
+            )
+        resp.raise_for_status()
+        data = resp.json()
 
-            summary = data.get("info", {}).get("summary") or None
-            if summary:
-                summary = summary[:500]
+        summary = data.get("info", {}).get("summary") or None
+        if summary:
+            summary = summary[:500]
 
-            weekly_downloads = await _fetch_weekly_downloads(client, package)
+        weekly_downloads = await _fetch_weekly_downloads(client, package)
 
         return PyPISignals(
             weekly_downloads=weekly_downloads,
@@ -70,16 +72,16 @@ class PipProvider:
     # ------------------------------------------------------------------
 
     async def fetch_release_age(self, package: str, new_version: str) -> ReleaseAgeSignals:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.get(f"https://pypi.org/pypi/{package}/{new_version}/json")
-            if resp.status_code == 404:
-                raise ApplicationError(
-                    f"{package}=={new_version} not found on PyPI",
-                    type="PackageNotFound",
-                    non_retryable=True,
-                )
-            resp.raise_for_status()
-            data = resp.json()
+        client = get_client()
+        resp = await client.get(f"https://pypi.org/pypi/{package}/{new_version}/json", timeout=15.0)
+        if resp.status_code == 404:
+            raise ApplicationError(
+                f"{package}=={new_version} not found on PyPI",
+                type="PackageNotFound",
+                non_retryable=True,
+            )
+        resp.raise_for_status()
+        data = resp.json()
 
         urls = data.get("urls", [])
         if not urls:
@@ -100,11 +102,11 @@ class PipProvider:
     async def fetch_maintainer(
         self, package: str, old_version: str, new_version: str
     ) -> MaintainerSignals:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            old_info, new_info = await asyncio.gather(
-                _fetch_version_info(client, package, old_version),
-                _fetch_version_info(client, package, new_version),
-            )
+        client = get_client()
+        old_info, new_info = await asyncio.gather(
+            _fetch_version_info(client, package, old_version),
+            _fetch_version_info(client, package, new_version),
+        )
 
         if old_info is None or new_info is None:
             return MaintainerSignals(maintainer_changed=False)
@@ -150,11 +152,11 @@ class PipProvider:
     async def fetch_attestations(
         self, package: str, old_version: str, new_version: str
     ) -> AttestationSignals:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            new_pub, old_pub = await asyncio.gather(
-                _fetch_pypi_publisher(client, package, new_version),
-                _fetch_pypi_publisher(client, package, old_version),
-            )
+        client = get_client()
+        new_pub, old_pub = await asyncio.gather(
+            _fetch_pypi_publisher(client, package, new_version),
+            _fetch_pypi_publisher(client, package, old_version),
+        )
 
         if new_pub is None:
             return AttestationSignals(has_attestation=False)
@@ -188,11 +190,11 @@ class PipProvider:
         import os
 
         token = os.environ.get("GITHUB_TOKEN")
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.get(f"https://pypi.org/pypi/{package}/{version}/json")
-            if resp.status_code != 200:
-                return ReleaseSignals()
-            data = resp.json()
+        client = get_client()
+        resp = await client.get(f"https://pypi.org/pypi/{package}/{version}/json", timeout=15.0)
+        if resp.status_code != 200:
+            return ReleaseSignals()
+        data = resp.json()
 
         # Registry publish timestamp for skew calculation
         registry_time = None
@@ -238,7 +240,7 @@ class PipProvider:
         lower = filename.lower()
         if lower.endswith((".tar.gz", ".tar.bz2", ".tgz")):
             with tarfile.open(fileobj=buf) as tf:
-                tf.extractall(dest, filter="data")
+                safe_tar_extractall(tf, dest)
         elif lower.endswith((".whl", ".zip")):
             with zipfile.ZipFile(buf) as zf:
                 safe_zip_extractall(zf, dest_path)

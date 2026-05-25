@@ -16,6 +16,7 @@ from activities.ecosystems import (
     is_major,
     parse_vcs_repo,
     parse_upload_time,
+    safe_tar_extractall,
     validate_archive_url,
 )
 from activities.models import (
@@ -25,6 +26,7 @@ from activities.models import (
     ReleaseAgeSignals,
     ReleaseSignals,
 )
+from helpers.http import get_client
 
 
 class RubyGemsProvider:
@@ -38,19 +40,19 @@ class RubyGemsProvider:
     # ------------------------------------------------------------------
 
     async def fetch_metadata(self, package: str, old_version: str, new_version: str) -> PyPISignals:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            gem_resp, dl_resp = await asyncio.gather(
-                client.get(f"https://rubygems.org/api/v1/gems/{package}.json"),
-                _fetch_weekly_downloads(client, package),
+        client = get_client()
+        gem_resp, dl_resp = await asyncio.gather(
+            client.get(f"https://rubygems.org/api/v1/gems/{package}.json", timeout=15.0),
+            _fetch_weekly_downloads(client, package),
+        )
+        if gem_resp.status_code == 404:
+            raise ApplicationError(
+                f"{package} not found on RubyGems",
+                type="PackageNotFound",
+                non_retryable=True,
             )
-            if gem_resp.status_code == 404:
-                raise ApplicationError(
-                    f"{package} not found on RubyGems",
-                    type="PackageNotFound",
-                    non_retryable=True,
-                )
-            gem_resp.raise_for_status()
-            data = gem_resp.json()
+        gem_resp.raise_for_status()
+        data = gem_resp.json()
 
         summary = (data.get("info") or "")[:500] or None
         return PyPISignals(
@@ -64,16 +66,18 @@ class RubyGemsProvider:
     # ------------------------------------------------------------------
 
     async def fetch_release_age(self, package: str, new_version: str) -> ReleaseAgeSignals:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.get(f"https://rubygems.org/api/v1/versions/{package}.json")
-            if resp.status_code == 404:
-                raise ApplicationError(
-                    f"{package} not found on RubyGems",
-                    type="PackageNotFound",
-                    non_retryable=True,
-                )
-            resp.raise_for_status()
-            versions = resp.json()
+        client = get_client()
+        resp = await client.get(
+            f"https://rubygems.org/api/v1/versions/{package}.json", timeout=15.0
+        )
+        if resp.status_code == 404:
+            raise ApplicationError(
+                f"{package} not found on RubyGems",
+                type="PackageNotFound",
+                non_retryable=True,
+            )
+        resp.raise_for_status()
+        versions = resp.json()
 
         for v in versions:
             if v.get("number") == new_version:
@@ -93,14 +97,16 @@ class RubyGemsProvider:
     async def fetch_maintainer(
         self, package: str, old_version: str, new_version: str
     ) -> MaintainerSignals:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            try:
-                resp = await client.get(f"https://rubygems.org/api/v1/versions/{package}.json")
-                if resp.status_code != 200:
-                    return MaintainerSignals(maintainer_changed=False)
-                versions = resp.json()
-            except Exception:
+        client = get_client()
+        try:
+            resp = await client.get(
+                f"https://rubygems.org/api/v1/versions/{package}.json", timeout=15.0
+            )
+            if resp.status_code != 200:
                 return MaintainerSignals(maintainer_changed=False)
+            versions = resp.json()
+        except Exception:
+            return MaintainerSignals(maintainer_changed=False)
 
         old_authors: set[str] = set()
         new_authors: set[str] = set()
@@ -165,11 +171,11 @@ class RubyGemsProvider:
         import os
 
         token = os.environ.get("GITHUB_TOKEN")
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            gem_resp, versions_resp = await asyncio.gather(
-                client.get(f"https://rubygems.org/api/v1/gems/{package}.json"),
-                client.get(f"https://rubygems.org/api/v1/versions/{package}.json"),
-            )
+        client = get_client()
+        gem_resp, versions_resp = await asyncio.gather(
+            client.get(f"https://rubygems.org/api/v1/gems/{package}.json", timeout=15.0),
+            client.get(f"https://rubygems.org/api/v1/versions/{package}.json", timeout=15.0),
+        )
 
         if gem_resp.status_code != 200:
             return ReleaseSignals()
@@ -219,7 +225,7 @@ class RubyGemsProvider:
             inner_buf = io.BytesIO(data_fobj.read())
 
         with tarfile.open(fileobj=inner_buf, mode="r:gz") as inner:
-            inner.extractall(dest, filter="data")
+            safe_tar_extractall(inner, dest)
 
 
 # ---------------------------------------------------------------------------

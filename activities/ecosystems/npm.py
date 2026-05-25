@@ -17,6 +17,7 @@ from activities.ecosystems import (
     is_major,
     parse_vcs_repo,
     parse_upload_time,
+    safe_tar_extractall,
     validate_archive_url,
 )
 from activities.models import (
@@ -26,6 +27,7 @@ from activities.models import (
     ReleaseAgeSignals,
     ReleaseSignals,
 )
+from helpers.http import get_client
 
 
 class NpmProvider:
@@ -39,19 +41,19 @@ class NpmProvider:
     # ------------------------------------------------------------------
 
     async def fetch_metadata(self, package: str, old_version: str, new_version: str) -> PyPISignals:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.get(f"https://registry.npmjs.org/{package}/{new_version}")
-            if resp.status_code == 404:
-                raise ApplicationError(
-                    f"{package}@{new_version} not found on npm registry",
-                    type="PackageNotFound",
-                    non_retryable=True,
-                )
-            resp.raise_for_status()
-            data = resp.json()
+        client = get_client()
+        resp = await client.get(f"https://registry.npmjs.org/{package}/{new_version}", timeout=15.0)
+        if resp.status_code == 404:
+            raise ApplicationError(
+                f"{package}@{new_version} not found on npm registry",
+                type="PackageNotFound",
+                non_retryable=True,
+            )
+        resp.raise_for_status()
+        data = resp.json()
 
-            summary = (data.get("description") or "")[:500] or None
-            weekly_downloads = await _fetch_weekly_downloads(client, package)
+        summary = (data.get("description") or "")[:500] or None
+        weekly_downloads = await _fetch_weekly_downloads(client, package)
 
         return PyPISignals(
             weekly_downloads=weekly_downloads,
@@ -64,17 +66,17 @@ class NpmProvider:
     # ------------------------------------------------------------------
 
     async def fetch_release_age(self, package: str, new_version: str) -> ReleaseAgeSignals:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            # Full package document contains the `time` map: {version: ISO timestamp}
-            resp = await client.get(f"https://registry.npmjs.org/{package}")
-            if resp.status_code == 404:
-                raise ApplicationError(
-                    f"{package}@{new_version} not found on npm registry",
-                    type="PackageNotFound",
-                    non_retryable=True,
-                )
-            resp.raise_for_status()
-            data = resp.json()
+        client = get_client()
+        # Full package document contains the `time` map: {version: ISO timestamp}
+        resp = await client.get(f"https://registry.npmjs.org/{package}", timeout=15.0)
+        if resp.status_code == 404:
+            raise ApplicationError(
+                f"{package}@{new_version} not found on npm registry",
+                type="PackageNotFound",
+                non_retryable=True,
+            )
+        resp.raise_for_status()
+        data = resp.json()
 
         raw = (data.get("time") or {}).get(new_version, "")
         if not raw:
@@ -91,11 +93,11 @@ class NpmProvider:
     async def fetch_maintainer(
         self, package: str, old_version: str, new_version: str
     ) -> MaintainerSignals:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            old_data, new_data = await asyncio.gather(
-                _fetch_version(client, package, old_version),
-                _fetch_version(client, package, new_version),
-            )
+        client = get_client()
+        old_data, new_data = await asyncio.gather(
+            _fetch_version(client, package, old_version),
+            _fetch_version(client, package, new_version),
+        )
 
         if old_data is None or new_data is None:
             return MaintainerSignals(maintainer_changed=False)
@@ -137,11 +139,11 @@ class NpmProvider:
     async def fetch_attestations(
         self, package: str, old_version: str, new_version: str
     ) -> AttestationSignals:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            new_pub, old_pub = await asyncio.gather(
-                _fetch_npm_publisher(client, package, new_version),
-                _fetch_npm_publisher(client, package, old_version),
-            )
+        client = get_client()
+        new_pub, old_pub = await asyncio.gather(
+            _fetch_npm_publisher(client, package, new_version),
+            _fetch_npm_publisher(client, package, old_version),
+        )
 
         if new_pub is None:
             return AttestationSignals(has_attestation=False)
@@ -175,11 +177,11 @@ class NpmProvider:
         import os
 
         token = os.environ.get("GITHUB_TOKEN")
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            v_resp, pkg_resp = await asyncio.gather(
-                client.get(f"https://registry.npmjs.org/{package}/{version}"),
-                client.get(f"https://registry.npmjs.org/{package}"),
-            )
+        client = get_client()
+        v_resp, pkg_resp = await asyncio.gather(
+            client.get(f"https://registry.npmjs.org/{package}/{version}", timeout=15.0),
+            client.get(f"https://registry.npmjs.org/{package}", timeout=15.0),
+        )
 
         if v_resp.status_code != 200:
             return ReleaseSignals()
@@ -226,7 +228,7 @@ class NpmProvider:
     def extract_archive(self, archive_bytes: bytes, filename: str, dest: str) -> None:
         buf = io.BytesIO(archive_bytes)
         with tarfile.open(fileobj=buf) as tf:
-            tf.extractall(dest, filter="data")
+            safe_tar_extractall(tf, dest)
 
 
 # ---------------------------------------------------------------------------

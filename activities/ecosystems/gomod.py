@@ -11,6 +11,7 @@ import io
 import re
 import zipfile
 from datetime import datetime, timezone
+from pathlib import Path
 
 import httpx
 from temporalio.exceptions import ApplicationError
@@ -22,6 +23,7 @@ from activities.ecosystems import (
     is_major,
     parse_vcs_repo,
     parse_upload_time,
+    safe_zip_extractall,
     validate_archive_url,
 )
 from activities.models import (
@@ -31,6 +33,7 @@ from activities.models import (
     ReleaseAgeSignals,
     ReleaseSignals,
 )
+from helpers.http import get_client
 
 _PROXY = "https://proxy.golang.org"
 
@@ -52,15 +55,15 @@ class GoModulesProvider:
 
     async def fetch_metadata(self, package: str, old_version: str, new_version: str) -> PyPISignals:
         # Go proxy has no download counts or description API; only version info.
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.get(f"{_PROXY}/{_escape(package)}/@v/{new_version}.info")
-            if resp.status_code in (404, 410):
-                raise ApplicationError(
-                    f"{package}@{new_version} not found on Go proxy",
-                    type="PackageNotFound",
-                    non_retryable=True,
-                )
-            resp.raise_for_status()
+        client = get_client()
+        resp = await client.get(f"{_PROXY}/{_escape(package)}/@v/{new_version}.info", timeout=15.0)
+        if resp.status_code in (404, 410):
+            raise ApplicationError(
+                f"{package}@{new_version} not found on Go proxy",
+                type="PackageNotFound",
+                non_retryable=True,
+            )
+        resp.raise_for_status()
 
         return PyPISignals(
             weekly_downloads=None,  # not available from Go proxy
@@ -73,16 +76,16 @@ class GoModulesProvider:
     # ------------------------------------------------------------------
 
     async def fetch_release_age(self, package: str, new_version: str) -> ReleaseAgeSignals:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.get(f"{_PROXY}/{_escape(package)}/@v/{new_version}.info")
-            if resp.status_code in (404, 410):
-                raise ApplicationError(
-                    f"{package}@{new_version} not found on Go proxy",
-                    type="PackageNotFound",
-                    non_retryable=True,
-                )
-            resp.raise_for_status()
-            data = resp.json()
+        client = get_client()
+        resp = await client.get(f"{_PROXY}/{_escape(package)}/@v/{new_version}.info", timeout=15.0)
+        if resp.status_code in (404, 410):
+            raise ApplicationError(
+                f"{package}@{new_version} not found on Go proxy",
+                type="PackageNotFound",
+                non_retryable=True,
+            )
+        resp.raise_for_status()
+        data = resp.json()
 
         raw = data.get("Time", "")
         if not raw:
@@ -121,8 +124,9 @@ class GoModulesProvider:
     def extract_archive(self, archive_bytes: bytes, filename: str, dest: str) -> None:
         """Extract a Go module zip. All entries are prefixed {module}@{version}/."""
         buf = io.BytesIO(archive_bytes)
+        dest_path = Path(dest)
         with zipfile.ZipFile(buf) as zf:
-            zf.extractall(dest)
+            safe_zip_extractall(zf, dest_path)
 
     # ------------------------------------------------------------------
     # fetch_attestations
@@ -145,11 +149,11 @@ class GoModulesProvider:
         token = os.environ.get("GITHUB_TOKEN")
 
         # The .info Origin.URL field gives the canonical VCS repo URL.
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            new_info, old_info = await asyncio.gather(
-                client.get(f"{_PROXY}/{_escape(package)}/@v/{version}.info"),
-                client.get(f"{_PROXY}/{_escape(package)}/@v/{old_version}.info"),
-            )
+        client = get_client()
+        new_info, old_info = await asyncio.gather(
+            client.get(f"{_PROXY}/{_escape(package)}/@v/{version}.info", timeout=15.0),
+            client.get(f"{_PROXY}/{_escape(package)}/@v/{old_version}.info", timeout=15.0),
+        )
 
         if new_info.status_code != 200:
             return ReleaseSignals()
