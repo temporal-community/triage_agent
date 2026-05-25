@@ -2,7 +2,7 @@
 
 Everything that varies between deployments is pluggable via Python entry points — no forking required.
 
-Four extension points exist:
+Six extension points exist:
 
 | What to extend | Entry point group | When to use |
 |---|---|---|
@@ -11,6 +11,8 @@ Four extension points exist:
 | Custom checks (simple) | `dependency_scout.checks` | Fast API calls, <30 seconds, no Temporal knowledge needed |
 | Custom checks (advanced) | `dependency_scout.activity_checks` | Long-running work, needs heartbeating or custom retry policies |
 | New platform | `dependency_scout.platforms` | Support a new code-hosting platform (Gitea, Bitbucket, etc.) |
+| Attack signatures (YAML) | `dependency_scout.signatures` | Ship additional regex pattern files — no Python expertise required |
+| Attack signatures (Python) | `dependency_scout.signature_providers` | Dynamically generated patterns, e.g. from a threat-intel feed |
 
 **Contributing vs. extending:** if your ecosystem, classifier, or check is general-purpose and you'd like it in the core, see [contributing.md](contributing.md). If it's specific to your organization or stack, the plugin path here is what you want — no changes to this repo needed.
 
@@ -278,3 +280,60 @@ At worker startup, `_discover_activity_check_plugins()` loads all `dependency_sc
 |---|---|---|
 | `dependency_scout.checks` | Fast API calls, <30 seconds total | None — plain `async def` |
 | `dependency_scout.activity_checks` | Long-running (archive downloads, corpus scanning), needs heartbeating or custom retry | Yes — requires `@activity.defn` |
+
+---
+
+## Attack signature plugins
+
+Two tiers, same idea as checks:
+
+### YAML signatures (`dependency_scout.signatures`)
+
+The lowest-barrier extension point. Ship YAML files in your package using the same format as `checks/signatures/`. Your entry point is a callable that returns a `Path` to your signatures directory:
+
+```python
+# my_plugin/signatures.py
+from pathlib import Path
+
+def get_signatures_dir() -> Path:
+    return Path(__file__).parent / "sigs"
+```
+
+Your `sigs/` directory can contain any subset of the standard files (`net_calls.yaml`, `obfuscation.yaml`, `persistence.yaml`, `file_types.yaml`) — only the ones present are merged.
+
+```toml
+# pyproject.toml
+[project.entry-points."dependency_scout.signatures"]
+my_sigs = "my_plugin.signatures:get_signatures_dir"
+```
+
+### Python signature providers (`dependency_scout.signature_providers`)
+
+For dynamically generated patterns — fetched from a threat-intel API, generated from a CVE feed, etc. Your entry point is a callable returning a `SignatureContribution`:
+
+```python
+# my_plugin/intel.py
+from checks.signatures import SignatureContribution
+
+def get_signatures() -> SignatureContribution:
+    # patterns can come from anywhere — an API, a database, generated logic
+    return SignatureContribution(
+        net_call_patterns={".py": [r"evil_sdk\.exfil\b", r"badlib\.upload\b"]},
+        persistence_patterns=[r"crontab.*attacker\.sh"],
+    )
+```
+
+```toml
+# pyproject.toml
+[project.entry-points."dependency_scout.signature_providers"]
+threat_intel = "my_plugin.intel:get_signatures"
+```
+
+All pattern strings are raw regex strings — they are compiled internally. Only populate the fields you are contributing; omitted fields are ignored.
+
+### When to use each path
+
+| Path | Use when |
+|---|---|
+| `dependency_scout.signatures` | Static patterns you'd write as YAML — no Python expertise required beyond a 3-line shim |
+| `dependency_scout.signature_providers` | Patterns that must be generated at runtime (threat feeds, CVE APIs, programmatic logic) |

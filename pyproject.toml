@@ -63,6 +63,27 @@ gitlab = "platforms.gitlab:create_client"
 #   extra_check_activities:
 #     - my_company.deep_archive_scan
 
+[project.entry-points."dependency_scout.signatures"]
+# YAML-based attack signature directories. Each entry point must point to a callable
+# that returns a pathlib.Path to a directory containing any of: net_calls.yaml,
+# obfuscation.yaml, persistence.yaml, file_types.yaml — same format as checks/signatures/.
+# Patterns are merged into the built-in sets at import time.
+# Example in your plugin's pyproject.toml:
+#   [project.entry-points."dependency_scout.signatures"]
+#   my_sigs = "my_package.signatures:get_signatures_dir"
+# Where get_signatures_dir() returns Path(__file__).parent / "sigs".
+
+[project.entry-points."dependency_scout.signature_providers"]
+# Advanced: Python callables returning a SignatureContribution for dynamically generated
+# or programmatically constructed patterns (e.g. fetched from a threat-intel feed).
+# Each entry point must point to a callable returning a SignatureContribution instance.
+#   from checks.signatures import SignatureContribution
+#   def get_signatures() -> SignatureContribution:
+#       return SignatureContribution(net_call_patterns={".py": [r"evil_sdk\.call\b"]})
+# Example in your plugin's pyproject.toml:
+#   [project.entry-points."dependency_scout.signature_providers"]
+#   threat_intel = "my_package.intel:get_signatures"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
