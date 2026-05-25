@@ -23,11 +23,11 @@ Instead, the Scout splits into two workflows:
 **`PRActionWorkflow`** — handles what happens in *this specific repo* based on the verdict: post a comment, auto-merge, request review from specific people, wait for a human decision, or close the PR. ID: `pr-action-{repo}-{pr_number}`.
 
 ```
-GitHub webhook
-      │
-      ▼
+GitHub webhook          GitLab webhook
+      │                       │
+      ▼                       ▼
 FastAPI receiver (api/webhook.py)
-      │  validates package name, version, and HMAC signature
+      │  validates package name, version, and HMAC/token signature
       ▼
 PRActionWorkflow
       │
@@ -204,30 +204,110 @@ The Scout processes untrusted data by design — it downloads packages uploaded 
 
 ---
 
-## Adding a new ecosystem
+## Package layout
 
-Each ecosystem is a single file in `activities/ecosystems/` implementing the `EcosystemProvider` Protocol:
-
-```python
-class EcosystemProvider(Protocol):
-    osv_name: str                       # OSV ecosystem name, e.g. "PyPI", "npm"
-
-    async def fetch_metadata(...)   -> PyPISignals
-    async def fetch_release_age(...)-> ReleaseAgeSignals
-    async def fetch_maintainer(...) -> MaintainerSignals
-    async def get_archive_url(...)  -> tuple[str, str, str] | None   # (url, filename, integrity)
-    def extract_archive(...)        -> None
+```
+ecosystems/         EcosystemProvider Protocol, EcosystemProviderBase, built-in providers
+platforms/          PlatformClient Protocol, entry-point factory, GitHub + GitLab clients
+classifiers/        Classifier Protocol, Claude / OpenAI / Ollama / RuleBased implementations
+models/             PRContext, PackageSignals, Verdict, all signal sub-models
+activities/         @activity.defn Temporal wrappers only — thin glue calling into the above
+workflows/          PackageTriageWorkflow, PRActionWorkflow
+helpers/            GitHub App auth, comment formatting, config providers, HTTP client
+api/                FastAPI webhook receiver
+tests/              pytest suite (771 tests)
 ```
 
-The activity files (`pypi_metadata.py`, `release_age.py`, `maintainer.py`, `package_diff.py`, `osv.py`) are thin wrappers that call `get_provider(ecosystem).method(...)`. Adding a new ecosystem means:
+The split between `activities/` and the top-level packages is intentional: `ecosystems/`, `platforms/`, and `classifiers/` are stable public extension points. Plugin authors import from them directly without needing to know anything about Temporal.
 
-1. **Create** `activities/ecosystems/{name}.py` implementing the Protocol
-2. **Register** it in `get_provider()` in `activities/ecosystems/__init__.py`
-3. **Update** the `Literal["pip", "npm", "rubygems"]` type in `activities/models.py`
-4. **Add** the Dependabot branch slug to `_DEPENDABOT_ECOSYSTEM_MAP` in `helpers/pr_parser.py`
-5. **Add** a name-validation regex entry in `api/webhook.py`'s `_NAME_RE_BY_ECOSYSTEM`
+---
 
-Shared utilities (`validate_archive_url`, `safe_zip_extractall`, `safe_tar_extractall`, `is_major`, `parse_upload_time`, `detect_stale_version_line`) are in `activities/ecosystems/__init__.py`. The CDN allowlist (`ALLOWED_CDN_HOSTS`) lives there too and must be extended for each new registry.
+## Extension points
+
+Three things can be extended by third-party packages without forking the Scout.
+
+### Ecosystems
+
+Inherit `EcosystemProviderBase` from `ecosystems` and register under the `dependency_scout.ecosystems` entry point group:
+
+```toml
+# pyproject.toml in your plugin package
+[project.entry-points."dependency_scout.ecosystems"]
+drupal = "my_package:DrupalProvider"
+```
+
+```python
+from ecosystems import EcosystemProviderBase
+
+class DrupalProvider(EcosystemProviderBase):
+    ecosystem_name  = "drupal"
+    osv_name        = "Packagist"
+    dependabot_slug = "drupal"
+    name_re         = re.compile(r"^[a-z0-9_-]+/[a-z0-9_-]+$")
+
+    async def fetch_metadata(self, package, old_version, new_version): ...
+    # implement the remaining required methods
+```
+
+`EcosystemProviderBase` is a concrete base class, not a pure Protocol. Required methods raise `NotImplementedError`; future optional signal methods added to the class will have safe empty-model defaults so your provider won't break on upgrade.
+
+For non-Python teams, `RemoteEcosystemProvider` (also in `ecosystems/`) lets you implement the signals as a remote HTTP service — the Scout posts to your endpoint and you return the structured signal data.
+
+### Platforms
+
+Implement `PlatformClient` from `platforms` and register a factory function:
+
+```toml
+[project.entry-points."dependency_scout.platforms"]
+gitea = "my_package:create_client"
+```
+
+```python
+from models import PRContext
+from platforms import PlatformClient
+
+def create_client(pr: PRContext) -> PlatformClient:
+    return GiteaClient(base_url=os.environ["GITEA_BASE_URL"])
+```
+
+The factory receives the full `PRContext` and returns any object satisfying `PlatformClient`.
+
+### Classifiers
+
+Implement the `Classifier` Protocol from `classifiers` and register it:
+
+```toml
+[project.entry-points."dependency_scout.classifiers"]
+gemini = "my_package:GeminiClassifier"
+```
+
+Select it with `CLASSIFIER=gemini` in `.env`.
+
+### Extra signal activities
+
+Per-repo custom signals can be added without writing a plugin package. Any Temporal activity registered with the worker can be listed in `.github/triage-agent.yml`:
+
+```yaml
+extra_signal_activities:
+  - my_company.internal_vuln_db.check
+```
+
+The activity receives `(ecosystem, package, old_version, new_version)` and must return a JSON-serializable dict. Results land in `PackageSignals.custom_signals` and are included in the LLM prompt.
+
+---
+
+## Adding a new built-in ecosystem
+
+The activity files (`pypi_metadata.py`, `release_age.py`, `maintainer.py`, `package_diff.py`, `osv.py`) are thin wrappers that call `get_provider(ecosystem).method(...)`. Adding a new ecosystem to the core means:
+
+1. **Create** `ecosystems/{name}.py` inheriting `EcosystemProviderBase`
+2. **Update** the `ecosystem` field type in `models/__init__.py`
+3. **Add** the Dependabot branch slug to `_DEPENDABOT_ECOSYSTEM_MAP` in `helpers/pr_parser.py`
+4. **Add** a name-validation regex entry in `api/webhook.py`'s `_NAME_RE_BY_ECOSYSTEM`
+
+No manual registration in a registry — `get_provider()` discovers providers by scanning `ecosystems/*.py` on first call.
+
+Shared utilities (`validate_archive_url`, `safe_zip_extractall`, `safe_tar_extractall`, `is_major`, `parse_upload_time`, `detect_stale_version_line`) are in `ecosystems/__init__.py`. The CDN allowlist (`ALLOWED_CDN_HOSTS`) lives there too and must be extended for each new registry.
 
 ---
 
@@ -290,6 +370,11 @@ GITHUB_APP_ID=
 GITHUB_APP_PRIVATE_KEY_PATH=
 GITHUB_WEBHOOK_SECRET=
 
+# GitLab (optional — enables GitLab MR support)
+GITLAB_TOKEN=
+GITLAB_WEBHOOK_SECRET=
+GITLAB_BASE_URL=https://gitlab.com   # override for self-hosted instances
+
 # Socket (optional — adds supply chain score signal)
 SOCKET_API_KEY=
 
@@ -305,7 +390,7 @@ ENABLE_PR_ACTIONS=false          # set true to enable real PR actions locally
 uv run ruff format .          # format
 uv run ruff check .           # lint
 uv run mypy .                 # type check
-uv run pytest                 # tests (733 total)
-uv run pytest --cov=activities,workflows,helpers,api --cov-report=term-missing
+uv run pytest                 # tests (771 total)
+uv run pytest --cov=activities,ecosystems,platforms,classifiers,models,workflows,helpers,api --cov-report=term-missing
 uv run pytest tests/test_workflow_replay.py -v   # replay/determinism tests only
 ```

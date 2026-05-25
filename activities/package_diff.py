@@ -190,6 +190,11 @@ _NET_CALL_PATTERNS: dict[str, list[re.Pattern[str]]] = {
             r"api\.telegram\.org/bot",  # Telegram bot C2 exfiltration channel
             r"\.icp0\.io",  # ICP canister C2 (CanisterWorm) — decentralised exfil endpoint
             r"open\s*\([^,]*(?:\.bashrc|\.zshrc|\.profile|bash_profile)[^,]*,\s*['\"]a['\"]",  # shell RC append
+            r"""subprocess\.[^\n]{0,60}["']node["'][^\n]{0,20}["']-e["']""",  # cross-lang node -e exec (Telnyx/TrapDoor)
+            r"api\.mainnet-beta\.solana\.com",  # Solana RPC C2 dead-drop (GlassWorm)
+            r"discord\.com/api/webhooks/",  # Discord webhook exfil (Shai-Hulud / Yeshen-Asia)
+            r"logs\.betterstack\.com|logtail\.com",  # BetterStack/Logtail exfil
+            r"api\.github\.com/gists",  # GitHub Gist dead-drop
         ],
         ".js": [
             r"\bfetch\s*\(",
@@ -206,12 +211,23 @@ _NET_CALL_PATTERNS: dict[str, list[re.Pattern[str]]] = {
             r"api\.telegram\.org/bot",  # Telegram bot C2 exfiltration channel
             r"\.icp0\.io",  # ICP canister C2 (CanisterWorm) — decentralised exfil endpoint
             r"(?:appendFileSync|writeFile(?:Sync)?)\s*\([^,]*(?:\.bashrc|\.zshrc|\.profile|bash_profile)",  # shell RC injection
+            r"getTransaction\s*\(|getSignaturesForAddress\s*\(|getAccountInfo\s*\(",  # Solana RPC C2 dead-drop (GlassWorm)
+            r"discord\.com/api/webhooks/",  # Discord webhook exfil (Shai-Hulud / Yeshen-Asia)
+            r"logs\.betterstack\.com|logtail\.com",  # BetterStack/Logtail exfil
+            r"api\.github\.com/gists",  # GitHub Gist dead-drop
+            r"api\.github\.com/user/repos",  # GitHub repo creation as encrypted dead-drop (Mini Shai-Hulud)
+            r"window\.ethereum\s*=|window\.solana\s*=|window\.phantom\s*=",  # crypto wallet API monkey-patching (September 2025 npm)
+            r"\bfetch\s*=\s*(?!==)|XMLHttpRequest\.prototype\.\w+\s*=",  # global fetch/XHR hijack (crypto drainer)
         ],
         ".ts": [
             r"\bfetch\s*\(",
             r"\baxios\.(get|post|put|delete|request|create)\b",
             r"\bhttps?\.(request|get)\s*\(",
             r"\bXMLHttpRequest\b",
+            r"getTransaction\s*\(|getSignaturesForAddress\s*\(|getAccountInfo\s*\(",  # Solana RPC C2
+            r"discord\.com/api/webhooks/",
+            r"logs\.betterstack\.com|logtail\.com",
+            r"window\.ethereum\s*=|window\.solana\s*=",  # wallet monkey-patching
         ],
         ".cjs": [
             r"\bfetch\s*\(",
@@ -226,11 +242,16 @@ _NET_CALL_PATTERNS: dict[str, list[re.Pattern[str]]] = {
             r"api\.telegram\.org/bot",
             r"\.icp0\.io",
             r"(?:appendFileSync|writeFile(?:Sync)?)\s*\([^,]*(?:\.bashrc|\.zshrc|\.profile|bash_profile)",
+            r"getTransaction\s*\(|getSignaturesForAddress\s*\(",  # Solana RPC C2
+            r"discord\.com/api/webhooks/",
+            r"api\.github\.com/gists",
         ],
         ".mjs": [
             r"\bfetch\s*\(",
             r"\baxios\b",
             r"\bhttps?\.(request|get)\s*\(",
+            r"discord\.com/api/webhooks/",
+            r"window\.ethereum\s*=|window\.solana\s*=",
         ],
         ".php": [
             r"\bcurl_exec\s*\(",
@@ -340,6 +361,32 @@ _OBFUSCATION_LINE_THRESHOLD = 100_000
 # Zero-width Unicode characters used for steganographic AI prompt injection (TrapDoor May 2026).
 # U+200B/200C/200D zero-width spaces, U+2060 word joiner, U+FEFF BOM mid-text, U+FFFC replacement.
 _ZERO_WIDTH_RE = re.compile("[​‌‍⁠﻿￼]")
+
+# Extensions where zero-width Unicode steganography is checked (invisible chars have no legit use).
+_ZERO_WIDTH_SOURCE_EXTENSIONS = frozenset({".js", ".ts", ".mjs", ".cjs", ".py", ".rb", ".php"})
+
+# Patterns that indicate OS-level persistence being installed from a lifecycle hook.
+_PERSISTENCE_PATTERNS: list[re.Pattern[str]] = [re.compile(p) for p in [
+    r"LaunchAgents",  # macOS LaunchAgent plist drop (Mini Shai-Hulud TanStack)
+    r"\blaunchctl\s+load\b",  # register macOS daemon
+    r"\bsystemctl\s+--user\b",  # systemd user service registration
+    r"~[/\\]\.config[/\\]systemd[/\\]user[/\\]",  # systemd user service path
+    r"\bpm2\s+(?:start|save|startup)\b",  # pm2 process manager daemon (Sonatype Q2 2025)
+    r"crontab\s+-[il]\b|crontab\s+[^-\s]",  # crontab modification
+    r"\bnpx\s+pm2\b|\brequire\s*\(['\"]pm2['\"]\)",  # pm2 via npx or require
+    r"github\.com/[^/\s]+/[^/\s]+/releases/download/bun-v",  # Bun runtime bootstrap (Shai-Hulud)
+    r"\btrufflehog\b|\bgitleaks\b|\bdetect-secrets\b",  # weaponised secrets scanner
+    r"rm\s+-rf\s+(?:~/|~[/\\]|\$HOME[/\\])",  # home dir wipe (Mini Shai-Hulud scorched-earth)
+]]
+
+# Patterns for npm worm self-propagation: reads credentials AND calls publish endpoint.
+_NPM_CRED_READ_RE = re.compile(
+    r"\.npmrc|NPM_TOKEN|npm_[A-Za-z0-9]{20,}|~[/\\]\.npm[/\\]_authtoken", re.IGNORECASE
+)
+_NPM_PUBLISH_RE = re.compile(
+    r"registry\.npmjs\.org[^\n]{0,60}publish|npm\s+publish\b|@npmcli/[^\n]{0,40}publish|npm\s+pack\b",
+    re.IGNORECASE,
+)
 
 # npm dependency version prefixes that bypass the registry (git/URL sourced)
 _GIT_DEP_PREFIXES = ("github:", "git+", "git://", "bitbucket:", "gitlab:", "file:")
@@ -1163,29 +1210,19 @@ def _has_zero_width_unicode(path: Path) -> bool:
 
 
 def _has_gzip_b64_payload(path: Path) -> bool:
-    """Return True if the file embeds a base64 string whose decoded bytes are gzip-compressed.
+    """Return True if the file contains a base64-encoded gzip payload.
 
-    Attackers layer gzip+base64 to evade text-based scanners — the encoded blob looks
-    like random noise until decoded. A gzip magic (\x1f\x8b) after b64decode is a strong
-    signal of hidden executable payload (seen in npm/pip campaigns, Socket blog May 2026).
-    Only checks strings ≥100 chars to avoid false positives on short inline data.
+    Gzip data in base64 always starts with 'H4sI' (the bytes \x1f\x8b\x08 encoded).
+    Attackers layer gzip+base64 to make payloads look like random noise while evading
+    text-based scanners (seen in npm/pip campaigns, Socket blog May 2026).
+    Requires ≥60 additional base64 chars after the magic to avoid false positives.
     """
-    import base64
-
-    _B64_RE = re.compile(r"[A-Za-z0-9+/]{100,}={0,2}")
-    _GZIP_MAGIC = b"\x1f\x8b"
+    _GZIP_B64_RE = re.compile(r"H4sI[A-Za-z0-9+/]{60,}={0,2}")
     try:
         text = path.read_text(encoding="utf-8", errors="replace")
-        for match in _B64_RE.finditer(text):
-            try:
-                decoded = base64.b64decode(match.group() + "==")
-                if decoded[:2] == _GZIP_MAGIC:
-                    return True
-            except Exception:  # noqa: BLE001
-                continue
+        return bool(_GZIP_B64_RE.search(text))
     except Exception:  # noqa: BLE001
-        pass
-    return False
+        return False
 
 
 def _read_text(path: Path) -> str:
@@ -1285,7 +1322,7 @@ async def _compare_artifact_to_source(
 
     mismatch_files: list[str] = []
     for rel_path, source_content in zip(paths, source_contents):
-        if source_content is None or isinstance(source_content, Exception):
+        if not isinstance(source_content, str):
             continue
         archive_content = artifact_files[rel_path]
         extra = _count_extra_lines(source_content, archive_content)

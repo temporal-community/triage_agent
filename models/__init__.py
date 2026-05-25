@@ -95,6 +95,12 @@ class DiffSignals(BaseModel):
         False  # archive has unexpected additions vs git tag source (XZ-style backdoor)
     )
     artifact_source_mismatch_files: list[str] = []  # which files have unexplained new lines
+    persistence_mechanism_added: bool = (
+        False  # LaunchAgent, systemd user service, pm2 daemon, or cron job added by install hook
+    )
+    worm_propagation_pattern: bool = (
+        False  # reads npm/GitHub credentials AND calls registry publish or repo-creation endpoints
+    )
 
 
 class PRFilesSignals(BaseModel):
