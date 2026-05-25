@@ -62,7 +62,7 @@ _CHECKS = [
 ]
 
 
-async def _fetch_pr(url: str) -> tuple[str, str, str]:
+async def _fetch_pr(url: str) -> tuple[str, str, str, str]:
     """Return (ecosystem, package, old_version, new_version) by querying GitHub."""
     m = _GITHUB_PR_RE.search(url)
     if not m:
