@@ -17,10 +17,7 @@ class OpenAIClassifier:
         import httpx as _httpx
 
         api_key = os.environ.get("OPENAI_API_KEY", "")
-        model = os.environ.get("OPENAI_MODEL", "")
-        if not model:
-            activity.logger.warning("OPENAI_MODEL not set — falling back to rule-based classifier")
-            return _rule_based(signals)
+        model = os.environ.get("OPENAI_MODEL", "gpt-4o")
         try:
             async with _httpx.AsyncClient(timeout=60.0) as client:
                 resp = await client.post(

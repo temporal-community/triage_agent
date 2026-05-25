@@ -7,7 +7,7 @@ A classifier takes all the checks gathered by `PackageTriageWorkflow` and produc
 | File | Class | What drives it | Required config |
 |---|---|---|---|
 | `anthropic.py` | `AnthropicClassifier` | Anthropic API | `ANTHROPIC_API_KEY`; optionally `ANTHROPIC_MODEL` (default: `claude-sonnet-4-6`) |
-| `openai.py` | `OpenAIClassifier` | OpenAI API | `OPENAI_API_KEY` and `OPENAI_MODEL` |
+| `openai.py` | `OpenAIClassifier` | OpenAI API | `OPENAI_API_KEY`; optionally `OPENAI_MODEL` (default: `gpt-4o`) |
 | `ollama.py` | `OllamaClassifier` | Local [Ollama](https://ollama.com) instance — no API key needed | `OLLAMA_HOST` (default: `http://localhost:11434`) and `OLLAMA_MODEL` (default: `llama3.2`) |
 | `_helpers.py` | `RuleBasedClassifier` (via `__init__.py`) | Deterministic threshold rules — zero API keys, zero cost | Nothing |
 
