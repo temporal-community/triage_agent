@@ -34,6 +34,10 @@ patterns:
   desc: RubyGems API key file access in install hook (extconf.rb credential theft)
 - pattern: api\.github\.com/gists
   desc: GitHub Gist used as exfil dead-drop from install hook (TrapDoor crates.io build.rs pattern)
+- pattern: 'eval\s*\(\s*(?:base64|zlib|__import__)'
+  desc: Python eval of decoded payload in install hook - layered obfuscation before execution
+- pattern: 'exec\s*\(\s*(?:base64|zlib|__import__|compile)'
+  desc: Python exec of decoded payload in install hook - common dropper pattern
 worm_propagation:
   desc: 'npm worm: reads credentials AND calls publish endpoint in same file'
   credential_read:

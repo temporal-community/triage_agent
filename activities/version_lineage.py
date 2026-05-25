@@ -45,6 +45,8 @@ async def check(
             result = await _check_composer(package, new_version)
         elif ecosystem == "nuget":
             result = await _check_nuget(package, new_version)
+        elif ecosystem == "cargo":
+            result = await _check_cargo(package, new_version)
         else:
             return VersionLineageChecks()
     except ApplicationError:
@@ -201,6 +203,39 @@ async def _check_nuget(package: str, new_version: str) -> VersionLineageChecks:
         return VersionLineageChecks()
     versions: list[str] = resp.json().get("versions", [])
     return detect_stale_version_line(versions, new_version)
+
+
+async def _check_cargo(package: str, new_version: str) -> VersionLineageChecks:
+    """Use the crates.io API to detect stale major-line bumps."""
+    client = get_client()
+    headers = {
+        "User-Agent": "dependabot-supply-chain-scout/1.0 (security scanner; https://github.com/temporal-community/dependabot-supply-chain-scout)"
+    }
+    resp = await client.get(
+        f"https://crates.io/api/v1/crates/{package}", headers=headers, timeout=15.0
+    )
+    if resp.status_code == 404:
+        raise ApplicationError(
+            f"{package} not found on crates.io", type="PackageNotFound", non_retryable=True
+        )
+    resp.raise_for_status()
+    data = resp.json()
+
+    all_versions: list[str] = []
+    release_dates: dict[str, datetime] = {}
+    for v in data.get("versions", []):
+        num = v.get("num", "")
+        if not num or v.get("yanked"):
+            continue
+        all_versions.append(num)
+        raw = v.get("created_at", "")
+        if raw:
+            try:
+                release_dates[num] = parse_upload_time(raw)
+            except Exception:  # noqa: BLE001
+                pass
+
+    return detect_stale_version_line(all_versions, new_version, release_dates=release_dates)
 
 
 async def _check_rubygems(package: str, new_version: str) -> VersionLineageChecks:

@@ -283,7 +283,7 @@ PACKAGIST_BASE = "https://packagist.org/packages"
 async def test_composer_no_slash_returns_empty():
     env = ActivityEnvironment()
     result = await env.run(lineage_check, "composer", "noslash", "1.0.0", "1.0.1")
-    assert result == VersionLineSignals()
+    assert result == VersionLineageChecks()
 
 
 @respx.mock
@@ -300,7 +300,7 @@ async def test_composer_non_200_returns_empty():
     respx.get(f"{PACKAGIST_BASE}/vendor/pkg.json").mock(return_value=httpx.Response(503))
     env = ActivityEnvironment()
     result = await env.run(lineage_check, "composer", "vendor/pkg", "1.0.0", "1.0.1")
-    assert result == VersionLineSignals()
+    assert result == VersionLineageChecks()
 
 
 @respx.mock
@@ -310,7 +310,7 @@ async def test_composer_no_versions_returns_empty():
     )
     env = ActivityEnvironment()
     result = await env.run(lineage_check, "composer", "vendor/pkg", "1.0.0", "1.0.1")
-    assert result == VersionLineSignals()
+    assert result == VersionLineageChecks()
 
 
 # ---------------------------------------------------------------------------
@@ -324,7 +324,7 @@ MAVEN_SEARCH = "https://search.maven.org/solrsearch/select"
 async def test_maven_no_colon_returns_empty():
     env = ActivityEnvironment()
     result = await env.run(lineage_check, "maven", "nocolon", "1.0.0", "1.0.1")
-    assert result == VersionLineSignals()
+    assert result == VersionLineageChecks()
 
 
 @respx.mock
@@ -332,17 +332,15 @@ async def test_maven_non_200_returns_empty():
     respx.get(MAVEN_SEARCH).mock(return_value=httpx.Response(503))
     env = ActivityEnvironment()
     result = await env.run(lineage_check, "maven", "com.example:lib", "1.0.0", "1.0.1")
-    assert result == VersionLineSignals()
+    assert result == VersionLineageChecks()
 
 
 @respx.mock
 async def test_maven_no_docs_returns_empty():
-    respx.get(MAVEN_SEARCH).mock(
-        return_value=httpx.Response(200, json={"response": {"docs": []}})
-    )
+    respx.get(MAVEN_SEARCH).mock(return_value=httpx.Response(200, json={"response": {"docs": []}}))
     env = ActivityEnvironment()
     result = await env.run(lineage_check, "maven", "com.example:lib", "1.0.0", "1.0.1")
-    assert result == VersionLineSignals()
+    assert result == VersionLineageChecks()
 
 
 # ---------------------------------------------------------------------------
@@ -357,7 +355,7 @@ async def test_nuget_non_200_returns_empty():
     respx.get(f"{NUGET_BASE}/mypkg/index.json").mock(return_value=httpx.Response(503))
     env = ActivityEnvironment()
     result = await env.run(lineage_check, "nuget", "mypkg", "1.0.0", "1.0.1")
-    assert result == VersionLineSignals()
+    assert result == VersionLineageChecks()
 
 
 # ---------------------------------------------------------------------------
@@ -368,8 +366,89 @@ async def test_nuget_non_200_returns_empty():
 @respx.mock
 async def test_unknown_ecosystem_returns_empty():
     env = ActivityEnvironment()
-    result = await env.run(lineage_check, "cargo", "serde", "1.0.0", "1.0.1")
-    assert result == VersionLineSignals()
+    result = await env.run(lineage_check, "gomod", "github.com/foo/bar", "1.0.0", "1.0.1")
+    assert result == VersionLineageChecks()
+
+
+# ---------------------------------------------------------------------------
+# Activity tests — Cargo (crates.io)
+# ---------------------------------------------------------------------------
+
+CARGO_API = "https://crates.io/api/v1/crates"
+
+
+def _cargo_crate_response(versions: dict[str, str], yanked: set[str] | None = None) -> dict:
+    """Build a minimal crates.io API response with the given {version: created_at} map."""
+    yanked = yanked or set()
+    return {
+        "crate": {"id": "mycrate", "name": "mycrate"},
+        "versions": [
+            {"num": v, "created_at": ts, "yanked": v in yanked} for v, ts in versions.items()
+        ],
+    }
+
+
+@respx.mock
+async def test_cargo_stale_version_line_detected():
+    respx.get(f"{CARGO_API}/mycrate").mock(
+        return_value=httpx.Response(
+            200,
+            json=_cargo_crate_response({"0.5.0": _OLD, "1.0.0": _RECENT, "1.1.0": _RECENT}),
+        )
+    )
+    env = ActivityEnvironment()
+    result = await env.run(lineage_check, "cargo", "mycrate", "0.5.0", "0.5.1")
+    assert result.stale_version_line is True
+    assert result.bump_major == 0
+    assert result.latest_major == 1
+
+
+@respx.mock
+async def test_cargo_not_stale_when_patching_latest():
+    respx.get(f"{CARGO_API}/mycrate").mock(
+        return_value=httpx.Response(
+            200,
+            json=_cargo_crate_response({"0.5.0": _OLD, "1.0.0": _RECENT, "1.1.0": _RECENT}),
+        )
+    )
+    env = ActivityEnvironment()
+    result = await env.run(lineage_check, "cargo", "mycrate", "1.0.0", "1.1.0")
+    assert result.stale_version_line is False
+
+
+@respx.mock
+async def test_cargo_yanked_versions_excluded():
+    """Yanked versions should not participate in version lineage detection."""
+    respx.get(f"{CARGO_API}/mycrate").mock(
+        return_value=httpx.Response(
+            200,
+            json=_cargo_crate_response(
+                {"0.5.0": _OLD, "1.0.0": _RECENT},
+                yanked={"1.0.0"},
+            ),
+        )
+    )
+    env = ActivityEnvironment()
+    result = await env.run(lineage_check, "cargo", "mycrate", "0.5.0", "0.5.1")
+    # 1.0.0 is yanked so only 0.x is visible — not stale
+    assert result.stale_version_line is False
+
+
+@respx.mock
+async def test_cargo_404_raises_non_retryable():
+    respx.get(f"{CARGO_API}/nosuchcrate").mock(return_value=httpx.Response(404))
+    env = ActivityEnvironment()
+    with pytest.raises(ApplicationError) as exc_info:
+        await env.run(lineage_check, "cargo", "nosuchcrate", "1.0.0", "1.0.1")
+    assert exc_info.value.non_retryable is True
+
+
+@respx.mock
+async def test_cargo_non_200_returns_empty():
+    respx.get(f"{CARGO_API}/mycrate").mock(return_value=httpx.Response(503))
+    env = ActivityEnvironment()
+    result = await env.run(lineage_check, "cargo", "mycrate", "1.0.0", "1.0.1")
+    assert result == VersionLineageChecks()
 
 
 # ---------------------------------------------------------------------------
