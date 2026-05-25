@@ -12,6 +12,7 @@ from temporalio.exceptions import ApplicationError
 from activities.ecosystems import (
     build_release_signals,
     fetch_vcs_account_age,
+    fetch_vcs_ci_workflow_changes,
     fetch_vcs_release,
     fetch_vcs_tag_signature,
     is_major,
@@ -104,7 +105,15 @@ class NpmProvider:
 
         old_set = _maintainer_set(old_data)
         new_set = _maintainer_set(new_data)
-        return MaintainerSignals(maintainer_changed=bool(new_set - old_set))
+        added = new_set - old_set
+        if not added:
+            return MaintainerSignals(maintainer_changed=False)
+
+        account_age = await _fetch_npm_account_age(client, min(added))
+        return MaintainerSignals(
+            maintainer_changed=True,
+            new_maintainer_account_age_days=account_age,
+        )
 
     # ------------------------------------------------------------------
     # get_archive_url
@@ -214,16 +223,20 @@ class NpmProvider:
                     pass
 
         owner, repo = owner_repo.split("/", 1)
-        release, new_sig, old_sig = await asyncio.gather(
+        release, new_sig, old_sig, ci_days = await asyncio.gather(
             fetch_vcs_release(platform, owner, repo, version, token),
             fetch_vcs_tag_signature(platform, owner, repo, version, token),
             fetch_vcs_tag_signature(platform, owner, repo, old_version, token),
+            fetch_vcs_ci_workflow_changes(platform, owner, repo),
         )
+        extra: dict = {"metadata_repo": owner_repo}
+        if ci_days is not None:
+            extra["ci_workflow_changed_days_ago"] = ci_days
         if release:
             return build_release_signals(release, registry_time, new_sig, old_sig).model_copy(
-                update={"metadata_repo": owner_repo}
+                update=extra
             )
-        return ReleaseSignals(metadata_repo=owner_repo)
+        return ReleaseSignals(**extra)
 
     def extract_archive(self, archive_bytes: bytes, filename: str, dest: str) -> None:
         buf = io.BytesIO(archive_bytes)
@@ -263,6 +276,31 @@ def _maintainer_set(data: dict) -> set[str]:
         if name:
             result.add(name)
     return result
+
+
+async def _fetch_npm_account_age(client: httpx.AsyncClient, username: str) -> int | None:
+    """Return the age in days of an npm user account, or None if unavailable.
+
+    Uses the npm CouchDB user endpoint. Returns None gracefully on 404 or any error.
+    """
+    try:
+        resp = await client.get(
+            f"https://registry.npmjs.org/-/user/org.couchdb.user:{username}",
+            timeout=10.0,
+        )
+        if resp.status_code != 200:
+            return None
+        data = resp.json()
+        created_raw = data.get("created") or data.get("date")
+        if not created_raw:
+            return None
+        from activities.ecosystems import parse_upload_time
+        from datetime import datetime, timezone
+
+        created = parse_upload_time(created_raw)
+        return max(0, (datetime.now(timezone.utc) - created).days)
+    except Exception:  # noqa: BLE001
+        return None
 
 
 async def _fetch_npm_publisher(

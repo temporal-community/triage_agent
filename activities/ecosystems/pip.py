@@ -14,6 +14,7 @@ from temporalio.exceptions import ApplicationError
 from activities.ecosystems import (
     build_release_signals,
     fetch_vcs_account_age,
+    fetch_vcs_ci_workflow_changes,
     fetch_vcs_release,
     fetch_vcs_tag_signature,
     is_major,
@@ -223,16 +224,20 @@ class PipProvider:
             return ReleaseSignals()
         platform, owner_repo = vcs
         owner, repo = owner_repo.split("/", 1)
-        release, new_sig, old_sig = await asyncio.gather(
+        release, new_sig, old_sig, ci_days = await asyncio.gather(
             fetch_vcs_release(platform, owner, repo, version, token),
             fetch_vcs_tag_signature(platform, owner, repo, version, token),
             fetch_vcs_tag_signature(platform, owner, repo, old_version, token),
+            fetch_vcs_ci_workflow_changes(platform, owner, repo),
         )
+        extra: dict = {"metadata_repo": owner_repo}
+        if ci_days is not None:
+            extra["ci_workflow_changed_days_ago"] = ci_days
         if release:
             return build_release_signals(release, registry_time, new_sig, old_sig).model_copy(
-                update={"metadata_repo": owner_repo}
+                update=extra
             )
-        return ReleaseSignals(metadata_repo=owner_repo)
+        return ReleaseSignals(**extra)
 
     def extract_archive(self, archive_bytes: bytes, filename: str, dest: str) -> None:
         buf = io.BytesIO(archive_bytes)

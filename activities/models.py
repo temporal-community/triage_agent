@@ -89,6 +89,7 @@ class DiffSignals(BaseModel):
     obfuscated_code: bool = (
         False  # machine-generated obfuscation detected (eval/atob, _0x vars, etc.)
     )
+    lockfile_integrity_downgraded: bool = False  # package-lock.json sha512 entries removed or downgraded to sha1 (PackageGate pattern)
 
 
 class PRFilesSignals(BaseModel):
@@ -105,6 +106,9 @@ class VersionLineSignals(BaseModel):
 
 class MaintainerSignals(BaseModel):
     maintainer_changed: bool = False
+    new_maintainer_account_age_days: int | None = (
+        None  # age of the newest new-maintainer's npm account; None if unavailable or no new maintainer
+    )
 
 
 class ReleaseAgeSignals(BaseModel):
@@ -126,6 +130,9 @@ class ReleaseSignals(BaseModel):
     )
     metadata_repo: str | None = (
         None  # "owner/repo" extracted from package registry metadata (project_urls / repository / source_code_uri)
+    )
+    ci_workflow_changed_days_ago: int | None = (
+        None  # days since .github/workflows/ last changed; None = no recent changes or GitHub unavailable
     )
 
 

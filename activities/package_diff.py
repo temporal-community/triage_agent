@@ -395,6 +395,7 @@ async def compute(ecosystem: str, package: str, old_version: str, new_version: s
         binary_data,
         git_url_dep,
         obfuscated,
+        lockfile_downgraded,
     ) = await asyncio.to_thread(
         _extract_and_diff, old_bytes, old_filename, new_bytes, new_filename, provider
     )
@@ -409,6 +410,7 @@ async def compute(ecosystem: str, package: str, old_version: str, new_version: s
         binary_data_added=binary_data,
         git_url_dependency_added=git_url_dep,
         obfuscated_code=obfuscated,
+        lockfile_integrity_downgraded=lockfile_downgraded,
     )
     _cache.set(key, result)
     return result
@@ -490,16 +492,25 @@ def _extract_and_diff(
     new_bytes: bytes,
     new_filename: str,
     provider,
-) -> tuple[str, bool, bool, int, bool, bool, bool, bool]:
+) -> tuple[str, bool, bool, int, bool, bool, bool, bool, bool]:
     try:
         with tempfile.TemporaryDirectory() as old_dir, tempfile.TemporaryDirectory() as new_dir:
             provider.extract_archive(old_bytes, old_filename, old_dir)
             provider.extract_archive(new_bytes, new_filename, new_dir)
+
+            # Check package-lock.json before noise filtering strips it from the map
+            lockfile_downgraded = False
+            old_locks = list(Path(old_dir).rglob("package-lock.json"))
+            new_locks = list(Path(new_dir).rglob("package-lock.json"))
+            if old_locks and new_locks:
+                lockfile_downgraded = _npm_lockfile_integrity_downgraded(old_locks[0], new_locks[0])
+
             old_map = _get_file_map(old_dir)
             new_map = _get_file_map(new_dir)
-            return _build_diff(old_map, new_map)
+            diff_result = _build_diff(old_map, new_map)
+            return (*diff_result, lockfile_downgraded)
     except Exception as exc:  # noqa: BLE001
-        return f"[extraction error: {exc}]", False, False, 0, False, False, False, False
+        return f"[extraction error: {exc}]", False, False, 0, False, False, False, False, False
 
 
 def _is_noise(rel: str) -> bool:
@@ -915,6 +926,41 @@ def _npm_git_url_deps_added(old_path: Path, new_path: Path) -> bool:
         return False
     except Exception:  # noqa: BLE001
         return False
+
+
+def _npm_lockfile_integrity_downgraded(old_path: Path, new_path: Path) -> bool:
+    """Return True if package-lock.json lost sha512 integrity entries or downgraded to sha1.
+
+    PackageGate (Jan 2026): stripping sha512 entries from package-lock.json — or
+    replacing them with sha1 entries exploitable via collision — bypasses npm's
+    integrity verification. Legitimate version bumps never shrink the integrity map.
+    """
+
+    def _integrity_map(data: dict) -> dict[str, str]:
+        result: dict[str, str] = {}
+        for pkg_path, pkg_info in (data.get("packages") or {}).items():
+            if isinstance(pkg_info, dict) and "integrity" in pkg_info:
+                result[pkg_path] = pkg_info["integrity"]
+        return result
+
+    try:
+        old_data = json.loads(old_path.read_text(errors="replace"))
+        new_data = json.loads(new_path.read_text(errors="replace"))
+    except Exception:  # noqa: BLE001
+        return False
+
+    old_integrity = _integrity_map(old_data)
+    new_integrity = _integrity_map(new_data)
+
+    for pkg_path, old_hash in old_integrity.items():
+        if not old_hash.startswith("sha512-"):
+            continue
+        if pkg_path not in new_integrity:
+            return True  # sha512 entry removed entirely
+        if new_integrity[pkg_path].startswith("sha1-"):
+            return True  # downgraded sha512 → sha1
+
+    return False
 
 
 def _composer_autoload_files_added(old_path: Path, new_path: Path) -> bool:

@@ -359,8 +359,26 @@ def _rule_based(signals: PackageSignals) -> Verdict:
             "machine-generated obfuscation detected (eval/atob chains, _0x vars, or >100KB single line) — "
             "review for hidden credential harvesting or C2 payload"
         )
+    if signals.diff.lockfile_integrity_downgraded:
+        flags.append(
+            "package-lock.json integrity entries removed or downgraded from sha512 to sha1 — "
+            "bypasses npm registry integrity verification (PackageGate pattern)"
+        )
     if signals.maintainer.maintainer_changed:
-        flags.append("maintainer changed")
+        age = signals.maintainer.new_maintainer_account_age_days
+        if age is not None and age < 90:
+            flags.append(
+                f"new maintainer added with {age}-day-old npm account — "
+                "very young accounts gaining publish access are a strong XZ-style infiltration signal"
+            )
+        else:
+            flags.append("maintainer changed")
+    ci_days = signals.release.ci_workflow_changed_days_ago
+    if ci_days is not None:
+        flags.append(
+            f"GitHub Actions workflows changed {ci_days} day{'s' if ci_days != 1 else ''} ago — "
+            "CI pipeline modification before a release is a GhostAction/TeamPCP/tj-actions attack vector"
+        )
     if signals.attestation.publisher_changed:
         old = (
             f" (was {signals.attestation.old_publisher_repo})"

@@ -525,6 +525,48 @@ async def fetch_vcs_account_age(platform: str, owner: str) -> int | None:
     return None
 
 
+async def fetch_vcs_ci_workflow_changes(
+    platform: str, owner: str, repo: str, since_days: int = 30
+) -> int | None:
+    """Return days since the most recent commit touching .github/workflows/, or None.
+
+    None means either no changes in the window, no GitHub token, or an error.
+    A low value (e.g. < 7) means the CI pipeline was modified just before the release —
+    a key signal for GhostAction / TeamPCP / tj-actions style supply chain attacks.
+    Only implemented for GitHub (GitLab CI is in .gitlab-ci.yml, not a standard path).
+    """
+    if platform != "github":
+        return None
+    token = os.environ.get("GITHUB_TOKEN")
+    if not token:
+        return None
+    since = (datetime.now(timezone.utc) - timedelta(days=since_days)).isoformat()
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "Authorization": f"Bearer {token}",
+    }
+    try:
+        client = get_client()
+        resp = await client.get(
+            f"https://api.github.com/repos/{owner}/{repo}/commits",
+            headers=headers,
+            params={"path": ".github/workflows", "since": since, "per_page": "1"},
+            timeout=10.0,
+        )
+        if resp.status_code != 200:
+            return None
+        commits = resp.json()
+        if not commits:
+            return None
+        commit_date_raw = commits[0].get("commit", {}).get("committer", {}).get("date", "")
+        if not commit_date_raw:
+            return None
+        commit_date = parse_upload_time(commit_date_raw)
+        return max(0, (datetime.now(timezone.utc) - commit_date).days)
+    except Exception:  # noqa: BLE001
+        return None
+
+
 # Backward-compat alias
 async def fetch_github_account_age(owner: str) -> int | None:
     return await fetch_vcs_account_age("github", owner)

