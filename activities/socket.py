@@ -3,7 +3,7 @@ import os
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
-from models import SocketSignals
+from models import SocketChecks
 from helpers.cache import ActivityCache
 from helpers.http import get_client
 
@@ -35,7 +35,7 @@ _MEDIUM_INCLUDE_TYPES = {
 
 
 @activity.defn(name="activities.socket.score")
-async def score(ecosystem: str, package: str, old_version: str, new_version: str) -> SocketSignals:
+async def score(ecosystem: str, package: str, old_version: str, new_version: str) -> SocketChecks:
     key = (ecosystem, package, new_version)
     if (hit := _cache.get(key)) is not None:
         activity.logger.debug("socket cache hit: %s %s", package, new_version)
@@ -46,7 +46,7 @@ async def score(ecosystem: str, package: str, old_version: str, new_version: str
         activity.logger.info(
             "No SOCKET_API_KEY — skipping Socket score (treated as yellow indicator)"
         )
-        return SocketSignals(socket_score=None, socket_alerts=[])
+        return SocketChecks(socket_score=None, socket_alerts=[])
 
     ecosystem_slug = _ECOSYSTEM_MAP.get(ecosystem, "pypi")
     purl = f"pkg:{ecosystem_slug}/{package}@{new_version}"
@@ -67,7 +67,7 @@ async def score(ecosystem: str, package: str, old_version: str, new_version: str
         )
     if resp.status_code == 404:
         activity.logger.info(f"{package}@{new_version} not found in Socket database")
-        return SocketSignals(socket_score=None, socket_alerts=[])
+        return SocketChecks(socket_score=None, socket_alerts=[])
     if resp.status_code == 429:
         raise ApplicationError("Socket API rate limited", non_retryable=False)
 
@@ -75,7 +75,7 @@ async def score(ecosystem: str, package: str, old_version: str, new_version: str
 
     packages = resp.json().get("packages", [])
     if not packages:
-        return SocketSignals(socket_score=None, socket_alerts=[])
+        return SocketChecks(socket_score=None, socket_alerts=[])
 
     pkg = packages[0]
     depscore = pkg.get("score", {}).get("depscore")
@@ -96,7 +96,7 @@ async def score(ecosystem: str, package: str, old_version: str, new_version: str
     activity.logger.info(
         f"Socket: {package}@{new_version} score={socket_score} alerts={len(alerts)}"
     )
-    result = SocketSignals(
+    result = SocketChecks(
         socket_score=socket_score,
         socket_alerts=alerts,
         socket_alert_types=alert_types,

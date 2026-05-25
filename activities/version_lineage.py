@@ -15,7 +15,7 @@ from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
 from ecosystems import detect_stale_version_line, parse_upload_time
-from models import VersionLineSignals
+from models import VersionLineChecks
 from helpers.cache import ActivityCache
 from helpers.http import get_client
 
@@ -25,13 +25,13 @@ _cache: ActivityCache = ActivityCache(ttl_seconds=3600)  # new majors can be rel
 @activity.defn(name="activities.version_lineage.check")
 async def check(
     ecosystem: str, package: str, old_version: str, new_version: str
-) -> VersionLineSignals:
+) -> VersionLineChecks:
     key = (ecosystem, package, new_version)
     if (hit := _cache.get(key)) is not None:
         activity.logger.debug("version_lineage cache hit: %s %s", package, new_version)
         return hit
 
-    result: VersionLineSignals
+    result: VersionLineChecks
     try:
         if ecosystem == "pip":
             result = await _check_pypi(package, new_version)
@@ -46,17 +46,17 @@ async def check(
         elif ecosystem == "nuget":
             result = await _check_nuget(package, new_version)
         else:
-            return VersionLineSignals()
+            return VersionLineChecks()
     except ApplicationError:
         raise
     except Exception:  # noqa: BLE001
-        return VersionLineSignals()
+        return VersionLineChecks()
 
     _cache.set(key, result)
     return result
 
 
-async def _check_pypi(package: str, new_version: str) -> VersionLineSignals:
+async def _check_pypi(package: str, new_version: str) -> VersionLineChecks:
     client = get_client()
     resp = await client.get(f"https://pypi.org/pypi/{package}/json", timeout=15.0)
     if resp.status_code == 404:
@@ -83,7 +83,7 @@ async def _check_pypi(package: str, new_version: str) -> VersionLineSignals:
     )
 
 
-async def _check_npm(package: str, new_version: str) -> VersionLineSignals:
+async def _check_npm(package: str, new_version: str) -> VersionLineChecks:
     client = get_client()
     resp = await client.get(
         f"https://registry.npmjs.org/{package}",
@@ -111,10 +111,10 @@ async def _check_npm(package: str, new_version: str) -> VersionLineSignals:
     return detect_stale_version_line(all_versions, new_version, release_dates=release_dates)
 
 
-async def _check_composer(package: str, new_version: str) -> VersionLineSignals:
+async def _check_composer(package: str, new_version: str) -> VersionLineChecks:
     """Use the Packagist API to get all versions for a vendor/package."""
     if "/" not in package:
-        return VersionLineSignals()
+        return VersionLineChecks()
     vendor, name = package.split("/", 1)
     client = get_client()
     resp = await client.get(f"https://packagist.org/packages/{vendor}/{name}.json", timeout=15.0)
@@ -123,11 +123,11 @@ async def _check_composer(package: str, new_version: str) -> VersionLineSignals:
             f"{package} not found on Packagist", type="PackageNotFound", non_retryable=True
         )
     if resp.status_code != 200:
-        return VersionLineSignals()
+        return VersionLineChecks()
 
     versions: dict = resp.json().get("package", {}).get("versions", {})
     if not versions:
-        return VersionLineSignals()
+        return VersionLineChecks()
 
     all_versions: list[str] = []
     release_dates: dict[str, datetime] = {}
@@ -146,10 +146,10 @@ async def _check_composer(package: str, new_version: str) -> VersionLineSignals:
     return detect_stale_version_line(all_versions, new_version, release_dates=release_dates)
 
 
-async def _check_maven(package: str, new_version: str) -> VersionLineSignals:
+async def _check_maven(package: str, new_version: str) -> VersionLineChecks:
     """Use search.maven.org to get all versions for a groupId:artifactId package."""
     if ":" not in package:
-        return VersionLineSignals()
+        return VersionLineChecks()
     group_id, artifact_id = package.split(":", 1)
     client = get_client()
     resp = await client.get(
@@ -163,11 +163,11 @@ async def _check_maven(package: str, new_version: str) -> VersionLineSignals:
         timeout=15.0,
     )
     if resp.status_code != 200:
-        return VersionLineSignals()
+        return VersionLineChecks()
 
     docs = resp.json().get("response", {}).get("docs", [])
     if not docs:
-        return VersionLineSignals()
+        return VersionLineChecks()
 
     release_dates: dict[str, datetime] = {}
     all_versions: list[str] = []
@@ -186,7 +186,7 @@ async def _check_maven(package: str, new_version: str) -> VersionLineSignals:
     return detect_stale_version_line(all_versions, new_version, release_dates=release_dates)
 
 
-async def _check_nuget(package: str, new_version: str) -> VersionLineSignals:
+async def _check_nuget(package: str, new_version: str) -> VersionLineChecks:
     """Use the NuGet flat-container version index to detect stale major-line bumps."""
     id_lower = package.lower()
     client = get_client()
@@ -198,12 +198,12 @@ async def _check_nuget(package: str, new_version: str) -> VersionLineSignals:
             f"{package} not found on NuGet", type="PackageNotFound", non_retryable=True
         )
     if resp.status_code != 200:
-        return VersionLineSignals()
+        return VersionLineChecks()
     versions: list[str] = resp.json().get("versions", [])
     return detect_stale_version_line(versions, new_version)
 
 
-async def _check_rubygems(package: str, new_version: str) -> VersionLineSignals:
+async def _check_rubygems(package: str, new_version: str) -> VersionLineChecks:
     client = get_client()
     resp = await client.get(f"https://rubygems.org/api/v1/versions/{package}.json", timeout=15.0)
     if resp.status_code == 404:

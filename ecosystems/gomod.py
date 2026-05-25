@@ -18,7 +18,7 @@ from temporalio.exceptions import ApplicationError
 
 from ecosystems import (
     EcosystemProviderBase,
-    build_release_signals,
+    build_release_checks,
     fetch_vcs_release,
     fetch_vcs_tag_signature,
     is_major,
@@ -28,11 +28,11 @@ from ecosystems import (
     validate_archive_url,
 )
 from models import (
-    AttestationSignals,
-    MaintainerSignals,
-    PyPISignals,
-    ReleaseAgeSignals,
-    ReleaseSignals,
+    AttestationChecks,
+    MaintainerChecks,
+    PyPIChecks,
+    ReleaseAgeChecks,
+    ReleaseChecks,
 )
 from helpers.http import get_client
 
@@ -54,7 +54,7 @@ class GoModulesProvider(EcosystemProviderBase):
     # fetch_metadata
     # ------------------------------------------------------------------
 
-    async def fetch_metadata(self, package: str, old_version: str, new_version: str) -> PyPISignals:
+    async def fetch_metadata(self, package: str, old_version: str, new_version: str) -> PyPIChecks:
         # Go proxy has no download counts or description API; only version info.
         client = get_client()
         resp = await client.get(f"{_PROXY}/{_escape(package)}/@v/{new_version}.info", timeout=15.0)
@@ -66,7 +66,7 @@ class GoModulesProvider(EcosystemProviderBase):
             )
         resp.raise_for_status()
 
-        return PyPISignals(
+        return PyPIChecks(
             weekly_downloads=None,  # not available from Go proxy
             is_major_bump=is_major(old_version, new_version),
             package_description=None,
@@ -76,7 +76,7 @@ class GoModulesProvider(EcosystemProviderBase):
     # fetch_release_age
     # ------------------------------------------------------------------
 
-    async def fetch_release_age(self, package: str, new_version: str) -> ReleaseAgeSignals:
+    async def fetch_release_age(self, package: str, new_version: str) -> ReleaseAgeChecks:
         client = get_client()
         resp = await client.get(f"{_PROXY}/{_escape(package)}/@v/{new_version}.info", timeout=15.0)
         if resp.status_code in (404, 410):
@@ -90,10 +90,10 @@ class GoModulesProvider(EcosystemProviderBase):
 
         raw = data.get("Time", "")
         if not raw:
-            return ReleaseAgeSignals(release_age_hours=None)
+            return ReleaseAgeChecks(release_age_hours=None)
         upload_time = parse_upload_time(raw)
         hours = (datetime.now(timezone.utc) - upload_time).total_seconds() / 3600
-        return ReleaseAgeSignals(release_age_hours=max(0.0, hours))
+        return ReleaseAgeChecks(release_age_hours=max(0.0, hours))
 
     # ------------------------------------------------------------------
     # fetch_maintainer
@@ -101,10 +101,10 @@ class GoModulesProvider(EcosystemProviderBase):
 
     async def fetch_maintainer(
         self, package: str, old_version: str, new_version: str
-    ) -> MaintainerSignals:
+    ) -> MaintainerChecks:
         # Go proxy has no per-version publisher concept; the VCS repo is
         # the authority and ownership changes would change the module path.
-        return MaintainerSignals(maintainer_changed=False)
+        return MaintainerChecks(maintainer_changed=False)
 
     # ------------------------------------------------------------------
     # get_archive_url
@@ -135,16 +135,16 @@ class GoModulesProvider(EcosystemProviderBase):
 
     async def fetch_attestations(
         self, package: str, old_version: str, new_version: str
-    ) -> AttestationSignals:
+    ) -> AttestationChecks:
         # Go modules use the sum database (sum.golang.org) for transparency,
         # but Sigstore-style SLSA attestations are not yet standard.
-        return AttestationSignals(has_attestation=False)
+        return AttestationChecks(has_attestation=False)
 
     # ------------------------------------------------------------------
     # fetch_release
     # ------------------------------------------------------------------
 
-    async def fetch_release(self, package: str, old_version: str, version: str) -> ReleaseSignals:
+    async def fetch_release(self, package: str, old_version: str, version: str) -> ReleaseChecks:
         import os
 
         token = os.environ.get("GITHUB_TOKEN")
@@ -157,13 +157,13 @@ class GoModulesProvider(EcosystemProviderBase):
         )
 
         if new_info.status_code != 200:
-            return ReleaseSignals()
+            return ReleaseChecks()
 
         data = new_info.json()
         source_url = (data.get("Origin") or {}).get("URL") or ""
         vcs = parse_vcs_repo(source_url)
         if not vcs:
-            return ReleaseSignals()
+            return ReleaseChecks()
         platform, owner_repo = vcs
 
         registry_time = None
@@ -181,7 +181,7 @@ class GoModulesProvider(EcosystemProviderBase):
             fetch_vcs_tag_signature(platform, owner, repo, old_version, token),
         )
         if release:
-            return build_release_signals(release, registry_time, new_sig, old_sig).model_copy(
+            return build_release_checks(release, registry_time, new_sig, old_sig).model_copy(
                 update={"metadata_repo": owner_repo}
             )
-        return ReleaseSignals(metadata_repo=owner_repo)
+        return ReleaseChecks(metadata_repo=owner_repo)

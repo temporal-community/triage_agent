@@ -8,7 +8,7 @@ from urllib.parse import quote
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
-from models import PRContext, PRFilesSignals, Verdict
+from models import PRContext, PRFilesChecks, Verdict
 from helpers.comment_formatter import format_comment
 from helpers.http import get_client
 
@@ -229,9 +229,9 @@ class GitLabPlatformClient:
         resp.raise_for_status()
         activity.logger.info(f"Added label '{label_name}' to {pr.repo}!{pr.pr_number}")
 
-    async def check_pr_files(self, pr: PRContext) -> PRFilesSignals:
+    async def check_pr_files(self, pr: PRContext) -> PRFilesChecks:
         if self._dry_run():
-            return PRFilesSignals()
+            return PRFilesChecks()
         client = get_client()
         resp = await client.get(
             f"{self._project_url(pr)}/merge_requests/{pr.pr_number}/changes",
@@ -244,7 +244,7 @@ class GitLabPlatformClient:
         resp.raise_for_status()
         changes = resp.json().get("changes", [])
         unexpected = [c["new_path"] for c in changes if _is_ci_infra_file(c["new_path"])]
-        return PRFilesSignals(unexpected_files=unexpected)
+        return PRFilesChecks(unexpected_files=unexpected)
 
 
 def create_client(pr: PRContext) -> GitLabPlatformClient:

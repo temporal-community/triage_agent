@@ -14,7 +14,7 @@ from temporalio.exceptions import ApplicationError
 from temporalio.testing import ActivityEnvironment
 
 from platforms.github import GitHubPlatformClient, _is_ci_infra_file
-from models import PRContext, PRFilesSignals, Verdict
+from models import PRContext, PRFilesChecks, Verdict
 
 
 # ---------------------------------------------------------------------------
@@ -422,7 +422,7 @@ def test_is_ci_infra_file_passes_dep_files(path):
 async def test_check_pr_files_dry_run_returns_empty(client, pr, dry_run):
     env = ActivityEnvironment()
     result = await env.run(client.check_pr_files, pr)
-    assert result == PRFilesSignals()
+    assert result == PRFilesChecks()
     assert result.unexpected_files == []
 
 

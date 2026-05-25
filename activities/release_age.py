@@ -1,5 +1,5 @@
 from ecosystems import get_provider
-from models import ReleaseAgeSignals
+from models import ReleaseAgeChecks
 from helpers.cache import ActivityCache
 from temporalio import activity
 
@@ -9,7 +9,7 @@ _cache: ActivityCache = ActivityCache()  # upload timestamps are immutable
 @activity.defn(name="activities.release_age.check")
 async def check(
     ecosystem: str, package: str, old_version: str, new_version: str
-) -> ReleaseAgeSignals:
+) -> ReleaseAgeChecks:
     key = (ecosystem, package, new_version)
     if (hit := _cache.get(key)) is not None:
         activity.logger.debug("release_age cache hit: %s %s", package, new_version)

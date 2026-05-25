@@ -13,7 +13,7 @@ import os
 from temporalio import activity
 
 from platforms import get_platform_client
-from models import PRContext, PRFilesSignals, RepoConfig, Verdict
+from models import PRContext, PRFilesChecks, RepoConfig, Verdict
 from helpers.config_provider import get_config_provider
 from helpers.notification import get_notification_channels
 
@@ -44,7 +44,7 @@ async def request_review(pr: PRContext, reviewers: list[str]) -> None:
 
 
 @activity.defn(name="activities.platform.check_pr_files")
-async def check_pr_files(pr: PRContext) -> PRFilesSignals:
+async def check_pr_files(pr: PRContext) -> PRFilesChecks:
     return await get_platform_client(pr).check_pr_files(pr)
 
 

@@ -11,7 +11,7 @@ from temporalio.exceptions import ApplicationError
 
 from ecosystems import (
     EcosystemProviderBase,
-    build_release_signals,
+    build_release_checks,
     fetch_vcs_release,
     fetch_vcs_tag_signature,
     is_major,
@@ -21,11 +21,11 @@ from ecosystems import (
     validate_archive_url,
 )
 from models import (
-    AttestationSignals,
-    MaintainerSignals,
-    PyPISignals,
-    ReleaseAgeSignals,
-    ReleaseSignals,
+    AttestationChecks,
+    MaintainerChecks,
+    PyPIChecks,
+    ReleaseAgeChecks,
+    ReleaseChecks,
 )
 from helpers.http import get_client
 
@@ -40,7 +40,7 @@ class RubyGemsProvider(EcosystemProviderBase):
     # fetch_metadata
     # ------------------------------------------------------------------
 
-    async def fetch_metadata(self, package: str, old_version: str, new_version: str) -> PyPISignals:
+    async def fetch_metadata(self, package: str, old_version: str, new_version: str) -> PyPIChecks:
         client = get_client()
         gem_resp, dl_resp = await asyncio.gather(
             client.get(f"https://rubygems.org/api/v1/gems/{package}.json", timeout=15.0),
@@ -56,7 +56,7 @@ class RubyGemsProvider(EcosystemProviderBase):
         data = gem_resp.json()
 
         summary = (data.get("info") or "")[:500] or None
-        return PyPISignals(
+        return PyPIChecks(
             weekly_downloads=dl_resp,
             is_major_bump=is_major(old_version, new_version),
             package_description=summary,
@@ -66,7 +66,7 @@ class RubyGemsProvider(EcosystemProviderBase):
     # fetch_release_age
     # ------------------------------------------------------------------
 
-    async def fetch_release_age(self, package: str, new_version: str) -> ReleaseAgeSignals:
+    async def fetch_release_age(self, package: str, new_version: str) -> ReleaseAgeChecks:
         client = get_client()
         resp = await client.get(
             f"https://rubygems.org/api/v1/versions/{package}.json", timeout=15.0
@@ -84,12 +84,12 @@ class RubyGemsProvider(EcosystemProviderBase):
             if v.get("number") == new_version:
                 raw = v.get("created_at", "")
                 if not raw:
-                    return ReleaseAgeSignals(release_age_hours=None)
+                    return ReleaseAgeChecks(release_age_hours=None)
                 upload_time = parse_upload_time(raw)
                 hours = (datetime.now(timezone.utc) - upload_time).total_seconds() / 3600
-                return ReleaseAgeSignals(release_age_hours=max(0.0, hours))
+                return ReleaseAgeChecks(release_age_hours=max(0.0, hours))
 
-        return ReleaseAgeSignals(release_age_hours=None)
+        return ReleaseAgeChecks(release_age_hours=None)
 
     # ------------------------------------------------------------------
     # fetch_maintainer
@@ -97,17 +97,17 @@ class RubyGemsProvider(EcosystemProviderBase):
 
     async def fetch_maintainer(
         self, package: str, old_version: str, new_version: str
-    ) -> MaintainerSignals:
+    ) -> MaintainerChecks:
         client = get_client()
         try:
             resp = await client.get(
                 f"https://rubygems.org/api/v1/versions/{package}.json", timeout=15.0
             )
             if resp.status_code != 200:
-                return MaintainerSignals(maintainer_changed=False)
+                return MaintainerChecks(maintainer_changed=False)
             versions = resp.json()
         except Exception:
-            return MaintainerSignals(maintainer_changed=False)
+            return MaintainerChecks(maintainer_changed=False)
 
         old_authors: set[str] = set()
         new_authors: set[str] = set()
@@ -119,9 +119,9 @@ class RubyGemsProvider(EcosystemProviderBase):
                 new_authors = _author_set(v)
 
         if not old_authors or not new_authors:
-            return MaintainerSignals(maintainer_changed=False)
+            return MaintainerChecks(maintainer_changed=False)
 
-        return MaintainerSignals(maintainer_changed=bool(new_authors - old_authors))
+        return MaintainerChecks(maintainer_changed=bool(new_authors - old_authors))
 
     # ------------------------------------------------------------------
     # get_archive_url
@@ -160,15 +160,15 @@ class RubyGemsProvider(EcosystemProviderBase):
 
     async def fetch_attestations(
         self, package: str, old_version: str, new_version: str
-    ) -> AttestationSignals:
+    ) -> AttestationChecks:
         # RubyGems does not yet support SLSA provenance or Sigstore attestations.
-        return AttestationSignals(has_attestation=False)
+        return AttestationChecks(has_attestation=False)
 
     # ------------------------------------------------------------------
     # fetch_release
     # ------------------------------------------------------------------
 
-    async def fetch_release(self, package: str, old_version: str, version: str) -> ReleaseSignals:
+    async def fetch_release(self, package: str, old_version: str, version: str) -> ReleaseChecks:
         import os
 
         token = os.environ.get("GITHUB_TOKEN")
@@ -179,13 +179,13 @@ class RubyGemsProvider(EcosystemProviderBase):
         )
 
         if gem_resp.status_code != 200:
-            return ReleaseSignals()
+            return ReleaseChecks()
         gem_data = gem_resp.json()
 
         source_url = gem_data.get("source_code_uri") or gem_data.get("homepage_uri") or ""
         vcs = parse_vcs_repo(source_url)
         if not vcs:
-            return ReleaseSignals()
+            return ReleaseChecks()
         platform, owner_repo = vcs
 
         # Registry timestamp for skew calculation
@@ -208,10 +208,10 @@ class RubyGemsProvider(EcosystemProviderBase):
             fetch_vcs_tag_signature(platform, owner, repo, old_version, token),
         )
         if release:
-            return build_release_signals(release, registry_time, new_sig, old_sig).model_copy(
+            return build_release_checks(release, registry_time, new_sig, old_sig).model_copy(
                 update={"metadata_repo": owner_repo}
             )
-        return ReleaseSignals(metadata_repo=owner_repo)
+        return ReleaseChecks(metadata_repo=owner_repo)
 
     def extract_archive(self, archive_bytes: bytes, filename: str, dest: str) -> None:
         """Extract a RubyGems .gem file (outer tar → data.tar.gz → source tree)."""

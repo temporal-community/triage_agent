@@ -7,7 +7,7 @@ from temporalio.common import RetryPolicy
 from temporalio.workflow import ParentClosePolicy
 
 with workflow.unsafe.imports_passed_through():
-    from models import PRContext, PRFilesSignals, RepoConfig, Verdict
+    from models import PRContext, PRFilesChecks, RepoConfig, Verdict
     from workflows.package_triage_workflow import PackageTriageWorkflow
 
 
@@ -95,7 +95,7 @@ class PRActionWorkflow:
             workflow.execute_activity(
                 "activities.platform.check_pr_files",
                 pr,
-                result_type=PRFilesSignals,
+                result_type=PRFilesChecks,
                 **opts,
             ),
         )

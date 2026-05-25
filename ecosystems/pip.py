@@ -13,7 +13,7 @@ from temporalio.exceptions import ApplicationError
 
 from ecosystems import (
     EcosystemProviderBase,
-    build_release_signals,
+    build_release_checks,
     fetch_vcs_account_age,
     fetch_vcs_ci_workflow_changes,
     fetch_vcs_release,
@@ -26,11 +26,11 @@ from ecosystems import (
     validate_archive_url,
 )
 from models import (
-    AttestationSignals,
-    MaintainerSignals,
-    PyPISignals,
-    ReleaseAgeSignals,
-    ReleaseSignals,
+    AttestationChecks,
+    MaintainerChecks,
+    PyPIChecks,
+    ReleaseAgeChecks,
+    ReleaseChecks,
 )
 from helpers.http import get_client
 
@@ -45,7 +45,7 @@ class PipProvider(EcosystemProviderBase):
     # fetch_metadata
     # ------------------------------------------------------------------
 
-    async def fetch_metadata(self, package: str, old_version: str, new_version: str) -> PyPISignals:
+    async def fetch_metadata(self, package: str, old_version: str, new_version: str) -> PyPIChecks:
         client = get_client()
         resp = await client.get(f"https://pypi.org/pypi/{package}/{new_version}/json", timeout=15.0)
         if resp.status_code == 404:
@@ -63,7 +63,7 @@ class PipProvider(EcosystemProviderBase):
 
         weekly_downloads = await _fetch_weekly_downloads(client, package)
 
-        return PyPISignals(
+        return PyPIChecks(
             weekly_downloads=weekly_downloads,
             is_major_bump=is_major(old_version, new_version),
             package_description=summary,
@@ -73,7 +73,7 @@ class PipProvider(EcosystemProviderBase):
     # fetch_release_age
     # ------------------------------------------------------------------
 
-    async def fetch_release_age(self, package: str, new_version: str) -> ReleaseAgeSignals:
+    async def fetch_release_age(self, package: str, new_version: str) -> ReleaseAgeChecks:
         client = get_client()
         resp = await client.get(f"https://pypi.org/pypi/{package}/{new_version}/json", timeout=15.0)
         if resp.status_code == 404:
@@ -87,15 +87,15 @@ class PipProvider(EcosystemProviderBase):
 
         urls = data.get("urls", [])
         if not urls:
-            return ReleaseAgeSignals(release_age_hours=None)
+            return ReleaseAgeChecks(release_age_hours=None)
 
         raw = urls[0].get("upload_time_iso_8601") or urls[0].get("upload_time", "")
         if not raw:
-            return ReleaseAgeSignals(release_age_hours=None)
+            return ReleaseAgeChecks(release_age_hours=None)
 
         upload_time = parse_upload_time(raw)
         hours = (datetime.now(timezone.utc) - upload_time).total_seconds() / 3600
-        return ReleaseAgeSignals(release_age_hours=max(0.0, hours))
+        return ReleaseAgeChecks(release_age_hours=max(0.0, hours))
 
     # ------------------------------------------------------------------
     # fetch_maintainer
@@ -103,7 +103,7 @@ class PipProvider(EcosystemProviderBase):
 
     async def fetch_maintainer(
         self, package: str, old_version: str, new_version: str
-    ) -> MaintainerSignals:
+    ) -> MaintainerChecks:
         client = get_client()
         old_info, new_info = await asyncio.gather(
             _fetch_version_info(client, package, old_version),
@@ -111,11 +111,11 @@ class PipProvider(EcosystemProviderBase):
         )
 
         if old_info is None or new_info is None:
-            return MaintainerSignals(maintainer_changed=False)
+            return MaintainerChecks(maintainer_changed=False)
 
         old_set = _maintainer_set(old_info)
         new_set = _maintainer_set(new_info)
-        return MaintainerSignals(maintainer_changed=bool(new_set - old_set))
+        return MaintainerChecks(maintainer_changed=bool(new_set - old_set))
 
     # ------------------------------------------------------------------
     # get_archive_url
@@ -153,7 +153,7 @@ class PipProvider(EcosystemProviderBase):
 
     async def fetch_attestations(
         self, package: str, old_version: str, new_version: str
-    ) -> AttestationSignals:
+    ) -> AttestationChecks:
         client = get_client()
         new_pub, old_pub = await asyncio.gather(
             _fetch_pypi_publisher(client, package, new_version),
@@ -161,7 +161,7 @@ class PipProvider(EcosystemProviderBase):
         )
 
         if new_pub is None:
-            return AttestationSignals(has_attestation=False)
+            return AttestationChecks(has_attestation=False)
 
         age_days = None
         if new_pub.get("repo"):
@@ -169,7 +169,7 @@ class PipProvider(EcosystemProviderBase):
             age_days = await fetch_vcs_account_age("github", owner)
 
         publisher_changed = old_pub is not None and old_pub.get("repo") != new_pub.get("repo")
-        return AttestationSignals(
+        return AttestationChecks(
             has_attestation=True,
             publisher_kind=new_pub.get("kind"),
             publisher_repo=new_pub.get("repo"),
@@ -188,14 +188,14 @@ class PipProvider(EcosystemProviderBase):
     # fetch_release
     # ------------------------------------------------------------------
 
-    async def fetch_release(self, package: str, old_version: str, version: str) -> ReleaseSignals:
+    async def fetch_release(self, package: str, old_version: str, version: str) -> ReleaseChecks:
         import os
 
         token = os.environ.get("GITHUB_TOKEN")
         client = get_client()
         resp = await client.get(f"https://pypi.org/pypi/{package}/{version}/json", timeout=15.0)
         if resp.status_code != 200:
-            return ReleaseSignals()
+            return ReleaseChecks()
         data = resp.json()
 
         # Registry publish timestamp for skew calculation
@@ -222,7 +222,7 @@ class PipProvider(EcosystemProviderBase):
         )
         vcs = parse_vcs_repo(source_url)
         if not vcs:
-            return ReleaseSignals()
+            return ReleaseChecks()
         platform, owner_repo = vcs
         owner, repo = owner_repo.split("/", 1)
         release, new_sig, old_sig, ci_days = await asyncio.gather(
@@ -235,10 +235,10 @@ class PipProvider(EcosystemProviderBase):
         if ci_days is not None:
             extra["ci_workflow_changed_days_ago"] = ci_days
         if release:
-            return build_release_signals(release, registry_time, new_sig, old_sig).model_copy(
+            return build_release_checks(release, registry_time, new_sig, old_sig).model_copy(
                 update=extra
             )
-        return ReleaseSignals(**extra)
+        return ReleaseChecks(**extra)
 
     def extract_archive(self, archive_bytes: bytes, filename: str, dest: str) -> None:
         buf = io.BytesIO(archive_bytes)

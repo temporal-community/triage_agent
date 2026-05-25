@@ -18,7 +18,7 @@ from temporalio.exceptions import ApplicationError
 
 from ecosystems import (
     EcosystemProviderBase,
-    build_release_signals,
+    build_release_checks,
     fetch_vcs_release,
     fetch_vcs_tag_signature,
     is_major,
@@ -28,11 +28,11 @@ from ecosystems import (
     validate_archive_url,
 )
 from models import (
-    AttestationSignals,
-    MaintainerSignals,
-    PyPISignals,
-    ReleaseAgeSignals,
-    ReleaseSignals,
+    AttestationChecks,
+    MaintainerChecks,
+    PyPIChecks,
+    ReleaseAgeChecks,
+    ReleaseChecks,
 )
 from helpers.http import get_client
 
@@ -51,7 +51,7 @@ class NuGetProvider(EcosystemProviderBase):
     # fetch_metadata
     # ------------------------------------------------------------------
 
-    async def fetch_metadata(self, package: str, old_version: str, new_version: str) -> PyPISignals:
+    async def fetch_metadata(self, package: str, old_version: str, new_version: str) -> PyPIChecks:
         id_lower = package.lower()
         client = get_client()
         reg_resp, search_resp = await asyncio.gather(
@@ -77,7 +77,7 @@ class NuGetProvider(EcosystemProviderBase):
             if results:
                 description = (results[0].get("description") or "").strip()[:500] or None
 
-        return PyPISignals(
+        return PyPIChecks(
             weekly_downloads=None,  # NuGet only exposes lifetime total downloads, not weekly
             is_major_bump=is_major(old_version, new_version),
             package_description=description,
@@ -87,20 +87,20 @@ class NuGetProvider(EcosystemProviderBase):
     # fetch_release_age
     # ------------------------------------------------------------------
 
-    async def fetch_release_age(self, package: str, new_version: str) -> ReleaseAgeSignals:
+    async def fetch_release_age(self, package: str, new_version: str) -> ReleaseAgeChecks:
         catalog = await _fetch_catalog_entry(package, new_version)
         if not catalog:
-            return ReleaseAgeSignals()
+            return ReleaseAgeChecks()
         raw = catalog.get("published", "")
         # NuGet uses 1900-01-01 as the published date for unlisted (deleted) versions
         if not raw or raw.startswith("1900"):
-            return ReleaseAgeSignals()
+            return ReleaseAgeChecks()
         try:
             upload_time = parse_upload_time(raw)
             hours = (datetime.now(timezone.utc) - upload_time).total_seconds() / 3600
-            return ReleaseAgeSignals(release_age_hours=max(0.0, hours))
+            return ReleaseAgeChecks(release_age_hours=max(0.0, hours))
         except Exception:  # noqa: BLE001
-            return ReleaseAgeSignals()
+            return ReleaseAgeChecks()
 
     # ------------------------------------------------------------------
     # fetch_maintainer
@@ -108,18 +108,18 @@ class NuGetProvider(EcosystemProviderBase):
 
     async def fetch_maintainer(
         self, package: str, old_version: str, new_version: str
-    ) -> MaintainerSignals:
+    ) -> MaintainerChecks:
         old_cat, new_cat = await asyncio.gather(
             _fetch_catalog_entry(package, old_version),
             _fetch_catalog_entry(package, new_version),
         )
         if not old_cat or not new_cat:
-            return MaintainerSignals()
+            return MaintainerChecks()
         old_owners = _parse_owners(old_cat.get("owners", ""))
         new_owners = _parse_owners(new_cat.get("owners", ""))
         if not old_owners or not new_owners:
-            return MaintainerSignals()
-        return MaintainerSignals(maintainer_changed=bool(new_owners - old_owners))
+            return MaintainerChecks()
+        return MaintainerChecks(maintainer_changed=bool(new_owners - old_owners))
 
     # ------------------------------------------------------------------
     # get_archive_url
@@ -151,21 +151,21 @@ class NuGetProvider(EcosystemProviderBase):
 
     async def fetch_attestations(
         self, package: str, old_version: str, new_version: str
-    ) -> AttestationSignals:
+    ) -> AttestationChecks:
         # NuGet does not yet have SLSA/Sigstore attestation support.
-        return AttestationSignals(has_attestation=False)
+        return AttestationChecks(has_attestation=False)
 
     # ------------------------------------------------------------------
     # fetch_release
     # ------------------------------------------------------------------
 
-    async def fetch_release(self, package: str, old_version: str, version: str) -> ReleaseSignals:
+    async def fetch_release(self, package: str, old_version: str, version: str) -> ReleaseChecks:
         import os
 
         token = os.environ.get("GITHUB_TOKEN")
         catalog = await _fetch_catalog_entry(package, version)
         if not catalog:
-            return ReleaseSignals()
+            return ReleaseChecks()
 
         registry_time: datetime | None = None
         raw = catalog.get("published", "")
@@ -178,7 +178,7 @@ class NuGetProvider(EcosystemProviderBase):
         project_url = catalog.get("projectUrl") or ""
         vcs = parse_vcs_repo(project_url)
         if not vcs:
-            return ReleaseSignals()
+            return ReleaseChecks()
         platform, owner_repo = vcs
 
         owner, repo = owner_repo.split("/", 1)
@@ -188,10 +188,10 @@ class NuGetProvider(EcosystemProviderBase):
             fetch_vcs_tag_signature(platform, owner, repo, old_version, token),
         )
         if release:
-            return build_release_signals(release, registry_time, new_sig, old_sig).model_copy(
+            return build_release_checks(release, registry_time, new_sig, old_sig).model_copy(
                 update={"metadata_repo": owner_repo}
             )
-        return ReleaseSignals(metadata_repo=owner_repo)
+        return ReleaseChecks(metadata_repo=owner_repo)
 
 
 # ---------------------------------------------------------------------------

@@ -18,21 +18,21 @@ from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Worker
 
 from models import (
-    AttestationSignals,
-    DepsDevSignals,
-    DiffSignals,
-    MaintainerSignals,
-    OSVSignals,
+    AttestationChecks,
+    DepsDevChecks,
+    DiffChecks,
+    MaintainerChecks,
+    OSVChecks,
     PRContext,
-    PRFilesSignals,
-    PyPISignals,
-    ReleaseAgeSignals,
-    ReleaseSignals,
+    PRFilesChecks,
+    PyPIChecks,
+    ReleaseAgeChecks,
+    ReleaseChecks,
     RepoConfig,
-    ScorecardSignals,
-    SocketSignals,
+    ScorecardChecks,
+    SocketChecks,
     Verdict,
-    VersionLineSignals,
+    VersionLineChecks,
 )
 from workflows.package_triage_workflow import PackageTriageWorkflow
 from workflows.pr_action_workflow import PRActionWorkflow
@@ -60,7 +60,7 @@ _PR = PRContext(
 def _pypi(is_major: bool = False):
     @activity.defn(name="activities.pypi_metadata.fetch")
     async def fetch(*_):
-        return PyPISignals(weekly_downloads=5_000_000, is_major_bump=is_major)
+        return PyPIChecks(weekly_downloads=5_000_000, is_major_bump=is_major)
 
     return fetch
 
@@ -68,7 +68,7 @@ def _pypi(is_major: bool = False):
 def _socket():
     @activity.defn(name="activities.socket.score")
     async def score(*_):
-        return SocketSignals(socket_score=80, socket_alerts=[])
+        return SocketChecks(socket_score=80, socket_alerts=[])
 
     return score
 
@@ -76,7 +76,7 @@ def _socket():
 def _osv(has_cve: bool = False):
     @activity.defn(name="activities.osv.check")
     async def check(*_):
-        return OSVSignals(osv_vulnerabilities=["CVE-2024-9999"] if has_cve else [])
+        return OSVChecks(osv_vulnerabilities=["CVE-2024-9999"] if has_cve else [])
 
     return check
 
@@ -84,7 +84,7 @@ def _osv(has_cve: bool = False):
 def _diff():
     @activity.defn(name="activities.package_diff.compute")
     async def compute(*_):
-        return DiffSignals(diff_summary="Minor doc changes.", diff_size_bytes=256)
+        return DiffChecks(diff_summary="Minor doc changes.", diff_size_bytes=256)
 
     return compute
 
@@ -92,7 +92,7 @@ def _diff():
 def _maintainer(changed: bool = False):
     @activity.defn(name="activities.maintainer.history")
     async def history(*_):
-        return MaintainerSignals(maintainer_changed=changed)
+        return MaintainerChecks(maintainer_changed=changed)
 
     return history
 
@@ -100,7 +100,7 @@ def _maintainer(changed: bool = False):
 def _release_age(hours: float = 720.0):
     @activity.defn(name="activities.release_age.check")
     async def check(*_):
-        return ReleaseAgeSignals(release_age_hours=hours)
+        return ReleaseAgeChecks(release_age_hours=hours)
 
     return check
 
@@ -108,7 +108,7 @@ def _release_age(hours: float = 720.0):
 def _attestation(has_attestation: bool = True, publisher_repo: str = "psf/requests"):
     @activity.defn(name="activities.attestation.check")
     async def check(*_):
-        return AttestationSignals(
+        return AttestationChecks(
             has_attestation=has_attestation,
             publisher_kind="GitHub" if has_attestation else None,
             publisher_repo=publisher_repo if has_attestation else None,
@@ -120,7 +120,7 @@ def _attestation(has_attestation: bool = True, publisher_repo: str = "psf/reques
 def _release_notes():
     @activity.defn(name="activities.release_notes.check")
     async def check(*_):
-        return ReleaseSignals(github_release_exists=True, release_is_automated=True)
+        return ReleaseChecks(github_release_exists=True, release_is_automated=True)
 
     return check
 
@@ -190,7 +190,7 @@ def _close_pr():
 def _check_pr_files(unexpected: list[str] | None = None):
     @activity.defn(name="activities.platform.check_pr_files")
     async def check_pr_files(*_):
-        return PRFilesSignals(unexpected_files=unexpected or [])
+        return PRFilesChecks(unexpected_files=unexpected or [])
 
     return check_pr_files
 
@@ -198,7 +198,7 @@ def _check_pr_files(unexpected: list[str] | None = None):
 def _version_lineage():
     @activity.defn(name="activities.version_lineage.check")
     async def check(*_):
-        return VersionLineSignals()
+        return VersionLineChecks()
 
     return check
 
@@ -206,7 +206,7 @@ def _version_lineage():
 def _depsdev():
     @activity.defn(name="activities.depsdev.fetch")
     async def fetch(*_):
-        return DepsDevSignals()
+        return DepsDevChecks()
 
     return fetch
 
@@ -214,7 +214,7 @@ def _depsdev():
 def _scorecard():
     @activity.defn(name="activities.scorecard.fetch")
     async def fetch(*_):
-        return ScorecardSignals()
+        return ScorecardChecks()
 
     return fetch
 

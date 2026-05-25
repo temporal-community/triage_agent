@@ -76,8 +76,8 @@ def _discover_plugin_activities() -> list:
 
     Security note: plugin activities run in-process alongside core activities — the same
     trust boundary as any installed pip dependency or dependency_scout.ecosystems plugin.
-    Results land in PackageSignals.custom_signals which is rendered in the sandboxed
-    <untrusted_custom> section of the LLM prompt, not the trusted signals block.
+    Results land in PackageChecks.custom_checks which is rendered in the sandboxed
+    <untrusted_custom> section of the LLM prompt, not the trusted checks block.
     """
     try:
         from importlib.metadata import entry_points

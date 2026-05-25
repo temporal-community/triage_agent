@@ -1,7 +1,7 @@
 from temporalio import activity
 
 from ecosystems import get_provider
-from models import OSVSignals
+from models import OSVChecks
 from helpers.cache import ActivityCache
 from helpers.http import get_client
 
@@ -9,7 +9,7 @@ _cache: ActivityCache = ActivityCache(ttl_seconds=3600)  # new CVEs can appear; 
 
 
 @activity.defn(name="activities.osv.check")
-async def check(ecosystem: str, package: str, old_version: str, new_version: str) -> OSVSignals:
+async def check(ecosystem: str, package: str, old_version: str, new_version: str) -> OSVChecks:
     key = (ecosystem, package, new_version)
     if (hit := _cache.get(key)) is not None:
         activity.logger.debug("osv cache hit: %s %s", package, new_version)
@@ -33,6 +33,6 @@ async def check(ecosystem: str, package: str, old_version: str, new_version: str
         cves = [a for a in vuln.get("aliases", []) if a.startswith("CVE-")]
         vuln_ids.extend(cves if cves else [vuln["id"]])
 
-    result = OSVSignals(osv_vulnerabilities=vuln_ids)
+    result = OSVChecks(osv_vulnerabilities=vuln_ids)
     _cache.set(key, result)
     return result

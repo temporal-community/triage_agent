@@ -11,7 +11,7 @@ from temporalio.exceptions import ApplicationError
 
 from ecosystems import (
     EcosystemProviderBase,
-    build_release_signals,
+    build_release_checks,
     fetch_vcs_account_age,
     fetch_vcs_ci_workflow_changes,
     fetch_vcs_release,
@@ -23,11 +23,11 @@ from ecosystems import (
     validate_archive_url,
 )
 from models import (
-    AttestationSignals,
-    MaintainerSignals,
-    PyPISignals,
-    ReleaseAgeSignals,
-    ReleaseSignals,
+    AttestationChecks,
+    MaintainerChecks,
+    PyPIChecks,
+    ReleaseAgeChecks,
+    ReleaseChecks,
 )
 from helpers.http import get_client
 
@@ -42,7 +42,7 @@ class NpmProvider(EcosystemProviderBase):
     # fetch_metadata
     # ------------------------------------------------------------------
 
-    async def fetch_metadata(self, package: str, old_version: str, new_version: str) -> PyPISignals:
+    async def fetch_metadata(self, package: str, old_version: str, new_version: str) -> PyPIChecks:
         client = get_client()
         resp = await client.get(f"https://registry.npmjs.org/{package}/{new_version}", timeout=15.0)
         if resp.status_code == 404:
@@ -57,7 +57,7 @@ class NpmProvider(EcosystemProviderBase):
         summary = (data.get("description") or "")[:500] or None
         weekly_downloads = await _fetch_weekly_downloads(client, package)
 
-        return PyPISignals(
+        return PyPIChecks(
             weekly_downloads=weekly_downloads,
             is_major_bump=is_major(old_version, new_version),
             package_description=summary,
@@ -67,7 +67,7 @@ class NpmProvider(EcosystemProviderBase):
     # fetch_release_age
     # ------------------------------------------------------------------
 
-    async def fetch_release_age(self, package: str, new_version: str) -> ReleaseAgeSignals:
+    async def fetch_release_age(self, package: str, new_version: str) -> ReleaseAgeChecks:
         client = get_client()
         # Full package document contains the `time` map: {version: ISO timestamp}
         resp = await client.get(f"https://registry.npmjs.org/{package}", timeout=15.0)
@@ -82,11 +82,11 @@ class NpmProvider(EcosystemProviderBase):
 
         raw = (data.get("time") or {}).get(new_version, "")
         if not raw:
-            return ReleaseAgeSignals(release_age_hours=None)
+            return ReleaseAgeChecks(release_age_hours=None)
 
         upload_time = parse_upload_time(raw)
         hours = (datetime.now(timezone.utc) - upload_time).total_seconds() / 3600
-        return ReleaseAgeSignals(release_age_hours=max(0.0, hours))
+        return ReleaseAgeChecks(release_age_hours=max(0.0, hours))
 
     # ------------------------------------------------------------------
     # fetch_maintainer
@@ -94,7 +94,7 @@ class NpmProvider(EcosystemProviderBase):
 
     async def fetch_maintainer(
         self, package: str, old_version: str, new_version: str
-    ) -> MaintainerSignals:
+    ) -> MaintainerChecks:
         client = get_client()
         old_data, new_data = await asyncio.gather(
             _fetch_version(client, package, old_version),
@@ -102,16 +102,16 @@ class NpmProvider(EcosystemProviderBase):
         )
 
         if old_data is None or new_data is None:
-            return MaintainerSignals(maintainer_changed=False)
+            return MaintainerChecks(maintainer_changed=False)
 
         old_set = _maintainer_set(old_data)
         new_set = _maintainer_set(new_data)
         added = new_set - old_set
         if not added:
-            return MaintainerSignals(maintainer_changed=False)
+            return MaintainerChecks(maintainer_changed=False)
 
         account_age = await _fetch_npm_account_age(client, min(added))
-        return MaintainerSignals(
+        return MaintainerChecks(
             maintainer_changed=True,
             new_maintainer_account_age_days=account_age,
         )
@@ -148,7 +148,7 @@ class NpmProvider(EcosystemProviderBase):
 
     async def fetch_attestations(
         self, package: str, old_version: str, new_version: str
-    ) -> AttestationSignals:
+    ) -> AttestationChecks:
         client = get_client()
         new_pub, old_pub = await asyncio.gather(
             _fetch_npm_publisher(client, package, new_version),
@@ -156,7 +156,7 @@ class NpmProvider(EcosystemProviderBase):
         )
 
         if new_pub is None:
-            return AttestationSignals(has_attestation=False)
+            return AttestationChecks(has_attestation=False)
 
         age_days = None
         if new_pub.get("repo"):
@@ -164,7 +164,7 @@ class NpmProvider(EcosystemProviderBase):
             age_days = await fetch_vcs_account_age("github", owner)
 
         publisher_changed = old_pub is not None and old_pub.get("repo") != new_pub.get("repo")
-        return AttestationSignals(
+        return AttestationChecks(
             has_attestation=True,
             publisher_kind=new_pub.get("kind"),
             publisher_repo=new_pub.get("repo"),
@@ -183,7 +183,7 @@ class NpmProvider(EcosystemProviderBase):
     # fetch_release
     # ------------------------------------------------------------------
 
-    async def fetch_release(self, package: str, old_version: str, version: str) -> ReleaseSignals:
+    async def fetch_release(self, package: str, old_version: str, version: str) -> ReleaseChecks:
         import os
 
         token = os.environ.get("GITHUB_TOKEN")
@@ -194,7 +194,7 @@ class NpmProvider(EcosystemProviderBase):
         )
 
         if v_resp.status_code != 200:
-            return ReleaseSignals()
+            return ReleaseChecks()
         vdata = v_resp.json()
 
         # Source URL — check repository field then homepage
@@ -210,7 +210,7 @@ class NpmProvider(EcosystemProviderBase):
 
         vcs = parse_vcs_repo(source_url)
         if not vcs:
-            return ReleaseSignals()
+            return ReleaseChecks()
         platform, owner_repo = vcs
 
         # Registry timestamp for skew calculation
@@ -234,10 +234,10 @@ class NpmProvider(EcosystemProviderBase):
         if ci_days is not None:
             extra["ci_workflow_changed_days_ago"] = ci_days
         if release:
-            return build_release_signals(release, registry_time, new_sig, old_sig).model_copy(
+            return build_release_checks(release, registry_time, new_sig, old_sig).model_copy(
                 update=extra
             )
-        return ReleaseSignals(**extra)
+        return ReleaseChecks(**extra)
 
     def extract_archive(self, archive_bytes: bytes, filename: str, dest: str) -> None:
         buf = io.BytesIO(archive_bytes)

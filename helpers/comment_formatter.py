@@ -1,6 +1,6 @@
 import os
 import re
-from models import PRContext, PackageSignals, Verdict
+from models import PRContext, PackageChecks, Verdict
 
 
 def _config_url(pr: PRContext) -> str:
@@ -36,7 +36,7 @@ _BADGE = {
 _FLAG_FOLD_THRESHOLD = 3
 
 
-def format_comment(pr: PRContext, verdict: Verdict, signals: PackageSignals | None = None) -> str:
+def format_comment(pr: PRContext, verdict: Verdict, signals: PackageChecks | None = None) -> str:
     badge = _BADGE.get(verdict.classification, verdict.classification.upper())
     ui_base = os.environ.get("TEMPORAL_UI_BASE_URL", "http://localhost:8233")
     ns = os.environ.get("TEMPORAL_NAMESPACE", "default")

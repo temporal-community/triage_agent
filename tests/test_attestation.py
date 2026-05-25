@@ -11,11 +11,11 @@ from temporalio.testing import ActivityEnvironment
 
 from activities.attestation import check as attestation_check
 from models import (
-    AttestationSignals,
-    PackageSignals,
-    DiffSignals,
-    ReleaseAgeSignals,
-    ReleaseSignals,
+    AttestationChecks,
+    PackageChecks,
+    DiffChecks,
+    ReleaseAgeChecks,
+    ReleaseChecks,
 )
 
 PYPI_BASE = "https://pypi.org/pypi"
@@ -345,13 +345,13 @@ async def test_rubygems_attestation_returns_empty():
 def test_rule_based_classifier_flags_publisher_changed():
     from classifiers import _rule_based
 
-    signals = PackageSignals(
+    signals = PackageChecks(
         ecosystem="pip",
         package_name="pkg",
         old_version="1.0.0",
         new_version="1.1.0",
-        age=ReleaseAgeSignals(release_age_hours=500.0),
-        attestation=AttestationSignals(
+        age=ReleaseAgeChecks(release_age_hours=500.0),
+        attestation=AttestationChecks(
             publisher_changed=True,
             old_publisher_repo="trusted/repo",
             publisher_repo="new/repo",
@@ -424,13 +424,13 @@ async def test_publisher_account_age_none_without_token(monkeypatch):
 def test_rule_based_classifier_flags_young_publisher_account():
     from classifiers import _rule_based
 
-    signals = PackageSignals(
+    signals = PackageChecks(
         ecosystem="npm",
         package_name="coolpkg",
         old_version="1.0.0",
         new_version="1.0.1",
-        age=ReleaseAgeSignals(release_age_hours=200.0),
-        attestation=AttestationSignals(
+        age=ReleaseAgeChecks(release_age_hours=200.0),
+        attestation=AttestationChecks(
             has_attestation=True,
             publisher_repo="neworg/coolpkg",
             publisher_account_age_days=30,
@@ -444,12 +444,12 @@ def test_rule_based_classifier_flags_young_publisher_account():
 def test_rule_based_classifier_install_script_added_is_red():
     from classifiers import _rule_based
 
-    signals = PackageSignals(
+    signals = PackageChecks(
         ecosystem="pip",
         package_name="mypkg",
         old_version="1.0.0",
         new_version="1.0.1",
-        diff=DiffSignals(diff_summary="+ setup.py", diff_size_bytes=100, install_script_added=True),
+        diff=DiffChecks(diff_summary="+ setup.py", diff_size_bytes=100, install_script_added=True),
     )
     verdict = _rule_based(signals)
     assert verdict.classification == "red"
@@ -459,13 +459,13 @@ def test_rule_based_classifier_install_script_added_is_red():
 def test_rule_based_classifier_install_script_changed_is_yellow():
     from classifiers import _rule_based
 
-    signals = PackageSignals(
+    signals = PackageChecks(
         ecosystem="pip",
         package_name="mypkg",
         old_version="1.0.0",
         new_version="1.0.1",
-        age=ReleaseAgeSignals(release_age_hours=300.0),
-        diff=DiffSignals(
+        age=ReleaseAgeChecks(release_age_hours=300.0),
+        diff=DiffChecks(
             diff_summary="--- setup.py\n+++ setup.py\n-version='1.0.0'\n+version='1.0.1'",
             diff_size_bytes=100,
             install_script_changed=True,
@@ -563,14 +563,14 @@ async def test_npm_attestation_populates_slsa_chain_fields():
 
 
 def _signals_with_attestation(**overrides):
-    """Minimal PackageSignals with attestation for classifier rule tests."""
-    return PackageSignals(
+    """Minimal PackageChecks with attestation for classifier rule tests."""
+    return PackageChecks(
         ecosystem=overrides.pop("ecosystem", "pip"),
         package_name=overrides.pop("package_name", "pkg"),
         old_version=overrides.pop("old_version", "1.0.0"),
         new_version=overrides.pop("new_version", "1.1.0"),
-        age=ReleaseAgeSignals(release_age_hours=overrides.pop("release_age_hours", 500.0)),
-        attestation=AttestationSignals(
+        age=ReleaseAgeChecks(release_age_hours=overrides.pop("release_age_hours", 500.0)),
+        attestation=AttestationChecks(
             has_attestation=overrides.pop("has_attestation", True),
             publisher_repo=overrides.pop("publisher_repo", "psf/requests"),
             publisher_changed=overrides.pop("publisher_changed", False),
@@ -578,7 +578,7 @@ def _signals_with_attestation(**overrides):
             source_ref=overrides.pop("source_ref", None),
             publisher_account_age_days=overrides.pop("publisher_account_age_days", None),
         ),
-        release=ReleaseSignals(
+        release=ReleaseChecks(
             metadata_repo=overrides.pop("metadata_repo", "psf/requests"),
         ),
     )

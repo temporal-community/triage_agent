@@ -19,7 +19,7 @@ from temporalio.exceptions import ApplicationError
 
 from ecosystems import (
     EcosystemProviderBase,
-    build_release_signals,
+    build_release_checks,
     fetch_vcs_release,
     fetch_vcs_tag_signature,
     is_major,
@@ -28,11 +28,11 @@ from ecosystems import (
     validate_archive_url,
 )
 from models import (
-    AttestationSignals,
-    MaintainerSignals,
-    PyPISignals,
-    ReleaseAgeSignals,
-    ReleaseSignals,
+    AttestationChecks,
+    MaintainerChecks,
+    PyPIChecks,
+    ReleaseAgeChecks,
+    ReleaseChecks,
 )
 from helpers.http import get_client
 
@@ -71,7 +71,7 @@ class MavenProvider(EcosystemProviderBase):
     # fetch_metadata
     # ------------------------------------------------------------------
 
-    async def fetch_metadata(self, package: str, old_version: str, new_version: str) -> PyPISignals:
+    async def fetch_metadata(self, package: str, old_version: str, new_version: str) -> PyPIChecks:
         group_id, artifact_id = self._parse(package)
         pom_url = f"{self._artifact_base(group_id, artifact_id, new_version)}.pom"
 
@@ -89,7 +89,7 @@ class MavenProvider(EcosystemProviderBase):
         pom = _parse_pom(resp.text)
         description = pom.get("description")
 
-        return PyPISignals(
+        return PyPIChecks(
             weekly_downloads=None,  # no public weekly-download API for Maven Central
             is_major_bump=is_major(old_version, new_version),
             package_description=description,
@@ -99,7 +99,7 @@ class MavenProvider(EcosystemProviderBase):
     # fetch_release_age
     # ------------------------------------------------------------------
 
-    async def fetch_release_age(self, package: str, new_version: str) -> ReleaseAgeSignals:
+    async def fetch_release_age(self, package: str, new_version: str) -> ReleaseAgeChecks:
         group_id, artifact_id = self._parse(package)
         client = get_client()
         resp = await client.get(
@@ -114,19 +114,19 @@ class MavenProvider(EcosystemProviderBase):
         )
 
         if resp.status_code != 200:
-            return ReleaseAgeSignals(release_age_hours=None)
+            return ReleaseAgeChecks(release_age_hours=None)
 
         docs = resp.json().get("response", {}).get("docs", [])
         if not docs:
-            return ReleaseAgeSignals(release_age_hours=None)
+            return ReleaseAgeChecks(release_age_hours=None)
 
         ts_ms = docs[0].get("timestamp")
         if ts_ms is None:
-            return ReleaseAgeSignals(release_age_hours=None)
+            return ReleaseAgeChecks(release_age_hours=None)
 
         upload_time = datetime.fromtimestamp(ts_ms / 1000, tz=timezone.utc)
         hours = (datetime.now(timezone.utc) - upload_time).total_seconds() / 3600
-        return ReleaseAgeSignals(release_age_hours=max(0.0, hours))
+        return ReleaseAgeChecks(release_age_hours=max(0.0, hours))
 
     # ------------------------------------------------------------------
     # fetch_maintainer
@@ -134,7 +134,7 @@ class MavenProvider(EcosystemProviderBase):
 
     async def fetch_maintainer(
         self, package: str, old_version: str, new_version: str
-    ) -> MaintainerSignals:
+    ) -> MaintainerChecks:
         group_id, artifact_id = self._parse(package)
         old_url = f"{self._artifact_base(group_id, artifact_id, old_version)}.pom"
         new_url = f"{self._artifact_base(group_id, artifact_id, new_version)}.pom"
@@ -145,15 +145,15 @@ class MavenProvider(EcosystemProviderBase):
         )
 
         if old_resp.status_code != 200 or new_resp.status_code != 200:
-            return MaintainerSignals(maintainer_changed=False)
+            return MaintainerChecks(maintainer_changed=False)
 
         old_devs = _parse_pom(old_resp.text).get("developers", set())
         new_devs = _parse_pom(new_resp.text).get("developers", set())
 
         if not old_devs or not new_devs:
-            return MaintainerSignals(maintainer_changed=False)
+            return MaintainerChecks(maintainer_changed=False)
 
-        return MaintainerSignals(maintainer_changed=bool(new_devs - old_devs))
+        return MaintainerChecks(maintainer_changed=bool(new_devs - old_devs))
 
     # ------------------------------------------------------------------
     # get_archive_url
@@ -204,16 +204,16 @@ class MavenProvider(EcosystemProviderBase):
 
     async def fetch_attestations(
         self, package: str, old_version: str, new_version: str
-    ) -> AttestationSignals:
+    ) -> AttestationChecks:
         # Maven Central's Sigstore/SLSA attestation support is nascent (2024+)
         # and coverage is very limited. Skip for now.
-        return AttestationSignals(has_attestation=False)
+        return AttestationChecks(has_attestation=False)
 
     # ------------------------------------------------------------------
     # fetch_release
     # ------------------------------------------------------------------
 
-    async def fetch_release(self, package: str, old_version: str, version: str) -> ReleaseSignals:
+    async def fetch_release(self, package: str, old_version: str, version: str) -> ReleaseChecks:
         import os
 
         token = os.environ.get("GITHUB_TOKEN")
@@ -235,12 +235,12 @@ class MavenProvider(EcosystemProviderBase):
         )
 
         if new_pom_resp.status_code != 200:
-            return ReleaseSignals()
+            return ReleaseChecks()
 
         pom = _parse_pom(new_pom_resp.text)
         vcs = parse_vcs_repo(pom.get("scm_url", ""))
         if not vcs:
-            return ReleaseSignals()
+            return ReleaseChecks()
         platform, owner_repo = vcs
 
         # Registry publish timestamp for skew calculation
@@ -262,10 +262,10 @@ class MavenProvider(EcosystemProviderBase):
             fetch_vcs_tag_signature(platform, owner, repo, old_version, token),
         )
         if release:
-            return build_release_signals(release, registry_time, new_sig, old_sig).model_copy(
+            return build_release_checks(release, registry_time, new_sig, old_sig).model_copy(
                 update={"metadata_repo": owner_repo}
             )
-        return ReleaseSignals(metadata_repo=owner_repo)
+        return ReleaseChecks(metadata_repo=owner_repo)
 
 
 # ---------------------------------------------------------------------------

@@ -1,5 +1,5 @@
 from ecosystems import get_provider
-from models import AttestationSignals
+from models import AttestationChecks
 from helpers.cache import ActivityCache
 from temporalio import activity
 
@@ -9,7 +9,7 @@ _cache: ActivityCache = ActivityCache()  # SLSA provenance is immutable once sig
 @activity.defn(name="activities.attestation.check")
 async def check(
     ecosystem: str, package: str, old_version: str, new_version: str
-) -> AttestationSignals:
+) -> AttestationChecks:
     key = (ecosystem, package, old_version, new_version)
     if (hit := _cache.get(key)) is not None:
         activity.logger.debug("attestation cache hit: %s %s", package, new_version)

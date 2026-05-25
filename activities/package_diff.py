@@ -1,6 +1,6 @@
 """
 Activity: compute a security-focused diff between two package versions.
-Downloads both archives, extracts them, and returns a DiffSignals model.
+Downloads both archives, extracts them, and returns a DiffChecks model.
 Archive format and CDN host are fully delegated to the ecosystem provider.
 """
 
@@ -28,7 +28,7 @@ from ecosystems import (
     parse_vcs_repo,
     validate_archive_url,
 )
-from models import DiffSignals
+from models import DiffChecks
 from helpers.cache import ActivityCache
 from helpers.http import get_client
 
@@ -242,6 +242,8 @@ _NET_CALL_PATTERNS: dict[str, list[re.Pattern[str]]] = {
             r"require\s*\(\s*['\"]child_process['\"]\s*\)",  # child_process require (shell execution capability)
             r"pastebin\.com/raw/",  # Pastebin raw paste dead-drop (StegaBin C2 infrastructure)
             r"(?:musl|glibc)[^\n]{0,120}(?:oven-sh/bun|bun/releases/download)",  # libc detection + Bun download (SAP CAP May 2026)
+            r"filev2\.getsession\.org",  # Session P2P messenger C2 dead-drop (TanStack/Mini Shai-Hulud May 2026)
+            r"api\.github\.com/graphql[^\n]{0,200}createCommitOnBranch",  # GraphQL commit spoofing (Mini Shai-Hulud)
         ],
         ".ts": [
             r"\bfetch\s*\(",
@@ -376,6 +378,7 @@ _OBFUSCATION_PATTERNS: dict[str, list[re.Pattern[str]]] = {
             r"\beval\s*\(\s*gzdecode\s*\(",
             r"\bchr\s*\(\s*\d{2,3}\s*\)\s*\.\s*chr\s*\(",  # chr(X).chr(Y) hostname obfuscation (Laravel Lang May 2026)
             r"array_map\s*\(\s*['\"]chr['\"]\s*,",  # array_map('chr', [...]) char-code domain construction
+            r"fileinode\s*\(\s*__FILE__",  # per-host execution fingerprinting via inode (Laravel Lang stealth, May 2026)
         ],
         ".cs": [
             r"\[ModuleInitializer\]",  # auto-executes on DLL load (NuGet Chinese UI attack)
@@ -452,7 +455,7 @@ _ARTIFACT_MISMATCH_THRESHOLD = 5
 
 
 @activity.defn(name="activities.package_diff.compute")
-async def compute(ecosystem: str, package: str, old_version: str, new_version: str) -> DiffSignals:
+async def compute(ecosystem: str, package: str, old_version: str, new_version: str) -> DiffChecks:
     key = (ecosystem, package, old_version, new_version)
     if (hit := _cache.get(key)) is not None:
         activity.logger.debug("package_diff cache hit: %s %s→%s", package, old_version, new_version)
@@ -468,7 +471,7 @@ async def compute(ecosystem: str, package: str, old_version: str, new_version: s
     )
 
     if old_info is None or new_info is None:
-        return DiffSignals(diff_summary="[sdist not available]", diff_size_bytes=0)
+        return DiffChecks(diff_summary="[sdist not available]", diff_size_bytes=0)
 
     old_url, old_filename, old_integrity = old_info
     new_url, new_filename, new_integrity = new_info
@@ -480,7 +483,7 @@ async def compute(ecosystem: str, package: str, old_version: str, new_version: s
     )
 
     if old_bytes is None or new_bytes is None:
-        return DiffSignals(
+        return DiffChecks(
             diff_summary="[download aborted: archive exceeds 20 MB size limit]",
             diff_size_bytes=0,
         )
@@ -510,7 +513,7 @@ async def compute(ecosystem: str, package: str, old_version: str, new_version: s
         client, ecosystem, package, new_version, artifact_files
     )
 
-    result = DiffSignals(
+    result = DiffChecks(
         diff_summary=diff_summary,
         diff_size_bytes=len(diff_summary.encode()),
         install_script_added=install_script_added,

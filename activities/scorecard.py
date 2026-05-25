@@ -4,7 +4,7 @@ from urllib.parse import quote
 
 from temporalio import activity
 
-from models import ScorecardSignals
+from models import ScorecardChecks
 from helpers.cache import ActivityCache
 from helpers.http import get_client
 
@@ -51,7 +51,7 @@ def _find_vcs_repo(data: dict) -> tuple[str, str] | None:
 @activity.defn(name="activities.scorecard.fetch")
 async def fetch(
     ecosystem: str, package: str, old_version: str, new_version: str
-) -> ScorecardSignals:
+) -> ScorecardChecks:
     key = (ecosystem, package)  # scorecard is per-repo, not per-version
     if (hit := _cache.get(key)) is not None:
         activity.logger.debug("scorecard cache hit: %s", package)
@@ -59,7 +59,7 @@ async def fetch(
 
     system = _ECOSYSTEM_MAP.get(ecosystem)
     if system is None:
-        return ScorecardSignals()
+        return ScorecardChecks()
 
     encoded_package = quote(package, safe="")
     encoded_version = quote(new_version, safe="")
@@ -70,11 +70,11 @@ async def fetch(
         # Step A — resolve GitHub repo via deps.dev
         deps_resp = await client.get(depsdev_url, timeout=20.0)
         if deps_resp.status_code != 200:
-            return ScorecardSignals()
+            return ScorecardChecks()
 
         vcs = _find_vcs_repo(deps_resp.json())
         if vcs is None or vcs[0] != "github":
-            return ScorecardSignals()
+            return ScorecardChecks()
         repo = vcs[1]
 
         # Step B — query OpenSSF Scorecard (GitHub-only API)
@@ -85,7 +85,7 @@ async def fetch(
         )
 
         if sc_resp.status_code != 200:
-            return ScorecardSignals(scorecard_repo=repo)
+            return ScorecardChecks(scorecard_repo=repo)
 
         sc_data = sc_resp.json()
         score = sc_data.get("score")
@@ -99,7 +99,7 @@ async def fetch(
                 # Score of -1 means "not applicable"
                 check_scores[field] = None if raw == -1 else raw
 
-        result = ScorecardSignals(
+        result = ScorecardChecks(
             scorecard_score=scorecard_score,
             scorecard_repo=repo,
             scorecard_maintained=check_scores["scorecard_maintained"],
@@ -112,4 +112,4 @@ async def fetch(
         return result
     except Exception as exc:
         activity.logger.warning(f"Scorecard fetch failed for {package}@{new_version}: {exc!r}")
-        return ScorecardSignals()
+        return ScorecardChecks()

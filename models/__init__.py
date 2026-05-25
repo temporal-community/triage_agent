@@ -55,26 +55,26 @@ class RepoConfig(BaseModel):
     ] = []  # additional Temporal activity names to call; each receives (ecosystem, package, old_version, new_version) and must return a JSON-serializable dict
 
 
-# Partial signal models — one per signal activity, nested into PackageSignals in the workflow.
+# Partial check models — one per check activity, nested into PackageChecks in the workflow.
 
 
-class PyPISignals(BaseModel):
+class PyPIChecks(BaseModel):
     weekly_downloads: int | None = None
     is_major_bump: bool = False
     package_description: str | None = None
 
 
-class SocketSignals(BaseModel):
+class SocketChecks(BaseModel):
     socket_score: int | None = None
     socket_alerts: list[str] = []
     socket_alert_types: list[str] = []  # raw type names (e.g. ["malware", "installScripts"])
 
 
-class OSVSignals(BaseModel):
+class OSVChecks(BaseModel):
     osv_vulnerabilities: list[str] = []
 
 
-class DiffSignals(BaseModel):
+class DiffChecks(BaseModel):
     diff_summary: str = ""
     diff_size_bytes: int = 0
     install_script_added: bool = False
@@ -103,11 +103,11 @@ class DiffSignals(BaseModel):
     )
 
 
-class PRFilesSignals(BaseModel):
+class PRFilesChecks(BaseModel):
     unexpected_files: list[str] = []  # CI/infra/script paths that shouldn't appear in a dep-bump PR
 
 
-class VersionLineSignals(BaseModel):
+class VersionLineChecks(BaseModel):
     stale_version_line: bool = (
         False  # bump targets an older major while a newer stable major is active
     )
@@ -115,18 +115,18 @@ class VersionLineSignals(BaseModel):
     bump_major: int | None = None  # major of the version being bumped to
 
 
-class MaintainerSignals(BaseModel):
+class MaintainerChecks(BaseModel):
     maintainer_changed: bool = False
     new_maintainer_account_age_days: int | None = (
         None  # age of the newest new-maintainer's npm account; None if unavailable or no new maintainer
     )
 
 
-class ReleaseAgeSignals(BaseModel):
+class ReleaseAgeChecks(BaseModel):
     release_age_hours: float | None = None  # None when upload_time is missing from PyPI metadata
 
 
-class ReleaseSignals(BaseModel):
+class ReleaseChecks(BaseModel):
     github_release_exists: bool = False
     release_author: str | None = None  # GitHub login who created the release
     release_is_automated: bool = False  # True if github-actions[bot] or similar bot
@@ -147,12 +147,12 @@ class ReleaseSignals(BaseModel):
     )
 
 
-class DepsDevSignals(BaseModel):
+class DepsDevChecks(BaseModel):
     is_deprecated: bool = False
     deprecated_reason: str | None = None
 
 
-class ScorecardSignals(BaseModel):
+class ScorecardChecks(BaseModel):
     scorecard_score: float | None = None
     scorecard_repo: str | None = None  # "owner/repo" that was queried
     scorecard_maintained: int | None = None  # 0-10 or None if N/A
@@ -162,7 +162,7 @@ class ScorecardSignals(BaseModel):
     scorecard_signed_releases: int | None = None
 
 
-class AttestationSignals(BaseModel):
+class AttestationChecks(BaseModel):
     has_attestation: bool = False  # new version has a verifiable SLSA/Sigstore attestation
     publisher_kind: str | None = None  # "GitHub", "GitLab", etc.
     publisher_repo: str | None = None  # e.g. "psf/requests"
@@ -177,23 +177,23 @@ class AttestationSignals(BaseModel):
     )
 
 
-class PackageSignals(BaseModel):
+class PackageChecks(BaseModel):
     ecosystem: str
     package_name: str
     old_version: str
     new_version: str
-    pypi: PyPISignals = Field(default_factory=PyPISignals)
-    socket: SocketSignals = Field(default_factory=SocketSignals)
-    osv: OSVSignals = Field(default_factory=OSVSignals)
-    diff: DiffSignals = Field(default_factory=DiffSignals)
-    maintainer: MaintainerSignals = Field(default_factory=MaintainerSignals)
-    age: ReleaseAgeSignals = Field(default_factory=ReleaseAgeSignals)
-    attestation: AttestationSignals = Field(default_factory=AttestationSignals)
-    release: ReleaseSignals = Field(default_factory=ReleaseSignals)
-    version_line: VersionLineSignals = Field(default_factory=VersionLineSignals)
-    deps_dev: DepsDevSignals = Field(default_factory=DepsDevSignals)
-    scorecard: ScorecardSignals = Field(default_factory=ScorecardSignals)
-    custom_signals: dict[str, Any] = Field(default_factory=dict)  # plugin-supplied signal results
+    pypi: PyPIChecks = Field(default_factory=PyPIChecks)
+    socket: SocketChecks = Field(default_factory=SocketChecks)
+    osv: OSVChecks = Field(default_factory=OSVChecks)
+    diff: DiffChecks = Field(default_factory=DiffChecks)
+    maintainer: MaintainerChecks = Field(default_factory=MaintainerChecks)
+    age: ReleaseAgeChecks = Field(default_factory=ReleaseAgeChecks)
+    attestation: AttestationChecks = Field(default_factory=AttestationChecks)
+    release: ReleaseChecks = Field(default_factory=ReleaseChecks)
+    version_line: VersionLineChecks = Field(default_factory=VersionLineChecks)
+    deps_dev: DepsDevChecks = Field(default_factory=DepsDevChecks)
+    scorecard: ScorecardChecks = Field(default_factory=ScorecardChecks)
+    custom_checks: dict[str, Any] = Field(default_factory=dict)  # plugin-supplied check results
 
     @field_validator("ecosystem")
     @classmethod
@@ -208,3 +208,19 @@ class Verdict(BaseModel):
     flags: list[str]
     release_age_hours: float | None = None  # passed through for per-repo age gate enforcement
     new_dependency_count: int = 0  # passed through for per-repo max_new_dependencies gate
+
+
+# Backward-compatible aliases — tests and callers that used the old *Signals names still work.
+PyPISignals = PyPIChecks
+SocketSignals = SocketChecks
+OSVSignals = OSVChecks
+DiffSignals = DiffChecks
+PRFilesSignals = PRFilesChecks
+VersionLineSignals = VersionLineChecks
+MaintainerSignals = MaintainerChecks
+ReleaseAgeSignals = ReleaseAgeChecks
+ReleaseSignals = ReleaseChecks
+DepsDevSignals = DepsDevChecks
+ScorecardSignals = ScorecardChecks
+AttestationSignals = AttestationChecks
+PackageSignals = PackageChecks

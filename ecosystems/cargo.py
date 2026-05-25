@@ -11,7 +11,7 @@ from temporalio.exceptions import ApplicationError
 
 from ecosystems import (
     EcosystemProviderBase,
-    build_release_signals,
+    build_release_checks,
     fetch_vcs_release,
     fetch_vcs_tag_signature,
     is_major,
@@ -21,11 +21,11 @@ from ecosystems import (
     validate_archive_url,
 )
 from models import (
-    AttestationSignals,
-    MaintainerSignals,
-    PyPISignals,
-    ReleaseAgeSignals,
-    ReleaseSignals,
+    AttestationChecks,
+    MaintainerChecks,
+    PyPIChecks,
+    ReleaseAgeChecks,
+    ReleaseChecks,
 )
 from helpers.http import get_client
 
@@ -46,7 +46,7 @@ class CargoProvider(EcosystemProviderBase):
     # fetch_metadata
     # ------------------------------------------------------------------
 
-    async def fetch_metadata(self, package: str, old_version: str, new_version: str) -> PyPISignals:
+    async def fetch_metadata(self, package: str, old_version: str, new_version: str) -> PyPIChecks:
         client = get_client()
         resp = await client.get(f"{_API_BASE}/crates/{package}", headers=_HEADERS, timeout=15.0)
         if resp.status_code == 404:
@@ -62,7 +62,7 @@ class CargoProvider(EcosystemProviderBase):
         description = (crate.get("description") or "")[:500] or None
         # recent_downloads is a 90-day window — the closest crates.io offers to weekly
         recent_downloads = crate.get("recent_downloads")
-        return PyPISignals(
+        return PyPIChecks(
             weekly_downloads=recent_downloads,
             is_major_bump=is_major(old_version, new_version),
             package_description=description,
@@ -72,7 +72,7 @@ class CargoProvider(EcosystemProviderBase):
     # fetch_release_age
     # ------------------------------------------------------------------
 
-    async def fetch_release_age(self, package: str, new_version: str) -> ReleaseAgeSignals:
+    async def fetch_release_age(self, package: str, new_version: str) -> ReleaseAgeChecks:
         client = get_client()
         resp = await client.get(f"{_API_BASE}/crates/{package}", headers=_HEADERS, timeout=15.0)
         if resp.status_code == 404:
@@ -88,12 +88,12 @@ class CargoProvider(EcosystemProviderBase):
             if v.get("num") == new_version:
                 raw = v.get("created_at", "")
                 if not raw:
-                    return ReleaseAgeSignals(release_age_hours=None)
+                    return ReleaseAgeChecks(release_age_hours=None)
                 upload_time = parse_upload_time(raw)
                 hours = (datetime.now(timezone.utc) - upload_time).total_seconds() / 3600
-                return ReleaseAgeSignals(release_age_hours=max(0.0, hours))
+                return ReleaseAgeChecks(release_age_hours=max(0.0, hours))
 
-        return ReleaseAgeSignals(release_age_hours=None)
+        return ReleaseAgeChecks(release_age_hours=None)
 
     # ------------------------------------------------------------------
     # fetch_maintainer
@@ -101,15 +101,15 @@ class CargoProvider(EcosystemProviderBase):
 
     async def fetch_maintainer(
         self, package: str, old_version: str, new_version: str
-    ) -> MaintainerSignals:
+    ) -> MaintainerChecks:
         client = get_client()
         try:
             resp = await client.get(f"{_API_BASE}/crates/{package}", headers=_HEADERS, timeout=15.0)
             if resp.status_code != 200:
-                return MaintainerSignals(maintainer_changed=False)
+                return MaintainerChecks(maintainer_changed=False)
             versions = resp.json().get("versions", [])
         except Exception:
-            return MaintainerSignals(maintainer_changed=False)
+            return MaintainerChecks(maintainer_changed=False)
 
         # crates.io records the GitHub login of whoever published each version
         old_publisher: str | None = None
@@ -123,9 +123,9 @@ class CargoProvider(EcosystemProviderBase):
                 new_publisher = login
 
         if not old_publisher or not new_publisher:
-            return MaintainerSignals(maintainer_changed=False)
+            return MaintainerChecks(maintainer_changed=False)
 
-        return MaintainerSignals(maintainer_changed=old_publisher != new_publisher)
+        return MaintainerChecks(maintainer_changed=old_publisher != new_publisher)
 
     # ------------------------------------------------------------------
     # get_archive_url
@@ -169,15 +169,15 @@ class CargoProvider(EcosystemProviderBase):
 
     async def fetch_attestations(
         self, package: str, old_version: str, new_version: str
-    ) -> AttestationSignals:
+    ) -> AttestationChecks:
         # crates.io does not yet support SLSA provenance or Sigstore attestations.
-        return AttestationSignals(has_attestation=False)
+        return AttestationChecks(has_attestation=False)
 
     # ------------------------------------------------------------------
     # fetch_release
     # ------------------------------------------------------------------
 
-    async def fetch_release(self, package: str, old_version: str, version: str) -> ReleaseSignals:
+    async def fetch_release(self, package: str, old_version: str, version: str) -> ReleaseChecks:
         import os
 
         token = os.environ.get("GITHUB_TOKEN")
@@ -185,14 +185,14 @@ class CargoProvider(EcosystemProviderBase):
         resp = await client.get(f"{_API_BASE}/crates/{package}", headers=_HEADERS, timeout=15.0)
 
         if resp.status_code != 200:
-            return ReleaseSignals()
+            return ReleaseChecks()
         data = resp.json()
         crate = data.get("crate", {})
 
         source_url = crate.get("repository") or ""
         vcs = parse_vcs_repo(source_url)
         if not vcs:
-            return ReleaseSignals()
+            return ReleaseChecks()
         platform, owner_repo = vcs
 
         registry_time = None
@@ -213,7 +213,7 @@ class CargoProvider(EcosystemProviderBase):
             fetch_vcs_tag_signature(platform, owner, repo, old_version, token),
         )
         if release:
-            return build_release_signals(release, registry_time, new_sig, old_sig).model_copy(
+            return build_release_checks(release, registry_time, new_sig, old_sig).model_copy(
                 update={"metadata_repo": owner_repo}
             )
-        return ReleaseSignals(metadata_repo=owner_repo)
+        return ReleaseChecks(metadata_repo=owner_repo)

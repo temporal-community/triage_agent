@@ -21,7 +21,7 @@ from typing import Protocol
 
 import httpx
 
-from models import PRContext, PackageSignals, Verdict
+from models import PRContext, PackageChecks, Verdict
 
 
 class NotificationChannel(Protocol):
@@ -31,7 +31,7 @@ class NotificationChannel(Protocol):
         self,
         pr: PRContext,
         verdict: Verdict,
-        signals: PackageSignals | None = None,
+        signals: PackageChecks | None = None,
     ) -> None: ...
 
 
@@ -42,7 +42,7 @@ class PlatformCommentChannel:
         self,
         pr: PRContext,
         verdict: Verdict,
-        signals: PackageSignals | None = None,
+        signals: PackageChecks | None = None,
     ) -> None:
         from platforms import get_platform_client
 
@@ -62,7 +62,7 @@ class SlackWebhookChannel:
         self,
         pr: PRContext,
         verdict: Verdict,
-        signals: PackageSignals | None = None,
+        signals: PackageChecks | None = None,
     ) -> None:
         from temporalio import activity
 
@@ -108,7 +108,7 @@ class WebhookChannel:
         self,
         pr: PRContext,
         verdict: Verdict,
-        signals: PackageSignals | None = None,
+        signals: PackageChecks | None = None,
     ) -> None:
         from temporalio import activity
 
@@ -139,7 +139,7 @@ class MultiChannel:
         self,
         pr: PRContext,
         verdict: Verdict,
-        signals: PackageSignals | None = None,
+        signals: PackageChecks | None = None,
     ) -> None:
         for ch in self._channels:
             await ch.send_verdict(pr, verdict, signals)

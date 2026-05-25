@@ -17,7 +17,7 @@ from temporalio.exceptions import ApplicationError
 
 from ecosystems import (
     EcosystemProviderBase,
-    build_release_signals,
+    build_release_checks,
     fetch_vcs_release,
     fetch_vcs_tag_signature,
     is_major,
@@ -28,11 +28,11 @@ from ecosystems import (
     validate_archive_url,
 )
 from models import (
-    AttestationSignals,
-    MaintainerSignals,
-    PyPISignals,
-    ReleaseAgeSignals,
-    ReleaseSignals,
+    AttestationChecks,
+    MaintainerChecks,
+    PyPIChecks,
+    ReleaseAgeChecks,
+    ReleaseChecks,
 )
 from helpers.http import get_client
 
@@ -68,7 +68,7 @@ class ComposerProvider(EcosystemProviderBase):
     # fetch_metadata
     # ------------------------------------------------------------------
 
-    async def fetch_metadata(self, package: str, old_version: str, new_version: str) -> PyPISignals:
+    async def fetch_metadata(self, package: str, old_version: str, new_version: str) -> PyPIChecks:
         vendor, name = self._parse(package)
         client = get_client()
         resp = await client.get(f"{_PACKAGIST}/packages/{vendor}/{name}.json", timeout=15.0)
@@ -80,7 +80,7 @@ class ComposerProvider(EcosystemProviderBase):
                 non_retryable=True,
             )
         if resp.status_code != 200:
-            return PyPISignals(is_major_bump=is_major(old_version, new_version))
+            return PyPIChecks(is_major_bump=is_major(old_version, new_version))
 
         pkg = resp.json().get("package", {})
         description = (pkg.get("description") or "").strip()[:500] or None
@@ -88,7 +88,7 @@ class ComposerProvider(EcosystemProviderBase):
         monthly = pkg.get("downloads", {}).get("monthly")
         weekly = int(monthly / 4) if monthly else None
 
-        return PyPISignals(
+        return PyPIChecks(
             weekly_downloads=weekly,
             is_major_bump=is_major(old_version, new_version),
             package_description=description,
@@ -98,27 +98,27 @@ class ComposerProvider(EcosystemProviderBase):
     # fetch_release_age
     # ------------------------------------------------------------------
 
-    async def fetch_release_age(self, package: str, new_version: str) -> ReleaseAgeSignals:
+    async def fetch_release_age(self, package: str, new_version: str) -> ReleaseAgeChecks:
         vendor, name = self._parse(package)
         client = get_client()
         resp = await client.get(f"{_PACKAGIST}/packages/{vendor}/{name}.json", timeout=15.0)
         if resp.status_code != 200:
-            return ReleaseAgeSignals()
+            return ReleaseAgeChecks()
 
         versions = resp.json().get("package", {}).get("versions", {})
         version_data = self._find_version(versions, new_version)
         if not version_data:
-            return ReleaseAgeSignals()
+            return ReleaseAgeChecks()
 
         raw_time = version_data.get("time", "")
         if not raw_time:
-            return ReleaseAgeSignals()
+            return ReleaseAgeChecks()
         try:
             upload_time = parse_upload_time(raw_time)
             hours = (datetime.now(timezone.utc) - upload_time).total_seconds() / 3600
-            return ReleaseAgeSignals(release_age_hours=max(0.0, hours))
+            return ReleaseAgeChecks(release_age_hours=max(0.0, hours))
         except Exception:  # noqa: BLE001
-            return ReleaseAgeSignals()
+            return ReleaseAgeChecks()
 
     # ------------------------------------------------------------------
     # fetch_maintainer
@@ -126,18 +126,18 @@ class ComposerProvider(EcosystemProviderBase):
 
     async def fetch_maintainer(
         self, package: str, old_version: str, new_version: str
-    ) -> MaintainerSignals:
+    ) -> MaintainerChecks:
         vendor, name = self._parse(package)
         client = get_client()
         resp = await client.get(f"{_PACKAGIST}/packages/{vendor}/{name}.json", timeout=15.0)
         if resp.status_code != 200:
-            return MaintainerSignals()
+            return MaintainerChecks()
 
         versions = resp.json().get("package", {}).get("versions", {})
         old_data = self._find_version(versions, old_version)
         new_data = self._find_version(versions, new_version)
         if not old_data or not new_data:
-            return MaintainerSignals()
+            return MaintainerChecks()
 
         def _authors(vdata: dict) -> set[str]:
             result: set[str] = set()
@@ -153,8 +153,8 @@ class ComposerProvider(EcosystemProviderBase):
         old_authors = _authors(old_data)
         new_authors = _authors(new_data)
         if not old_authors or not new_authors:
-            return MaintainerSignals()
-        return MaintainerSignals(maintainer_changed=bool(new_authors - old_authors))
+            return MaintainerChecks()
+        return MaintainerChecks(maintainer_changed=bool(new_authors - old_authors))
 
     # ------------------------------------------------------------------
     # get_archive_url
@@ -215,15 +215,15 @@ class ComposerProvider(EcosystemProviderBase):
 
     async def fetch_attestations(
         self, package: str, old_version: str, new_version: str
-    ) -> AttestationSignals:
+    ) -> AttestationChecks:
         # Packagist/Composer does not have SLSA/Sigstore attestation support.
-        return AttestationSignals(has_attestation=False)
+        return AttestationChecks(has_attestation=False)
 
     # ------------------------------------------------------------------
     # fetch_release
     # ------------------------------------------------------------------
 
-    async def fetch_release(self, package: str, old_version: str, version: str) -> ReleaseSignals:
+    async def fetch_release(self, package: str, old_version: str, version: str) -> ReleaseChecks:
         import os
 
         token = os.environ.get("GITHUB_TOKEN")
@@ -232,12 +232,12 @@ class ComposerProvider(EcosystemProviderBase):
         client = get_client()
         resp = await client.get(f"{_PACKAGIST}/packages/{vendor}/{name}.json", timeout=15.0)
         if resp.status_code != 200:
-            return ReleaseSignals()
+            return ReleaseChecks()
 
         versions = resp.json().get("package", {}).get("versions", {})
         version_data = self._find_version(versions, version)
         if not version_data:
-            return ReleaseSignals()
+            return ReleaseChecks()
 
         registry_time: datetime | None = None
         raw_time = version_data.get("time", "")
@@ -250,7 +250,7 @@ class ComposerProvider(EcosystemProviderBase):
         source_url = version_data.get("source", {}).get("url", "")
         vcs = parse_vcs_repo(source_url)
         if not vcs:
-            return ReleaseSignals()
+            return ReleaseChecks()
         platform, owner_repo = vcs
 
         owner, repo = owner_repo.split("/", 1)
@@ -260,7 +260,7 @@ class ComposerProvider(EcosystemProviderBase):
             fetch_vcs_tag_signature(platform, owner, repo, old_version, token),
         )
         if release:
-            return build_release_signals(release, registry_time, new_sig, old_sig).model_copy(
+            return build_release_checks(release, registry_time, new_sig, old_sig).model_copy(
                 update={"metadata_repo": owner_repo}
             )
-        return ReleaseSignals(metadata_repo=owner_repo)
+        return ReleaseChecks(metadata_repo=owner_repo)

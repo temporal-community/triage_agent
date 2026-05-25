@@ -2,14 +2,14 @@ import pytest
 from helpers.comment_formatter import format_comment, _sanitize_reasoning
 from models import (
     PRContext,
-    PackageSignals,
+    PackageChecks,
     Verdict,
-    PyPISignals,
-    SocketSignals,
-    OSVSignals,
-    DiffSignals,
-    ReleaseAgeSignals,
-    MaintainerSignals,
+    PyPIChecks,
+    SocketChecks,
+    OSVChecks,
+    DiffChecks,
+    ReleaseAgeChecks,
+    MaintainerChecks,
 )
 
 
@@ -71,17 +71,17 @@ def green_verdict():
 
 @pytest.fixture
 def signals():
-    return PackageSignals(
+    return PackageChecks(
         ecosystem="pip",
         package_name="requests",
         old_version="2.31.0",
         new_version="2.32.0",
-        pypi=PyPISignals(weekly_downloads=5_000_000, is_major_bump=False),
-        socket=SocketSignals(socket_score=85, socket_alerts=[]),
-        osv=OSVSignals(osv_vulnerabilities=[]),
-        diff=DiffSignals(diff_summary="Minor changes", diff_size_bytes=1024),
-        age=ReleaseAgeSignals(release_age_hours=200.0),
-        maintainer=MaintainerSignals(maintainer_changed=False),
+        pypi=PyPIChecks(weekly_downloads=5_000_000, is_major_bump=False),
+        socket=SocketChecks(socket_score=85, socket_alerts=[]),
+        osv=OSVChecks(osv_vulnerabilities=[]),
+        diff=DiffChecks(diff_summary="Minor changes", diff_size_bytes=1024),
+        age=ReleaseAgeChecks(release_age_hours=200.0),
+        maintainer=MaintainerChecks(maintainer_changed=False),
     )
 
 

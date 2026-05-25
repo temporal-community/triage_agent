@@ -11,9 +11,9 @@ from temporalio.testing import ActivityEnvironment
 from ecosystems import parse_github_repo
 from activities.release_notes import check as release_check
 from models import (
-    ReleaseSignals,
-    PackageSignals,
-    ReleaseAgeSignals,
+    ReleaseChecks,
+    PackageChecks,
+    ReleaseAgeChecks,
 )
 
 PYPI_BASE = "https://pypi.org/pypi"
@@ -573,13 +573,13 @@ async def test_release_tag_no_regression_when_both_unsigned():
 def test_rule_based_flags_possible_rerelease():
     from classifiers import _rule_based
 
-    signals = PackageSignals(
+    signals = PackageChecks(
         ecosystem="pip",
         package_name="pkg",
         old_version="1.0.0",
         new_version="1.0.1",
-        age=ReleaseAgeSignals(release_age_hours=200.0),
-        release=ReleaseSignals(possible_rerelease=True),
+        age=ReleaseAgeChecks(release_age_hours=200.0),
+        release=ReleaseChecks(possible_rerelease=True),
     )
     verdict = _rule_based(signals)
     assert verdict.classification == "yellow"
@@ -589,13 +589,13 @@ def test_rule_based_flags_possible_rerelease():
 def test_rule_based_flags_large_timestamp_skew():
     from classifiers import _rule_based
 
-    signals = PackageSignals(
+    signals = PackageChecks(
         ecosystem="pip",
         package_name="pkg",
         old_version="1.0.0",
         new_version="1.0.1",
-        age=ReleaseAgeSignals(release_age_hours=200.0),
-        release=ReleaseSignals(timestamp_skew_minutes=300.0),
+        age=ReleaseAgeChecks(release_age_hours=200.0),
+        release=ReleaseChecks(timestamp_skew_minutes=300.0),
     )
     verdict = _rule_based(signals)
     assert verdict.classification == "yellow"
@@ -605,13 +605,13 @@ def test_rule_based_flags_large_timestamp_skew():
 def test_rule_based_flags_tag_signing_regression():
     from classifiers import _rule_based
 
-    signals = PackageSignals(
+    signals = PackageChecks(
         ecosystem="pip",
         package_name="pkg",
         old_version="1.0.0",
         new_version="1.0.1",
-        age=ReleaseAgeSignals(release_age_hours=200.0),
-        release=ReleaseSignals(tag_was_previously_signed=True, tag_signature_verified=None),
+        age=ReleaseAgeChecks(release_age_hours=200.0),
+        release=ReleaseChecks(tag_was_previously_signed=True, tag_signature_verified=None),
     )
     verdict = _rule_based(signals)
     assert verdict.classification == "yellow"

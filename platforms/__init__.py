@@ -19,7 +19,7 @@ from __future__ import annotations
 import os
 from typing import Protocol
 
-from models import PRContext, PRFilesSignals, Verdict
+from models import PRContext, PRFilesChecks, Verdict
 
 
 class PlatformClient(Protocol):
@@ -28,7 +28,7 @@ class PlatformClient(Protocol):
     async def close_pr(self, pr: PRContext, reason: str, ignore_bot: bool = False) -> None: ...
     async def label(self, pr: PRContext, label_name: str) -> None: ...
     async def request_review(self, pr: PRContext, reviewers: list[str]) -> None: ...
-    async def check_pr_files(self, pr: PRContext) -> PRFilesSignals: ...
+    async def check_pr_files(self, pr: PRContext) -> PRFilesChecks: ...
 
 
 def get_platform_client(pr: PRContext) -> PlatformClient:

@@ -194,6 +194,51 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for full examples of each.
 
 ---
 
+## Project layout
+
+```
+activities/     Temporal activity definitions — one file per signal source.
+                Each activity fetches one kind of data (PyPI metadata, Socket score,
+                OSV vulnerabilities, package diff, maintainer info, etc.) and returns
+                a typed Pydantic model. Activities run in parallel inside the workflow.
+
+ecosystems/     Per-ecosystem providers (pip, npm, RubyGems, Cargo, Go, Composer,
+                Maven, NuGet). Each implements EcosystemProvider: how to fetch release
+                metadata, download archives, extract them, and look up VCS repos.
+                remote.py is the HTTP bridge for non-Python ecosystem plugins.
+
+workflows/      Two Temporal workflow definitions.
+                package_triage_workflow.py — orchestrates all signal activities,
+                collects results into PackageSignals, calls the classifier, returns
+                a Verdict. pr_action_workflow.py — receives the Verdict and takes
+                action (comment, merge, close, request review) via the platform client.
+
+classifiers/    Classifier implementations — Claude (default), OpenAI, Ollama, and
+                rule-based fallback. Selected by the CLASSIFIER env var or loaded via
+                dependency_scout.classifiers entry points for custom plugins.
+
+models/         Shared Pydantic data models: PRContext, RepoConfig, PackageSignals
+                (and all its signal sub-models), and Verdict. Imported by activities,
+                workflows, classifiers, and tests.
+
+platforms/      GitHub and GitLab platform clients: post comments, merge/close PRs,
+                request review, and check which files changed in a PR.
+
+helpers/        Shared utilities: async HTTP client, activity result cache, GitHub App
+                token refresh, comment formatter, repo config loader, bot-PR parsers
+                (Dependabot/Renovate), and the LLM prompt templates.
+
+api/            FastAPI webhook receiver. Parses incoming Dependabot and Renovate
+                webhook payloads and starts a PackageTriageWorkflow via the Temporal
+                client. Entry point for production traffic.
+
+tests/          pytest test suite — one file per module, plus test_workflow_replay.py
+                which replays recorded Temporal event histories from tests/fixtures/
+                to catch non-deterministic workflow changes.
+```
+
+---
+
 ## How it works under the hood
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the two-workflow Temporal design, signal sources, LLM classifier, security hardening, and how to run it against live GitHub webhooks.

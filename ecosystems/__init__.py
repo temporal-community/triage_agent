@@ -36,12 +36,12 @@ import re as _re
 from helpers.http import get_client
 
 from models import (
-    AttestationSignals,
-    MaintainerSignals,
-    PyPISignals,
-    ReleaseAgeSignals,
-    ReleaseSignals,
-    VersionLineSignals,
+    AttestationChecks,
+    MaintainerChecks,
+    PyPIChecks,
+    ReleaseAgeChecks,
+    ReleaseChecks,
+    VersionLineChecks,
 )
 
 MAX_EXTRACT_BYTES = 100 * 1024 * 1024  # zip bomb guard
@@ -55,13 +55,13 @@ class EcosystemProvider(Protocol):
 
     async def fetch_metadata(
         self, package: str, old_version: str, new_version: str
-    ) -> PyPISignals: ...
+    ) -> PyPIChecks: ...
 
-    async def fetch_release_age(self, package: str, new_version: str) -> ReleaseAgeSignals: ...
+    async def fetch_release_age(self, package: str, new_version: str) -> ReleaseAgeChecks: ...
 
     async def fetch_maintainer(
         self, package: str, old_version: str, new_version: str
-    ) -> MaintainerSignals: ...
+    ) -> MaintainerChecks: ...
 
     async def get_archive_url(
         self, client: httpx.AsyncClient, package: str, version: str
@@ -71,11 +71,11 @@ class EcosystemProvider(Protocol):
 
     async def fetch_attestations(
         self, package: str, old_version: str, new_version: str
-    ) -> AttestationSignals: ...
+    ) -> AttestationChecks: ...
 
     async def fetch_release(
         self, package: str, old_version: str, version: str
-    ) -> ReleaseSignals: ...
+    ) -> ReleaseChecks: ...
 
 
 class EcosystemProviderBase:
@@ -84,7 +84,7 @@ class EcosystemProviderBase:
 
     All current signal methods raise NotImplementedError — subclasses must implement them.
     Future optional signal methods will be added here with safe empty-model defaults,
-    so providers that inherit EcosystemProviderBase won't break when new signals are added.
+    so providers that inherit EcosystemProviderBase won't break when new checks are added.
     """
 
     ecosystem_name: str
@@ -92,15 +92,15 @@ class EcosystemProviderBase:
     dependabot_slug: str
     name_re: re.Pattern
 
-    async def fetch_metadata(self, package: str, old_version: str, new_version: str) -> PyPISignals:
+    async def fetch_metadata(self, package: str, old_version: str, new_version: str) -> PyPIChecks:
         raise NotImplementedError
 
-    async def fetch_release_age(self, package: str, new_version: str) -> ReleaseAgeSignals:
+    async def fetch_release_age(self, package: str, new_version: str) -> ReleaseAgeChecks:
         raise NotImplementedError
 
     async def fetch_maintainer(
         self, package: str, old_version: str, new_version: str
-    ) -> MaintainerSignals:
+    ) -> MaintainerChecks:
         raise NotImplementedError
 
     async def get_archive_url(
@@ -113,10 +113,10 @@ class EcosystemProviderBase:
 
     async def fetch_attestations(
         self, package: str, old_version: str, new_version: str
-    ) -> AttestationSignals:
+    ) -> AttestationChecks:
         raise NotImplementedError
 
-    async def fetch_release(self, package: str, old_version: str, version: str) -> ReleaseSignals:
+    async def fetch_release(self, package: str, old_version: str, version: str) -> ReleaseChecks:
         raise NotImplementedError
 
 
@@ -237,8 +237,8 @@ def detect_stale_version_line(
     new_version: str,
     cutoff_days: int = 730,
     release_dates: dict[str, datetime] | None = None,
-) -> VersionLineSignals:
-    """Return VersionLineSignals indicating whether new_version patches a stale major line.
+) -> VersionLineChecks:
+    """Return VersionLineChecks indicating whether new_version patches a stale major line.
 
     A version line is considered stale when the bump's major version is lower than the
     highest stable major and that highest major had a release within the last *cutoff_days*.
@@ -256,17 +256,17 @@ def detect_stale_version_line(
 
     stable = [v for v in all_versions if not _is_prerelease(v) and _major(v) is not None]
     if not stable:
-        return VersionLineSignals()
+        return VersionLineChecks()
 
     bump_major = _major(new_version)
     if bump_major is None:
-        return VersionLineSignals()
+        return VersionLineChecks()
 
     majors: set[int] = {m for v in stable if (m := _major(v)) is not None}
     latest_major = max(majors)
 
     if bump_major >= latest_major:
-        return VersionLineSignals(bump_major=bump_major, latest_major=latest_major)
+        return VersionLineChecks(bump_major=bump_major, latest_major=latest_major)
 
     # bump is targeting an older major — check if the latest major is actively maintained
     if release_dates:
@@ -277,9 +277,9 @@ def detect_stale_version_line(
             for v in latest_major_versions
         )
         if not latest_major_active:
-            return VersionLineSignals(bump_major=bump_major, latest_major=latest_major)
+            return VersionLineChecks(bump_major=bump_major, latest_major=latest_major)
 
-    return VersionLineSignals(
+    return VersionLineChecks(
         stale_version_line=True,
         bump_major=bump_major,
         latest_major=latest_major,
@@ -465,13 +465,13 @@ async def fetch_tag_signature(
     return await fetch_vcs_tag_signature("github", owner, repo, version, token)
 
 
-def build_release_signals(
+def build_release_checks(
     release: dict,
     registry_time: datetime | None = None,
     tag_signature_verified: bool | None = None,
     old_tag_signature_verified: bool | None = None,
-) -> ReleaseSignals:
-    """Convert a normalised release dict into structured ReleaseSignals.
+) -> ReleaseChecks:
+    """Convert a normalised release dict into structured ReleaseChecks.
 
     Both GitHub and GitLab releases are pre-normalised to GitHub field names by
     fetch_vcs_release before reaching this function.
@@ -510,7 +510,7 @@ def build_release_signals(
         old_tag_signature_verified is True and tag_signature_verified is not True
     )
 
-    return ReleaseSignals(
+    return ReleaseChecks(
         github_release_exists=True,
         release_author=author_login or None,
         release_is_automated=release_is_automated,
@@ -696,3 +696,6 @@ def safe_tar_extractall(tf: tarfile.TarFile, dest: str) -> None:
                 non_retryable=True,
             )
         tf.extract(member, dest, filter="data")
+
+# Backward-compatible alias
+build_release_signals = build_release_checks

@@ -10,15 +10,15 @@ from temporalio.testing import ActivityEnvironment
 from activities.depsdev import fetch as depsdev_fetch
 from activities.scorecard import fetch as scorecard_fetch
 from models import (
-    PackageSignals,
-    PyPISignals,
-    SocketSignals,
-    OSVSignals,
-    DiffSignals,
-    ReleaseAgeSignals,
-    MaintainerSignals,
-    DepsDevSignals,
-    ScorecardSignals,
+    PackageChecks,
+    PyPIChecks,
+    SocketChecks,
+    OSVChecks,
+    DiffChecks,
+    ReleaseAgeChecks,
+    MaintainerChecks,
+    DepsDevChecks,
+    ScorecardChecks,
 )
 
 DEPSDEV_BASE = "https://api.deps.dev/v3alpha/systems"
@@ -32,7 +32,7 @@ SCORECARD_BASE = "https://api.securityscorecards.dev/projects/github.com"
 
 @respx.mock
 async def test_depsdev_deprecated_true():
-    """200 response with isDeprecated=True → DepsDevSignals(is_deprecated=True)."""
+    """200 response with isDeprecated=True → DepsDevChecks(is_deprecated=True)."""
     respx.get(f"{DEPSDEV_BASE}/pypi/packages/requests/versions/2.32.0").mock(
         return_value=httpx.Response(
             200,
@@ -50,7 +50,7 @@ async def test_depsdev_deprecated_true():
 
 @respx.mock
 async def test_depsdev_404_returns_empty():
-    """Non-200 response → empty DepsDevSignals, no exception."""
+    """Non-200 response → empty DepsDevChecks, no exception."""
     respx.get(f"{DEPSDEV_BASE}/pypi/packages/requests/versions/2.32.0").mock(
         return_value=httpx.Response(404)
     )
@@ -62,7 +62,7 @@ async def test_depsdev_404_returns_empty():
 
 @respx.mock
 async def test_depsdev_200_no_deprecated_field():
-    """200 response without isDeprecated field → DepsDevSignals(is_deprecated=False)."""
+    """200 response without isDeprecated field → DepsDevChecks(is_deprecated=False)."""
     respx.get(f"{DEPSDEV_BASE}/pypi/packages/requests/versions/2.32.0").mock(
         return_value=httpx.Response(200, json={"versionKey": {"version": "2.32.0"}})
     )
@@ -73,7 +73,7 @@ async def test_depsdev_200_no_deprecated_field():
 
 
 async def test_depsdev_unknown_ecosystem_returns_empty():
-    """Unknown ecosystem → empty DepsDevSignals without making any HTTP call."""
+    """Unknown ecosystem → empty DepsDevChecks without making any HTTP call."""
     env = ActivityEnvironment()
     result = await env.run(depsdev_fetch, "cargo", "serde", "1.0.0", "1.1.0")
     assert result.is_deprecated is False
@@ -128,7 +128,7 @@ async def test_scorecard_successful_flow():
 
 @respx.mock
 async def test_scorecard_no_related_projects_returns_empty():
-    """deps.dev returns no relatedProjects → empty ScorecardSignals()."""
+    """deps.dev returns no relatedProjects → empty ScorecardChecks()."""
     respx.get(f"{DEPSDEV_BASE}/pypi/packages/requests/versions/2.32.0").mock(
         return_value=httpx.Response(200, json={"relatedProjects": [], "links": []})
     )
@@ -140,7 +140,7 @@ async def test_scorecard_no_related_projects_returns_empty():
 
 @respx.mock
 async def test_scorecard_scorecard_404_returns_repo_only():
-    """Scorecard API returns 404 → ScorecardSignals(scorecard_repo=...) with no score."""
+    """Scorecard API returns 404 → ScorecardChecks(scorecard_repo=...) with no score."""
     respx.get(f"{DEPSDEV_BASE}/pypi/packages/requests/versions/2.32.0").mock(
         return_value=httpx.Response(
             200, json={"relatedProjects": [{"projectKey": {"id": "github.com/owner/repo"}}]}
@@ -181,31 +181,31 @@ async def test_scorecard_fallback_to_links():
 
 
 def _base_signals(**overrides):
-    return PackageSignals(
+    return PackageChecks(
         ecosystem=overrides.pop("ecosystem", "pip"),
         package_name=overrides.pop("package_name", "mypkg"),
         old_version=overrides.pop("old_version", "1.0.0"),
         new_version=overrides.pop("new_version", "1.1.0"),
-        pypi=PyPISignals(
+        pypi=PyPIChecks(
             weekly_downloads=overrides.pop("weekly_downloads", 100_000),
             is_major_bump=overrides.pop("is_major_bump", False),
         ),
-        socket=SocketSignals(
+        socket=SocketChecks(
             socket_score=overrides.pop("socket_score", 80),
             socket_alerts=overrides.pop("socket_alerts", []),
         ),
-        osv=OSVSignals(osv_vulnerabilities=overrides.pop("osv_vulnerabilities", [])),
-        diff=DiffSignals(
+        osv=OSVChecks(osv_vulnerabilities=overrides.pop("osv_vulnerabilities", [])),
+        diff=DiffChecks(
             diff_summary=overrides.pop("diff_summary", "Minor changes."),
             diff_size_bytes=overrides.pop("diff_size_bytes", 100),
         ),
-        age=ReleaseAgeSignals(release_age_hours=overrides.pop("release_age_hours", 500.0)),
-        maintainer=MaintainerSignals(maintainer_changed=overrides.pop("maintainer_changed", False)),
-        deps_dev=DepsDevSignals(
+        age=ReleaseAgeChecks(release_age_hours=overrides.pop("release_age_hours", 500.0)),
+        maintainer=MaintainerChecks(maintainer_changed=overrides.pop("maintainer_changed", False)),
+        deps_dev=DepsDevChecks(
             is_deprecated=overrides.pop("is_deprecated", False),
             deprecated_reason=overrides.pop("deprecated_reason", None),
         ),
-        scorecard=ScorecardSignals(
+        scorecard=ScorecardChecks(
             scorecard_maintained=overrides.pop("scorecard_maintained", None),
             scorecard_repo=overrides.pop("scorecard_repo", None),
             scorecard_dangerous_workflow=overrides.pop("scorecard_dangerous_workflow", None),

@@ -10,18 +10,18 @@ Implement the `EcosystemProvider` Protocol. Copy an existing provider (e.g. `rub
 
 ```python
 from activities.ecosystems import is_major, parse_upload_time, validate_archive_url
-from activities.models import AttestationSignals, MaintainerSignals, PyPISignals, ReleaseAgeSignals
+from activities.models import AttestationChecks, MaintainerChecks, PyPIChecks, ReleaseAgeChecks
 
 class ComposerProvider:
     ecosystem_name = "composer"  # auto-discovered by get_provider()
     osv_name = "Packagist"       # must match the ecosystem name used by api.osv.dev
 
-    async def fetch_metadata(self, package, old_version, new_version) -> PyPISignals: ...
-    async def fetch_release_age(self, package, new_version) -> ReleaseAgeSignals: ...
-    async def fetch_maintainer(self, package, old_version, new_version) -> MaintainerSignals: ...
+    async def fetch_metadata(self, package, old_version, new_version) -> PyPIChecks: ...
+    async def fetch_release_age(self, package, new_version) -> ReleaseAgeChecks: ...
+    async def fetch_maintainer(self, package, old_version, new_version) -> MaintainerChecks: ...
     async def get_archive_url(self, client, package, version) -> tuple[str, str, str] | None: ...
     def extract_archive(self, archive_bytes, filename, dest) -> None: ...
-    async def fetch_attestations(self, package, old_version, new_version) -> AttestationSignals: ...
+    async def fetch_attestations(self, package, old_version, new_version) -> AttestationChecks: ...
 ```
 
 `get_archive_url` returns `(url, filename, integrity_string)`. Call `validate_archive_url(url)` before returning — this enforces the CDN allowlist. Add your registry's CDN host to `ALLOWED_CDN_HOSTS` in `activities/ecosystems/__init__.py`.
@@ -32,39 +32,39 @@ Add a test section for your ecosystem following the existing npm/rubygems patter
 
 ---
 
-## Adding a new signal
+## Adding a new check
 
-Each signal is a parallel activity that gathers one category of supply chain data and returns a typed sub-model. All signals run at the same time; a failing signal gets degraded defaults rather than crashing the workflow.
+Each check is a parallel activity that gathers one category of supply chain data and returns a typed sub-model. All checks run at the same time; a failing check gets degraded defaults rather than crashing the workflow.
 
 **Step 1 — Define the sub-model in `activities/models.py`**
 
 ```python
-class MyNewSignals(BaseModel):
+class MyNewChecks(BaseModel):
     some_flag: bool = False
     some_score: int | None = None
 ```
 
-All fields need defaults so the model can be instantiated as a zero/degraded state when the activity fails. Then add it as a nested field in `PackageSignals`:
+All fields need defaults so the model can be instantiated as a zero/degraded state when the activity fails. Then add it as a nested field in `PackageChecks`:
 
 ```python
-class PackageSignals(BaseModel):
+class PackageChecks(BaseModel):
     ...
-    my_new: MyNewSignals = Field(default_factory=MyNewSignals)
+    my_new: MyNewChecks = Field(default_factory=MyNewChecks)
 ```
 
-**Step 2 — Create `activities/my_new_signal.py`**
+**Step 2 — Create `activities/my_new_check.py`**
 
 ```python
 from temporalio import activity
-from activities.models import MyNewSignals
+from activities.models import MyNewChecks
 
-@activity.defn(name="activities.my_new_signal.check")
-async def check(ecosystem: str, package: str, old_version: str, new_version: str) -> MyNewSignals:
+@activity.defn(name="activities.my_new_check.check")
+async def check(ecosystem: str, package: str, old_version: str, new_version: str) -> MyNewChecks:
     try:
         # fetch data from an external API
-        return MyNewSignals(some_flag=True, some_score=42)
+        return MyNewChecks(some_flag=True, some_score=42)
     except Exception:
-        return MyNewSignals()   # degraded defaults — never raise from a signal activity
+        return MyNewChecks()   # degraded defaults — never raise from a check activity
 ```
 
 The activity name string is what the workflow references. It must match exactly.
@@ -79,11 +79,11 @@ _cache = ActivityCache()                     # immutable (archive contents, prov
 _cache = ActivityCache(ttl_seconds=3600)     # can change, but rarely within an hour (CVEs, scores)
 _cache = ActivityCache(ttl_seconds=86400)    # changes slowly (deprecation, repo health)
 
-@activity.defn(name="activities.my_new_signal.check")
+@activity.defn(name="activities.my_new_check.check")
 async def check(ecosystem, package, old_version, new_version):
     key = (ecosystem, package, new_version)  # omit old_version if it doesn't affect the result
     if (hit := _cache.get(key)) is not None:
-        activity.logger.debug("my_new_signal cache hit: %s %s", package, new_version)
+        activity.logger.debug("my_new_check cache hit: %s %s", package, new_version)
         return hit
     result = await _fetch(...)
     _cache.set(key, result)   # only cache successful results — don't cache degraded defaults
@@ -92,23 +92,23 @@ async def check(ecosystem, package, old_version, new_version):
 
 Tests are isolated automatically — a `conftest.py` fixture clears all caches before and after each test, so you don't need to worry about cache state leaking between tests.
 
-**Step 3 — Add to `_SIGNAL_REGISTRY` in `workflows/package_triage_workflow.py`**
+**Step 3 — Add to `_CHECK_REGISTRY` in `workflows/package_triage_workflow.py`**
 
-**Append** a row to `_SIGNAL_REGISTRY` — do not insert mid-list, as this changes Temporal's command sequence and breaks replay of existing histories:
+**Append** a row to `_CHECK_REGISTRY` — do not insert mid-list, as this changes Temporal's command sequence and breaks replay of existing histories:
 
 ```python
-_SIGNAL_REGISTRY: list[tuple[str, str, type, bool]] = [
+_CHECK_REGISTRY: list[tuple[str, str, type, bool]] = [
     ...
-    ("my_new", "activities.my_new_signal.check", MyNewSignals, False),
-    #           ^activity name string             ^result type  ^True = 2-min timeout
+    ("my_new", "activities.my_new_check.check", MyNewChecks, False),
+    #           ^activity name string            ^result type  ^True = 2-min timeout
 ]
 ```
 
-The first element (`"my_new"`) must match the field name you added to `PackageSignals`.
+The first element (`"my_new"`) must match the field name you added to `PackageChecks`.
 
-**Step 4 — Use the signal in `activities/classifier.py`**
+**Step 4 — Use the check in `activities/classifier.py`**
 
-Add logic to `_rule_based` using `signals.my_new.some_flag`, and/or let the LLM see it — it already appears in the trusted JSON block via `PackageSignals.model_dump()`. Forgetting this step will cause a test failure in `tests/test_signal_wiring.py`.
+Add logic to `_rule_based` using `signals.my_new.some_flag`, and/or let the LLM see it — it already appears in the trusted JSON block via `PackageChecks.model_dump()`. Forgetting this step will cause a test failure in `tests/test_check_wiring.py`.
 
 **Step 5 — Regenerate replay fixtures**
 
@@ -174,10 +174,10 @@ CLASSIFIER=rule_based   # or: claude
 
 ```python
 # my_package/__init__.py
-from activities.models import PackageSignals, Verdict
+from activities.models import PackageChecks, Verdict
 
 class OpenAIClassifier:
-    async def classify(self, signals: PackageSignals) -> Verdict:
+    async def classify(self, signals: PackageChecks) -> Verdict:
         # call OpenAI, return Verdict(...)
         ...
 ```
@@ -190,7 +190,7 @@ my_openai = "my_package:OpenAIClassifier"
 
 Then set `CLASSIFIER=my_openai` in `.env`. The worker picks it up automatically — no code changes needed.
 
-The classifier receives the full `PackageSignals` object including `custom_signals` (plugin signal activity results). Return a `Verdict` with `classification`, `confidence`, `reasoning`, and `flags`.
+The classifier receives the full `PackageChecks` object including `custom_checks` (plugin check activity results). Return a `Verdict` with `classification`, `confidence`, `reasoning`, and `flags`.
 
 ---
 
