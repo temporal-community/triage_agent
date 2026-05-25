@@ -46,6 +46,23 @@ gitlab = "platforms.gitlab:create_client"
 #   [project.entry-points."dependency_scout.checks"]
 #   internal_vuln = "my_package.vuln_check:run"
 
+[project.entry-points."dependency_scout.activity_checks"]
+# Advanced supply-chain checks that need full Temporal control: heartbeating (for long-running
+# downloads or corpus scans), custom retry policies, or activity-level cancellation.
+# Each entry point must point to an @activity.defn-decorated callable with signature:
+#   @activity.defn(name="my_company.deep_scan")
+#   async def deep_scan(ctx: CheckContext) -> dict: ...
+# The activity name string (from @activity.defn) is what goes in extra_check_activities in
+# .github/dependency-scout.yml. The function is auto-registered with the worker at startup.
+# Unlike dependency_scout.checks, a misconfigured entry point here is treated as a bug
+# (logged as WARNING and skipped). Use dependency_scout.checks for plain async functions.
+# Example in your plugin's pyproject.toml:
+#   [project.entry-points."dependency_scout.activity_checks"]
+#   deep_scan = "my_package.activities:deep_archive_scan"
+# In .github/dependency-scout.yml:
+#   extra_check_activities:
+#     - my_company.deep_archive_scan
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

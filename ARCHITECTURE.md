@@ -310,6 +310,44 @@ internal_vuln = "my_plugin.vuln_check:run"
 
 No Temporal, no config changes. The `activities.custom_checks.run_all` activity discovers all installed `dependency_scout.checks` entry points and runs them in parallel. Results land in `PackageChecks.custom_checks` under the entry-point name and are included in the LLM prompt.
 
+### Advanced checks via `dependency_scout.activity_checks`
+
+For checks that need full Temporal control — heartbeating for long-running work, custom retry policies, or activity-level cancellation — use the advanced plugin path. The canonical example in the core is `activities/package_diff.py`: it downloads and diffs package archives, needs a 2-minute start-to-close timeout, and uses a 45-second heartbeat timeout to detect stuck downloads. External checks with similar requirements belong here.
+
+```python
+# my_plugin/activities.py
+from temporalio import activity
+from dependency_scout.checks import CheckContext
+
+@activity.defn(name="my_company.deep_archive_scan")
+async def deep_archive_scan(ctx: CheckContext) -> dict:
+    # Call activity.heartbeat() periodically for long-running work
+    activity.heartbeat()
+    # ... long-running analysis ...
+    return {"suspicious_patterns": [...]}
+```
+
+```toml
+# pyproject.toml
+[project.entry-points."dependency_scout.activity_checks"]
+deep_scan = "my_plugin.activities:deep_archive_scan"
+```
+
+```yaml
+# .github/dependency-scout.yml (in any repo that wants this check)
+extra_check_activities:
+  - my_company.deep_archive_scan
+```
+
+At worker startup, `_discover_activity_check_plugins()` loads all `dependency_scout.activity_checks` entry points and registers them alongside the built-in activities. The worker then accepts tasks for them from Temporal. Per-repo opt-in is required via `extra_check_activities` in the repo config — the activity is registered but only called for repos that list it. Results are merged into `PackageChecks.custom_checks` under the activity name.
+
+**When to use each plugin path:**
+
+| Path | Use when | Temporal knowledge needed |
+|---|---|---|
+| `dependency_scout.checks` | Fast API calls, <30 seconds total | None — plain `async def` |
+| `dependency_scout.activity_checks` | Long-running (archive downloads, corpus scanning), needs heartbeating or custom retry | Yes — requires `@activity.defn` |
+
 ---
 
 ## Adding a new built-in ecosystem

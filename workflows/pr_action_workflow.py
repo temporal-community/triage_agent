@@ -73,6 +73,7 @@ class PRActionWorkflow:
                     pr.package_name,
                     pr.old_version,
                     pr.new_version,
+                    config.extra_check_activities,
                 ],
                 id=f"triage-{pr.ecosystem}-{pr.package_name}-{pr.new_version}-{date_key}",
                 parent_close_policy=ParentClosePolicy.ABANDON,

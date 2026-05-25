@@ -64,10 +64,55 @@ def _discover_activities() -> list:
     return fns
 
 
+def _discover_activity_check_plugins() -> list:
+    """Load @activity.defn-decorated functions from dependency_scout.activity_checks entry points.
+
+    Plugin packages declare advanced check activities in their pyproject.toml:
+        [project.entry-points."dependency_scout.activity_checks"]
+        my_deep_scan = "my_package.activities:deep_scan"
+
+    Each entry point must point to a single @activity.defn-decorated callable that accepts
+    a CheckContext and returns dict. Non-activity callables and load failures are skipped
+    with a warning (unlike the simple dependency_scout.checks path, a misconfigured
+    activity_checks entry point is likely a bug — hence the louder failure).
+    """
+    try:
+        from importlib.metadata import entry_points
+    except ImportError:
+        return []
+
+    seen: set[int] = set()
+    fns = []
+    for ep in entry_points(group="dependency_scout.activity_checks"):
+        try:
+            fn = ep.load()
+            if not callable(fn):
+                logger.warning(
+                    "dependency_scout.activity_checks plugin %r is not callable — skipped", ep.name
+                )
+                continue
+            if _Definition.from_callable(fn) is None:
+                logger.warning(
+                    "dependency_scout.activity_checks plugin %r is not decorated with "
+                    "@activity.defn — skipped. Use dependency_scout.checks for plain async functions.",
+                    ep.name,
+                )
+                continue
+            if id(fn) not in seen:
+                seen.add(id(fn))
+                fns.append(fn)
+                logger.info("Registered activity_checks plugin: %r", ep.name)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "Failed to load dependency_scout.activity_checks plugin %r: %r", ep.name, exc
+            )
+    return fns
+
+
 # Auto-discovered from activities/*.py — adding a new built-in activity file is sufficient,
 # no manual registration needed.
 # Exposed at module level for test_signal_wiring.py.
-ACTIVITIES = _discover_activities()
+ACTIVITIES = _discover_activities() + _discover_activity_check_plugins()
 
 
 async def main() -> None:

@@ -67,6 +67,7 @@ class PackageTriageWorkflow:
         package: str,
         old_version: str,
         new_version: str,
+        extra_check_activities: list[str] = [],
     ) -> Verdict:
         retry = RetryPolicy(maximum_attempts=5, initial_interval=timedelta(seconds=2))
         default_opts: dict = dict(
@@ -118,6 +119,30 @@ class PackageTriageWorkflow:
             result_type=dict,
             **default_opts,
         )
+
+        if extra_check_activities:
+            extra_raw = await asyncio.gather(
+                *(
+                    workflow.execute_activity(
+                        name,
+                        CheckContext(
+                            package=package,
+                            ecosystem=ecosystem,
+                            old_version=old_version,
+                            new_version=new_version,
+                        ),
+                        result_type=dict,
+                        **default_opts,
+                    )
+                    for name in extra_check_activities
+                ),
+                return_exceptions=True,
+            )
+            for name, result in zip(extra_check_activities, extra_raw):
+                if isinstance(result, Exception):
+                    workflow.logger.warning(f"Activity check '{name}' failed: {result!r} — skipped")
+                else:
+                    custom_checks_result[name] = result
 
         package_checks = PackageChecks(
             ecosystem=ecosystem,

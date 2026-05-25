@@ -307,3 +307,39 @@ This means plugins work best when an LLM classifier is configured. The rule-base
 Once installed, `get_provider("drupal")` returns your provider and custom checks run automatically — no changes to this repo needed. Built-in providers take precedence over plugins with the same `ecosystem_name`, so core ecosystems cannot be shadowed.
 
 **Security note:** both entry point groups (`dependency_scout.ecosystems` and `dependency_scout.checks`) load plugin code into the same process as the core worker. This is the same trust boundary as any `pip install` dependency — the operator who deploys Dependency Scout is implicitly trusting the packages they install. Plugin results in `custom_checks` are rendered in the sandboxed `<untrusted_custom>` section of the LLM prompt and cannot influence the trusted checks block.
+
+### Advanced checks via `dependency_scout.activity_checks`
+
+For checks that need full Temporal control — heartbeating, custom retry policies, or activity-level cancellation — use the advanced plugin path. The built-in `activities/package_diff.py` is the reference example: it downloads and diffs package archives, requiring a 2-minute start-to-close timeout and a 45-second heartbeat timeout to detect stuck downloads.
+
+```python
+# my_plugin/activities.py
+from temporalio import activity
+from models import CheckContext
+
+@activity.defn(name="my_company.deep_archive_scan")
+async def deep_archive_scan(ctx: CheckContext) -> dict:
+    # Call activity.heartbeat() periodically for long-running work
+    activity.heartbeat()
+    # ... long-running analysis ...
+    return {"suspicious_patterns": ["..."]}
+```
+
+```toml
+# pyproject.toml
+[project.entry-points."dependency_scout.activity_checks"]
+deep_scan = "my_plugin.activities:deep_archive_scan"
+```
+
+```yaml
+# .github/dependency-scout.yml (opt-in per repo)
+extra_check_activities:
+  - my_company.deep_archive_scan
+```
+
+The worker auto-discovers and registers `@activity.defn` functions from all `dependency_scout.activity_checks` entry points at startup. Per-repo opt-in via `extra_check_activities` is required — the activity is available to the worker but only invoked for repos that list it. Results are merged into `PackageChecks.custom_checks` under the activity name string (from `@activity.defn`).
+
+**When to use each plugin path:**
+
+- **`dependency_scout.checks`** — fast API calls, <30 seconds, no Temporal knowledge needed. Plain `async def run(ctx) -> dict`.
+- **`dependency_scout.activity_checks`** — long-running work (archive downloads, corpus scanning), needs heartbeating or custom retry. Requires `@activity.defn` and Temporal knowledge. Modelled on `activities/package_diff.py`.
