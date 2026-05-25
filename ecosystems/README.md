@@ -13,7 +13,7 @@ Each ecosystem provider translates a package registry's APIs into the seven sign
 | Go modules | `go` | Go | [pkg.go.dev](https://pkg.go.dev) | No | GOPROXY URL encoding (`!` escaping for uppercase) |
 | Maven | `maven` | Java / Kotlin / Scala / JVM | [search.maven.org](https://search.maven.org) | No | Coordinate format: `groupId:artifactId` |
 | NuGet | `nuget` | C# / .NET / F# | [nuget.org](https://www.nuget.org) | No | Registration pages may be paginated |
-| Composer | `composer` | PHP | [packagist.org](https://packagist.org) | No | Archives fetched from GitHub codeload |
+| Composer | `composer` | PHP | [packagist.org](https://packagist.org) | No | Packagist packages are pointers to GitHub repos, so archives are fetched directly from GitHub's download CDN (codeload.github.com) rather than Packagist itself |
 
 All eight providers implement all seven signal methods. "No" in the attestation column means the registry simply doesn't support build-origin verification yet — it's not a red flag for packages on those registries.
 
