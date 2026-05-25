@@ -161,7 +161,7 @@ def test_rule_based_yellow_carries_release_age(base_signals):
 def test_rule_based_multiple_flags_all_present(base_signals):
     base_signals.pypi.is_major_bump = True
     base_signals.maintainer.maintainer_changed = True
-    base_signals.socket.socket_score = 20
+    base_signals.socket.socket_score = 35  # 30–49 range → still yellow
     verdict = _rule_based(base_signals)
     assert verdict.classification == "yellow"
     assert len(verdict.flags) >= 3
@@ -464,3 +464,67 @@ def test_rule_based_artifact_mismatch_takes_priority_over_install_script(base_si
     verdict = _rule_based(base_signals)
     assert verdict.classification == "red"
     assert any("artifact/source mismatch" in f for f in verdict.flags)
+
+
+# ---------------------------------------------------------------------------
+# Socket alert types → hard RED
+# ---------------------------------------------------------------------------
+
+
+def test_rule_based_socket_malware_type_is_red(base_signals):
+    """socket_alert_types containing 'malware' produces a hard RED."""
+    base_signals.socket.socket_alert_types = ["malware"]
+    base_signals.socket.socket_alerts = ["[critical] malware: Malicious code detected"]
+    verdict = _rule_based(base_signals)
+    assert verdict.classification == "red"
+    assert verdict.confidence == 0.92
+    assert any("malware" in f for f in verdict.flags)
+
+
+def test_rule_based_socket_protestware_type_is_red(base_signals):
+    """socket_alert_types containing 'protestware' produces a hard RED."""
+    base_signals.socket.socket_alert_types = ["protestware"]
+    verdict = _rule_based(base_signals)
+    assert verdict.classification == "red"
+    assert any("protestware" in f for f in verdict.flags)
+
+
+def test_rule_based_socket_non_red_type_is_yellow(base_signals):
+    """High-severity alert types that are not malware/protestware stay yellow."""
+    base_signals.socket.socket_alert_types = ["installScripts", "networkAccess"]
+    base_signals.socket.socket_alerts = ["[high] installScripts: Install script detected"]
+    verdict = _rule_based(base_signals)
+    assert verdict.classification == "yellow"
+
+
+def test_rule_based_socket_score_below_30_is_red(base_signals):
+    """Socket score < 30 produces a hard RED (packages this low are almost always malware)."""
+    base_signals.socket.socket_score = 15
+    verdict = _rule_based(base_signals)
+    assert verdict.classification == "red"
+    assert verdict.confidence == 0.88
+    assert any("critically low socket score" in f for f in verdict.flags)
+
+
+def test_rule_based_socket_score_exactly_30_is_yellow(base_signals):
+    """Score of exactly 30 stays yellow (< 30 triggers RED, not <=)."""
+    base_signals.socket.socket_score = 30
+    verdict = _rule_based(base_signals)
+    assert verdict.classification == "yellow"
+    assert any("socket score" in f for f in verdict.flags)
+
+
+def test_rule_based_socket_score_29_is_red(base_signals):
+    """Score of 29 triggers the hard RED path."""
+    base_signals.socket.socket_score = 29
+    verdict = _rule_based(base_signals)
+    assert verdict.classification == "red"
+
+
+def test_rule_based_socket_malware_takes_priority_over_install_hook(base_signals):
+    """Socket malware detection is checked before install_script_added."""
+    base_signals.socket.socket_alert_types = ["malware"]
+    base_signals.diff.install_script_added = True
+    verdict = _rule_based(base_signals)
+    assert verdict.classification == "red"
+    assert any("malware" in f for f in verdict.flags)
