@@ -240,7 +240,6 @@ async def _handle_github_review(payload: dict) -> dict:
     reviewer = payload.get("review", {}).get("user", {}).get("login", "")
     repo = payload["repository"]["full_name"]
     pr_number = payload["pull_request"]["number"]
-
     workflow_id = f"pr-action-{repo.replace('/', '-')}-{pr_number}"
     decision = "approve" if state == "approved" else "reject"
 
