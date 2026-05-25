@@ -28,7 +28,7 @@ from ecosystems import (
 from models import (
     AttestationChecks,
     MaintainerChecks,
-    PyPIChecks,
+    MetadataChecks,
     ReleaseAgeChecks,
     ReleaseChecks,
 )
@@ -45,7 +45,7 @@ class PipProvider(EcosystemProviderBase):
     # fetch_metadata
     # ------------------------------------------------------------------
 
-    async def fetch_metadata(self, package: str, old_version: str, new_version: str) -> PyPIChecks:
+    async def fetch_metadata(self, package: str, old_version: str, new_version: str) -> MetadataChecks:
         client = get_client()
         resp = await client.get(f"https://pypi.org/pypi/{package}/{new_version}/json", timeout=15.0)
         if resp.status_code == 404:
@@ -63,7 +63,7 @@ class PipProvider(EcosystemProviderBase):
 
         weekly_downloads = await _fetch_weekly_downloads(client, package)
 
-        return PyPIChecks(
+        return MetadataChecks(
             weekly_downloads=weekly_downloads,
             is_major_bump=is_major(old_version, new_version),
             package_description=summary,

@@ -176,7 +176,7 @@ async def test_pypi_release_not_found_on_github():
 
 
 @respx.mock
-async def test_pypi_metadata_repo_populated_with_release():
+async def test_metadata_repo_populated_with_release():
     respx.get(f"{PYPI_BASE}/requests/2.32.0/json").mock(
         return_value=httpx.Response(
             200, json=_pypi_json("requests", "2.32.0", "https://github.com/psf/requests")
@@ -192,7 +192,7 @@ async def test_pypi_metadata_repo_populated_with_release():
 
 
 @respx.mock
-async def test_pypi_metadata_repo_populated_without_release():
+async def test_metadata_repo_populated_without_release():
     """metadata_repo should be set even when no GitHub release exists."""
     respx.get(f"{PYPI_BASE}/pkg/1.1.0/json").mock(
         return_value=httpx.Response(
@@ -209,7 +209,7 @@ async def test_pypi_metadata_repo_populated_without_release():
 
 
 @respx.mock
-async def test_pypi_metadata_repo_none_when_no_github_url():
+async def test_metadata_repo_none_when_no_github_url():
     respx.get(f"{PYPI_BASE}/mypkg/1.1.0/json").mock(
         return_value=httpx.Response(
             200,

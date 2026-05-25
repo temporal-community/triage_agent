@@ -23,7 +23,7 @@ from ecosystems import (
 from models import (
     AttestationChecks,
     MaintainerChecks,
-    PyPIChecks,
+    MetadataChecks,
     ReleaseAgeChecks,
     ReleaseChecks,
 )
@@ -46,7 +46,7 @@ class CargoProvider(EcosystemProviderBase):
     # fetch_metadata
     # ------------------------------------------------------------------
 
-    async def fetch_metadata(self, package: str, old_version: str, new_version: str) -> PyPIChecks:
+    async def fetch_metadata(self, package: str, old_version: str, new_version: str) -> MetadataChecks:
         client = get_client()
         resp = await client.get(f"{_API_BASE}/crates/{package}", headers=_HEADERS, timeout=15.0)
         if resp.status_code == 404:
@@ -62,7 +62,7 @@ class CargoProvider(EcosystemProviderBase):
         description = (crate.get("description") or "")[:500] or None
         # recent_downloads is a 90-day window — the closest crates.io offers to weekly
         recent_downloads = crate.get("recent_downloads")
-        return PyPIChecks(
+        return MetadataChecks(
             weekly_downloads=recent_downloads,
             is_major_bump=is_major(old_version, new_version),
             package_description=description,

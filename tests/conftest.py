@@ -5,7 +5,7 @@ from models import (
     PackageDiffChecks,
     OSVChecks,
     PackageChecks,
-    PyPIChecks,
+    MetadataChecks,
     ReleaseAgeChecks,
     SocketChecks,
 )
@@ -30,7 +30,7 @@ def base_signals():
         package_name="requests",
         old_version="2.31.0",
         new_version="2.32.0",
-        pypi=PyPIChecks(weekly_downloads=5_000_000, is_major_bump=False),
+        metadata=MetadataChecks(weekly_downloads=5_000_000, is_major_bump=False),
         socket=SocketChecks(socket_score=80, socket_alerts=[]),
         osv=OSVChecks(osv_vulnerabilities=[]),
         diff=PackageDiffChecks(diff_summary="Minor internal refactor.", diff_size_bytes=512),

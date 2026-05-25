@@ -4,7 +4,7 @@ from models import (
     PRContext,
     PackageChecks,
     Verdict,
-    PyPIChecks,
+    MetadataChecks,
     SocketChecks,
     OSVChecks,
     PackageDiffChecks,
@@ -76,7 +76,7 @@ def signals():
         package_name="requests",
         old_version="2.31.0",
         new_version="2.32.0",
-        pypi=PyPIChecks(weekly_downloads=5_000_000, is_major_bump=False),
+        metadata=MetadataChecks(weekly_downloads=5_000_000, is_major_bump=False),
         socket=SocketChecks(socket_score=85, socket_alerts=[]),
         osv=OSVChecks(osv_vulnerabilities=[]),
         diff=PackageDiffChecks(diff_summary="Minor changes", diff_size_bytes=1024),
@@ -223,7 +223,7 @@ def test_signals_weekly_downloads_formatted(pr, green_verdict, signals):
 
 
 def test_signals_weekly_downloads_unknown_when_none(pr, green_verdict, signals):
-    signals.pypi.weekly_downloads = None
+    signals.metadata.weekly_downloads = None
     out = format_comment(pr, green_verdict, signals)
     assert "| Weekly downloads | unknown |" in out
 
@@ -257,7 +257,7 @@ def test_signals_maintainer_changed_no(pr, green_verdict, signals):
 
 
 def test_signals_major_bump_yes(pr, green_verdict, signals):
-    signals.pypi.is_major_bump = True
+    signals.metadata.is_major_bump = True
     out = format_comment(pr, green_verdict, signals)
     assert "| Major bump | yes |" in out
 

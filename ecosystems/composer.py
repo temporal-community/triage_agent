@@ -30,7 +30,7 @@ from ecosystems import (
 from models import (
     AttestationChecks,
     MaintainerChecks,
-    PyPIChecks,
+    MetadataChecks,
     ReleaseAgeChecks,
     ReleaseChecks,
 )
@@ -68,7 +68,7 @@ class ComposerProvider(EcosystemProviderBase):
     # fetch_metadata
     # ------------------------------------------------------------------
 
-    async def fetch_metadata(self, package: str, old_version: str, new_version: str) -> PyPIChecks:
+    async def fetch_metadata(self, package: str, old_version: str, new_version: str) -> MetadataChecks:
         vendor, name = self._parse(package)
         client = get_client()
         resp = await client.get(f"{_PACKAGIST}/packages/{vendor}/{name}.json", timeout=15.0)
@@ -80,7 +80,7 @@ class ComposerProvider(EcosystemProviderBase):
                 non_retryable=True,
             )
         if resp.status_code != 200:
-            return PyPIChecks(is_major_bump=is_major(old_version, new_version))
+            return MetadataChecks(is_major_bump=is_major(old_version, new_version))
 
         pkg = resp.json().get("package", {})
         description = (pkg.get("description") or "").strip()[:500] or None
@@ -88,7 +88,7 @@ class ComposerProvider(EcosystemProviderBase):
         monthly = pkg.get("downloads", {}).get("monthly")
         weekly = int(monthly / 4) if monthly else None
 
-        return PyPIChecks(
+        return MetadataChecks(
             weekly_downloads=weekly,
             is_major_bump=is_major(old_version, new_version),
             package_description=description,

@@ -54,13 +54,13 @@ def _build_message(signals: PackageChecks) -> str:
     trusted = signals.model_dump(
         exclude={
             "diff": {"diff_summary"},
-            "pypi": {"package_description"},
+            "metadata": {"package_description"},
             "socket": {"socket_alerts"},
             "release": {"release_body"},
             "custom_checks": True,
         }
     )
-    desc = signals.pypi.package_description or "[not available]"
+    desc = signals.metadata.package_description or "[not available]"
     alerts = signals.socket.socket_alerts or []
     notes = signals.release.release_body or "[not available]"
     diff = signals.diff.diff_summary or "[no diff available]"
@@ -389,7 +389,7 @@ def _rule_based(signals: PackageChecks) -> Verdict:
         )
 
     # Collect yellow signals
-    if signals.pypi.is_major_bump:
+    if signals.metadata.is_major_bump:
         flags.append("major version bump")
     if signals.age.release_age_hours is None:
         flags.append("release age unknown (missing PyPI metadata)")
@@ -565,8 +565,8 @@ def _rule_based(signals: PackageChecks) -> Verdict:
         )
     if signals.socket.socket_score is not None and signals.socket.socket_score < 50:
         flags.append(f"low socket score ({signals.socket.socket_score}/100)")
-    if signals.pypi.weekly_downloads is not None and signals.pypi.weekly_downloads < 1_000:
-        flags.append(f"low download count ({signals.pypi.weekly_downloads:,}/week)")
+    if signals.metadata.weekly_downloads is not None and signals.metadata.weekly_downloads < 1_000:
+        flags.append(f"low download count ({signals.metadata.weekly_downloads:,}/week)")
 
     if flags:
         return Verdict(
@@ -583,7 +583,7 @@ def _rule_based(signals: PackageChecks) -> Verdict:
         if signals.age.release_age_hours is not None
         else "age unknown"
     )
-    downloads = f"{signals.pypi.weekly_downloads:,}" if signals.pypi.weekly_downloads else "unknown"
+    downloads = f"{signals.metadata.weekly_downloads:,}" if signals.metadata.weekly_downloads else "unknown"
     return Verdict(
         classification="green",
         confidence=0.80,

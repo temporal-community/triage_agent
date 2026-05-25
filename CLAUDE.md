@@ -13,10 +13,10 @@ Ecosystems: pip (production), npm (implemented, deployment pending).
 **Temporal activity references use string names, not imports:**
 ```python
 # In workflow code — always by string
-await workflow.execute_activity("activities.pypi_metadata.fetch", ...)
+await workflow.execute_activity("activities.metadata.fetch", ...)
 
 # Activity definition — name must match exactly
-@activity.defn(name="activities.pypi_metadata.fetch")
+@activity.defn(name="activities.metadata.fetch")
 async def fetch(...):
 ```
 This is required for determinism. Never import activity functions directly into workflow code.

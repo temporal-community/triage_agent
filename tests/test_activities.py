@@ -12,7 +12,7 @@ import respx
 from temporalio.exceptions import ApplicationError
 from temporalio.testing import ActivityEnvironment
 
-from activities.pypi_metadata import fetch as metadata_fetch
+from activities.metadata import fetch as metadata_fetch
 from activities.osv import check as osv_check
 from activities.release_age import check as release_age_check
 from activities.maintainer import history as maintainer_history
@@ -45,12 +45,12 @@ def _pypi_response(package: str, version: str, upload_time: str = "2025-01-01T00
 
 
 # ---------------------------------------------------------------------------
-# pypi_metadata
+# metadata
 # ---------------------------------------------------------------------------
 
 
 @respx.mock
-async def test_pypi_metadata_fetch_success():
+async def test_metadata_fetch_success():
     respx.get(f"{PYPI_BASE}/requests/2.32.0/json").mock(
         return_value=httpx.Response(200, json=_pypi_response("requests", "2.32.0"))
     )
@@ -66,7 +66,7 @@ async def test_pypi_metadata_fetch_success():
 
 
 @respx.mock
-async def test_pypi_metadata_major_bump():
+async def test_metadata_major_bump():
     respx.get(f"{PYPI_BASE}/django/5.0.0/json").mock(
         return_value=httpx.Response(200, json=_pypi_response("django", "5.0.0"))
     )
@@ -80,7 +80,7 @@ async def test_pypi_metadata_major_bump():
 
 
 @respx.mock
-async def test_pypi_metadata_404_raises_non_retryable():
+async def test_metadata_404_raises_non_retryable():
     respx.get(f"{PYPI_BASE}/nonexistent/1.0.0/json").mock(return_value=httpx.Response(404))
 
     env = ActivityEnvironment()
@@ -90,7 +90,7 @@ async def test_pypi_metadata_404_raises_non_retryable():
 
 
 @respx.mock
-async def test_pypi_metadata_pypistats_failure_returns_none():
+async def test_metadata_pypistats_failure_returns_none():
     respx.get(f"{PYPI_BASE}/requests/2.32.0/json").mock(
         return_value=httpx.Response(200, json=_pypi_response("requests", "2.32.0"))
     )
@@ -221,12 +221,12 @@ async def test_maintainer_fetch_error_returns_no_change():
 
 
 # ---------------------------------------------------------------------------
-# pypi_metadata — exception and non-semver edge cases
+# metadata — exception and non-semver edge cases
 # ---------------------------------------------------------------------------
 
 
 @respx.mock
-async def test_pypi_metadata_pypistats_network_error_returns_none():
+async def test_metadata_pypistats_network_error_returns_none():
     respx.get(f"{PYPI_BASE}/requests/2.32.0/json").mock(
         return_value=httpx.Response(200, json=_pypi_response("requests", "2.32.0"))
     )
@@ -298,7 +298,7 @@ def test_release_age_naive_datetime_gets_utc():
 
 
 # ---------------------------------------------------------------------------
-# npm paths — pypi_metadata
+# npm paths — metadata
 # ---------------------------------------------------------------------------
 
 NPM_BASE = "https://registry.npmjs.org"
@@ -380,7 +380,7 @@ async def test_npm_metadata_downloads_network_error_returns_none():
 
 
 @respx.mock
-async def test_pypi_metadata_long_summary_truncated():
+async def test_metadata_long_summary_truncated():
     long_summary = "x" * 600
     resp_data = _pypi_response("pkg", "1.0.0")
     resp_data["info"]["summary"] = long_summary
@@ -488,7 +488,7 @@ async def test_npm_maintainer_fetch_error_returns_no_change():
 
 
 # ---------------------------------------------------------------------------
-# RubyGems paths — pypi_metadata
+# RubyGems paths — metadata
 # ---------------------------------------------------------------------------
 
 RUBYGEMS_API = "https://rubygems.org/api/v1/gems"

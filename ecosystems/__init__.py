@@ -38,7 +38,7 @@ from helpers.http import get_client
 from models import (
     AttestationChecks,
     MaintainerChecks,
-    PyPIChecks,
+    MetadataChecks,
     ReleaseAgeChecks,
     ReleaseChecks,
     VersionLineageChecks,
@@ -55,7 +55,7 @@ class EcosystemProvider(Protocol):
 
     async def fetch_metadata(
         self, package: str, old_version: str, new_version: str
-    ) -> PyPIChecks: ...
+    ) -> MetadataChecks: ...
 
     async def fetch_release_age(self, package: str, new_version: str) -> ReleaseAgeChecks: ...
 
@@ -92,7 +92,7 @@ class EcosystemProviderBase:
     dependabot_slug: str
     name_re: re.Pattern
 
-    async def fetch_metadata(self, package: str, old_version: str, new_version: str) -> PyPIChecks:
+    async def fetch_metadata(self, package: str, old_version: str, new_version: str) -> MetadataChecks:
         raise NotImplementedError
 
     async def fetch_release_age(self, package: str, new_version: str) -> ReleaseAgeChecks:

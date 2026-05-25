@@ -39,7 +39,7 @@ from ecosystems import EcosystemProviderBase, MAX_EXTRACT_BYTES, validate_archiv
 from models import (
     AttestationChecks,
     MaintainerChecks,
-    PyPIChecks,
+    MetadataChecks,
     ReleaseAgeChecks,
     ReleaseChecks,
 )
@@ -91,9 +91,9 @@ class RemoteEcosystemProvider(EcosystemProviderBase):
     # EcosystemProvider methods
     # ------------------------------------------------------------------
 
-    async def fetch_metadata(self, package: str, old_version: str, new_version: str) -> PyPIChecks:
+    async def fetch_metadata(self, package: str, old_version: str, new_version: str) -> MetadataChecks:
         """POST fetch_metadata — request: {package, old_version, new_version}
-        Response: PyPIChecks fields (weekly_downloads, is_major_bump, package_description).
+        Response: MetadataChecks fields (weekly_downloads, is_major_bump, package_description).
         """
         data = await self._post(
             "fetch_metadata",
@@ -103,7 +103,7 @@ class RemoteEcosystemProvider(EcosystemProviderBase):
                 "new_version": new_version,
             },
         )
-        return PyPIChecks(**(data or {}))
+        return MetadataChecks(**(data or {}))
 
     async def fetch_release_age(self, package: str, new_version: str) -> ReleaseAgeChecks:
         """POST fetch_release_age — request: {package, new_version}

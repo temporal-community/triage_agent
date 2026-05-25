@@ -25,7 +25,7 @@ from ecosystems import (
 from models import (
     AttestationChecks,
     MaintainerChecks,
-    PyPIChecks,
+    MetadataChecks,
     ReleaseAgeChecks,
     ReleaseChecks,
 )
@@ -42,7 +42,7 @@ class NpmProvider(EcosystemProviderBase):
     # fetch_metadata
     # ------------------------------------------------------------------
 
-    async def fetch_metadata(self, package: str, old_version: str, new_version: str) -> PyPIChecks:
+    async def fetch_metadata(self, package: str, old_version: str, new_version: str) -> MetadataChecks:
         client = get_client()
         resp = await client.get(f"https://registry.npmjs.org/{package}/{new_version}", timeout=15.0)
         if resp.status_code == 404:
@@ -57,7 +57,7 @@ class NpmProvider(EcosystemProviderBase):
         summary = (data.get("description") or "")[:500] or None
         weekly_downloads = await _fetch_weekly_downloads(client, package)
 
-        return PyPIChecks(
+        return MetadataChecks(
             weekly_downloads=weekly_downloads,
             is_major_bump=is_major(old_version, new_version),
             package_description=summary,

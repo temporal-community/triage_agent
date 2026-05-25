@@ -30,7 +30,7 @@ from ecosystems import (
 from models import (
     AttestationChecks,
     MaintainerChecks,
-    PyPIChecks,
+    MetadataChecks,
     ReleaseAgeChecks,
     ReleaseChecks,
 )
@@ -51,7 +51,7 @@ class NuGetProvider(EcosystemProviderBase):
     # fetch_metadata
     # ------------------------------------------------------------------
 
-    async def fetch_metadata(self, package: str, old_version: str, new_version: str) -> PyPIChecks:
+    async def fetch_metadata(self, package: str, old_version: str, new_version: str) -> MetadataChecks:
         id_lower = package.lower()
         client = get_client()
         reg_resp, search_resp = await asyncio.gather(
@@ -77,7 +77,7 @@ class NuGetProvider(EcosystemProviderBase):
             if results:
                 description = (results[0].get("description") or "").strip()[:500] or None
 
-        return PyPIChecks(
+        return MetadataChecks(
             weekly_downloads=None,  # NuGet only exposes lifetime total downloads, not weekly
             is_major_bump=is_major(old_version, new_version),
             package_description=description,

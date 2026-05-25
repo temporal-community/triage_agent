@@ -25,7 +25,7 @@ from models import (
     OSVChecks,
     PRContext,
     PRFilesChecks,
-    PyPIChecks,
+    MetadataChecks,
     ReleaseAgeChecks,
     ReleaseChecks,
     RepoConfig,
@@ -58,9 +58,9 @@ _PR = PRContext(
 
 
 def _pypi(is_major: bool = False):
-    @activity.defn(name="activities.pypi_metadata.fetch")
+    @activity.defn(name="activities.metadata.fetch")
     async def fetch(*_):
-        return PyPIChecks(weekly_downloads=5_000_000, is_major_bump=is_major)
+        return MetadataChecks(weekly_downloads=5_000_000, is_major_bump=is_major)
 
     return fetch
 

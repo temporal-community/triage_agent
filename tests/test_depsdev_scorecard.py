@@ -11,7 +11,7 @@ from activities.depsdev import fetch as depsdev_fetch
 from activities.scorecard import fetch as scorecard_fetch
 from models import (
     PackageChecks,
-    PyPIChecks,
+    MetadataChecks,
     SocketChecks,
     OSVChecks,
     PackageDiffChecks,
@@ -186,7 +186,7 @@ def _base_signals(**overrides):
         package_name=overrides.pop("package_name", "mypkg"),
         old_version=overrides.pop("old_version", "1.0.0"),
         new_version=overrides.pop("new_version", "1.1.0"),
-        pypi=PyPIChecks(
+        metadata=MetadataChecks(
             weekly_downloads=overrides.pop("weekly_downloads", 100_000),
             is_major_bump=overrides.pop("is_major_bump", False),
         ),

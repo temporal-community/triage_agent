@@ -298,7 +298,7 @@ The activity receives `(ecosystem, package, old_version, new_version)` and must 
 
 ## Adding a new built-in ecosystem
 
-The activity files (`pypi_metadata.py`, `release_age.py`, `maintainer.py`, `package_diff.py`, `osv.py`) are thin wrappers that call `get_provider(ecosystem).method(...)`. Adding a new ecosystem to the core means:
+The activity files (`metadata.py`, `release_age.py`, `maintainer.py`, `package_diff.py`, `osv.py`) are thin wrappers that call `get_provider(ecosystem).method(...)`. Adding a new ecosystem to the core means:
 
 1. **Create** `ecosystems/{name}.py` inheriting `EcosystemProviderBase`
 2. **Update** the `ecosystem` field type in `models/__init__.py`

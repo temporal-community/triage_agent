@@ -23,7 +23,7 @@ from ecosystems import (
 from models import (
     AttestationChecks,
     MaintainerChecks,
-    PyPIChecks,
+    MetadataChecks,
     ReleaseAgeChecks,
     ReleaseChecks,
 )
@@ -40,7 +40,7 @@ class RubyGemsProvider(EcosystemProviderBase):
     # fetch_metadata
     # ------------------------------------------------------------------
 
-    async def fetch_metadata(self, package: str, old_version: str, new_version: str) -> PyPIChecks:
+    async def fetch_metadata(self, package: str, old_version: str, new_version: str) -> MetadataChecks:
         client = get_client()
         gem_resp, dl_resp = await asyncio.gather(
             client.get(f"https://rubygems.org/api/v1/gems/{package}.json", timeout=15.0),
@@ -56,7 +56,7 @@ class RubyGemsProvider(EcosystemProviderBase):
         data = gem_resp.json()
 
         summary = (data.get("info") or "")[:500] or None
-        return PyPIChecks(
+        return MetadataChecks(
             weekly_downloads=dl_resp,
             is_major_bump=is_major(old_version, new_version),
             package_description=summary,

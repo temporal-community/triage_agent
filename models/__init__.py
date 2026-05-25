@@ -58,7 +58,7 @@ class RepoConfig(BaseModel):
 # Partial check models — one per check activity, nested into PackageChecks in the workflow.
 
 
-class PyPIChecks(BaseModel):
+class MetadataChecks(BaseModel):
     weekly_downloads: int | None = None
     is_major_bump: bool = False
     package_description: str | None = None
@@ -182,7 +182,7 @@ class PackageChecks(BaseModel):
     package_name: str
     old_version: str
     new_version: str
-    pypi: PyPIChecks = Field(default_factory=PyPIChecks)
+    metadata: MetadataChecks = Field(default_factory=MetadataChecks)
     socket: SocketChecks = Field(default_factory=SocketChecks)
     osv: OSVChecks = Field(default_factory=OSVChecks)
     diff: PackageDiffChecks = Field(default_factory=PackageDiffChecks)

@@ -66,7 +66,7 @@ def test_rule_based_cves_returns_red(base_signals):
 
 
 def test_rule_based_major_bump_is_yellow(base_signals):
-    base_signals.pypi.is_major_bump = True
+    base_signals.metadata.is_major_bump = True
     verdict = _rule_based(base_signals)
     assert verdict.classification == "yellow"
     assert any("major" in f for f in verdict.flags)
@@ -115,21 +115,21 @@ def test_rule_based_low_socket_score_is_yellow(base_signals):
 
 
 def test_rule_based_low_downloads_is_yellow(base_signals):
-    base_signals.pypi.weekly_downloads = 500
+    base_signals.metadata.weekly_downloads = 500
     verdict = _rule_based(base_signals)
     assert verdict.classification == "yellow"
     assert any("download count" in f for f in verdict.flags)
 
 
 def test_rule_based_yellow_carries_release_age(base_signals):
-    base_signals.pypi.is_major_bump = True
+    base_signals.metadata.is_major_bump = True
     base_signals.age.release_age_hours = 72.0
     verdict = _rule_based(base_signals)
     assert verdict.release_age_hours == 72.0
 
 
 def test_rule_based_multiple_flags_all_present(base_signals):
-    base_signals.pypi.is_major_bump = True
+    base_signals.metadata.is_major_bump = True
     base_signals.maintainer.maintainer_changed = True
     base_signals.socket.socket_score = 35  # 30–49 range → still yellow
     verdict = _rule_based(base_signals)
@@ -156,7 +156,7 @@ def test_rule_based_green_carries_release_age(base_signals):
 
 
 def test_rule_based_green_handles_none_downloads(base_signals):
-    base_signals.pypi.weekly_downloads = None
+    base_signals.metadata.weekly_downloads = None
     verdict = _rule_based(base_signals)
     assert verdict.classification == "green"
     assert "unknown" in verdict.reasoning

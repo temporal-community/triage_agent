@@ -30,7 +30,7 @@ from ecosystems import (
 from models import (
     AttestationChecks,
     MaintainerChecks,
-    PyPIChecks,
+    MetadataChecks,
     ReleaseAgeChecks,
     ReleaseChecks,
 )
@@ -71,7 +71,7 @@ class MavenProvider(EcosystemProviderBase):
     # fetch_metadata
     # ------------------------------------------------------------------
 
-    async def fetch_metadata(self, package: str, old_version: str, new_version: str) -> PyPIChecks:
+    async def fetch_metadata(self, package: str, old_version: str, new_version: str) -> MetadataChecks:
         group_id, artifact_id = self._parse(package)
         pom_url = f"{self._artifact_base(group_id, artifact_id, new_version)}.pom"
 
@@ -89,7 +89,7 @@ class MavenProvider(EcosystemProviderBase):
         pom = _parse_pom(resp.text)
         description = pom.get("description")
 
-        return PyPIChecks(
+        return MetadataChecks(
             weekly_downloads=None,  # no public weekly-download API for Maven Central
             is_major_bump=is_major(old_version, new_version),
             package_description=description,

@@ -80,15 +80,15 @@ def format_comment(pr: PRContext, verdict: Verdict, signals: PackageChecks | Non
             f"| Release age | {signals.age.release_age_hours:.0f}h |"
             if signals.age.release_age_hours is not None
             else "| Release age | unknown |",
-            f"| Weekly downloads | {signals.pypi.weekly_downloads:,} |"
-            if signals.pypi.weekly_downloads
+            f"| Weekly downloads | {signals.metadata.weekly_downloads:,} |"
+            if signals.metadata.weekly_downloads
             else "| Weekly downloads | unknown |",
             f"| Socket score | {signals.socket.socket_score}/100 |"
             if signals.socket.socket_score is not None
             else "| Socket score | unavailable |",
             f"| CVEs | {len(signals.osv.osv_vulnerabilities)} |",
             f"| Maintainer changed | {'yes' if signals.maintainer.maintainer_changed else 'no'} |",
-            f"| Major bump | {'yes' if signals.pypi.is_major_bump else 'no'} |",
+            f"| Major bump | {'yes' if signals.metadata.is_major_bump else 'no'} |",
             f"| Diff size | {signals.diff.diff_size_bytes:,} bytes |",
             "",
         ]

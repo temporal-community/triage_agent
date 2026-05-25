@@ -7,7 +7,7 @@ with workflow.unsafe.imports_passed_through():
     from models import (
         PackageChecks,
         Verdict,
-        PyPIChecks,
+        MetadataChecks,
         SocketChecks,
         OSVChecks,
         PackageDiffChecks,
@@ -29,7 +29,7 @@ with workflow.unsafe.imports_passed_through():
 # Append-only: inserting mid-list changes Temporal's ScheduleActivity command sequence,
 # which breaks replay of existing workflow histories and requires fixture regeneration.
 _CHECK_REGISTRY: list[tuple[str, str, type, bool]] = [
-    ("pypi", "activities.pypi_metadata.fetch", PyPIChecks, False),
+    ("metadata", "activities.metadata.fetch", MetadataChecks, False),
     ("socket", "activities.socket.score", SocketChecks, False),
     ("osv", "activities.osv.check", OSVChecks, False),
     ("diff", "activities.package_diff.compute", PackageDiffChecks, True),  # archive download

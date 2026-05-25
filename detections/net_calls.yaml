@@ -2,335 +2,337 @@
 # Matched against newly-added lines only (not pre-existing code) in non-install-hook files.
 #
 # Each entry has:
-#   pattern: regex string (single-quoted to avoid backslash-doubling)
+#   pattern: regex string
 #   desc:    human-readable explanation of what this detects and why it matters
 
 .rb:
-  - pattern: 'Net::HTTP\b'
-    desc: Ruby stdlib HTTP client
-  - pattern: 'URI\.open\b'
-    desc: Ruby URI.open (can fetch remote URIs)
-  - pattern: 'open-uri'
-    desc: Ruby open-uri library import
-  - pattern: 'Faraday\b'
-    desc: Faraday HTTP client gem
-  - pattern: 'HTTParty\b'
-    desc: HTTParty HTTP client gem
-  - pattern: 'RestClient\b'
-    desc: RestClient HTTP client gem
-  - pattern: 'Excon\b'
-    desc: Excon HTTP client gem
-  - pattern: 'Typhoeus\b'
-    desc: Typhoeus HTTP client gem
-  - pattern: '\bHTTP\.(get|post|head|put|delete|patch)\b'
-    desc: http.rb gem HTTP method calls
-  - pattern: 'rubygems\.org/api/v1/gems'
-    desc: registry-as-exfiltration (GemStuffer pattern)
-  - pattern: 'authorized_keys'
-    desc: SSH persistence via authorized_keys append
-  - pattern: 'ENV\s*\[\s*[''"]HOME[''"]\s*\]\s*=\s*[''"]\\/tmp\\/'
-    desc: redirect HOME to /tmp (GemStuffer)
-  - pattern: 'File\.binwrite\s*\(\s*[''"]\\/tmp\\\/\.'
-    desc: write hidden binary to /tmp (malware staging)
-  - pattern: '\bgem\s+push\s+[^\n]{0,60}\.gem'
-    desc: worm self-replication via fabricated gem publish (GemStuffer)
-  - pattern: 'drive\.usercontent\.google\.com/download'
-    desc: Google Drive CDN payload delivery (Contagious Interview Apr 2026)
-  - pattern: 'drive\.google\.com/uc\?[^"'']{0,60}export=download'
-    desc: Google Drive legacy direct-download
-  - pattern: '\.gem/credentials'
-    desc: credential theft — RubyGems API key file (BufferZoneCorp May 2026)
-  - pattern: '\.config/gh/hosts\.yml'
-    desc: credential theft — GitHub CLI auth token (BufferZoneCorp May 2026)
-  - pattern: 'File\.chmod\s*\(\s*0600\s*,[^\n]*\.gem[/\\]credentials'
-    desc: credential fabrication — chmod on .gem/credentials (GemStuffer May 2026)
-
+- pattern: Net::HTTP\b
+  desc: Ruby stdlib HTTP client
+- pattern: URI\.open\b
+  desc: Ruby URI.open (can fetch remote URIs)
+- pattern: open-uri
+  desc: Ruby open-uri library import
+- pattern: Faraday\b
+  desc: Faraday HTTP client gem
+- pattern: HTTParty\b
+  desc: HTTParty HTTP client gem
+- pattern: RestClient\b
+  desc: RestClient HTTP client gem
+- pattern: Excon\b
+  desc: Excon HTTP client gem
+- pattern: Typhoeus\b
+  desc: Typhoeus HTTP client gem
+- pattern: \bHTTP\.(get|post|head|put|delete|patch)\b
+  desc: http.rb gem HTTP method calls
+- pattern: rubygems\.org/api/v1/gems
+  desc: registry-as-exfiltration (GemStuffer pattern)
+- pattern: authorized_keys
+  desc: SSH persistence via authorized_keys append
+- pattern: ENV\s*\[\s*['\"]HOME['\"]\s*\]\s*=\s*['\"]\/tmp\/
+  desc: redirect HOME to /tmp (GemStuffer)
+- pattern: File\.binwrite\s*\(\s*['\"]\/tmp\/\.
+  desc: write hidden binary to /tmp (malware staging)
+- pattern: \bgem\s+push\s+[^\n]{0,60}\.gem
+  desc: worm self-replication via fabricated gem publish (GemStuffer)
+- pattern: drive\.usercontent\.google\.com/download
+  desc: Google Drive CDN payload delivery (Contagious Interview Apr 2026)
+- pattern: drive\.google\.com/uc\?[^\"']{0,60}export=download
+  desc: Google Drive legacy direct-download
+- pattern: \.gem/credentials
+  desc: credential theft - RubyGems API key file (BufferZoneCorp May 2026)
+- pattern: \.config/gh/hosts\.yml
+  desc: credential theft - GitHub CLI auth token (BufferZoneCorp May 2026)
+- pattern: File\.chmod\s*\(\s*0600\s*,[^\n]*\.gem[/\\]credentials
+  desc: credential fabrication - chmod on .gem/credentials (GemStuffer May 2026)
+- pattern: Dir\.home[^\n]{0,60}(?:\.aws|\.ssh|\.npmrc)
+  desc: credential file read via Dir.home in extconf.rb (BufferZoneCorp/GemStuffer Ruby gem install-time harvest)
 .py:
-  - pattern: '\brequests\.(get|post|put|delete|head|patch|request)\s*\('
-    desc: requests library HTTP call
-  - pattern: '\burllib\.request\b'
-    desc: urllib.request module usage
-  - pattern: '\burlopen\s*\('
-    desc: urllib urlopen call
-  - pattern: '\bhttpx\.(get|post|put|delete|head|patch|request|AsyncClient|Client)\b'
-    desc: httpx HTTP client call
-  - pattern: '\baiohttp\.(ClientSession|request)\b'
-    desc: aiohttp async HTTP client
-  - pattern: '\bhttp\.client\.(HTTPConnection|HTTPSConnection)\b'
-    desc: http.client low-level connection
-  - pattern: '\bsocket\.getaddrinfo\s*\('
-    desc: DNS lookups (C2-over-DNS pattern)
-  - pattern: '\bsocket\.gethostbyname\s*\('
-    desc: DNS hostname resolution
-  - pattern: '\bsubprocess\.(run|Popen|call|check_output|check_call)\s*\('
-    desc: OS exec in library
-  - pattern: '169\.254\.169\.254'
-    desc: AWS/GCP IMDS probe — credential harvesting
-  - pattern: 'api\.telegram\.org/bot'
-    desc: Telegram bot C2 exfiltration channel
-  - pattern: '\.icp0\.io'
-    desc: ICP canister C2 (CanisterWorm) — decentralised exfil endpoint
-  - pattern: 'open\s*\([^,]*(?:\.bashrc|\.zshrc|\.profile|bash_profile)[^,]*,\s*[''"]a[''"]'
-    desc: shell RC append
-  - pattern: 'subprocess\.[^\n]{0,60}["'']node["''][^\n]{0,20}["'']-e["'']'
-    desc: cross-lang node -e exec (Telnyx/TrapDoor)
-  - pattern: '\bsubprocess\.[^\n]{0,80}[''"](?:bun|deno)[''"][^\n]{0,40}\.(?:js|mjs|cjs)[''"]'
-    desc: cross-runtime JS payload (PyTorch Lightning Apr 2026)
-  - pattern: 'freemyip\.com|dnslog\.cn'
-    desc: free dynamic DNS C2 (Go Decimal typosquat May 2026)
-  - pattern: 'api\.mainnet-beta\.solana\.com'
-    desc: Solana RPC C2 dead-drop (GlassWorm)
-  - pattern: 'api\.(?:devnet|testnet)\.solana\.com'
-    desc: Solana non-mainnet RPC (same C2 pattern)
-  - pattern: 'discord\.com/api/webhooks/'
-    desc: Discord webhook exfil (Shai-Hulud / Yeshen-Asia)
-  - pattern: 'logs\.betterstack\.com|logtail\.com'
-    desc: BetterStack/Logtail exfil
-  - pattern: 'api\.github\.com/gists'
-    desc: GitHub Gist dead-drop
-  - pattern: 'pastebin\.com/raw/'
-    desc: Pastebin raw paste dead-drop (StegaBin C2 infrastructure)
-  - pattern: 'open\s*\([^)]*[''"]\\/proc\\/\d+\\/mem[''"]'
-    desc: /proc/PID/mem read — CI secret extraction bypassing log masking (SAP CAP)
-  - pattern: 'drive\.usercontent\.google\.com/download'
-    desc: Google Drive CDN payload delivery (Contagious Interview Apr 2026)
-  - pattern: 'drive\.google\.com/uc\?[^"'']{0,60}export=download'
-    desc: Google Drive legacy direct-download
-  - pattern: 'icanhazip\.com'
-    desc: public IP oracle used to fingerprint victim before C2 beacon (Coruna art-template May 2026)
-
+- pattern: \brequests\.(get|post|put|delete|head|patch|request)\s*\(
+  desc: requests library HTTP call
+- pattern: \burllib\.request\b
+  desc: urllib.request module usage
+- pattern: \burlopen\s*\(
+  desc: urllib urlopen call
+- pattern: \bhttpx\.(get|post|put|delete|head|patch|request|AsyncClient|Client)\b
+  desc: httpx HTTP client call
+- pattern: \baiohttp\.(ClientSession|request)\b
+  desc: aiohttp async HTTP client
+- pattern: \bhttp\.client\.(HTTPConnection|HTTPSConnection)\b
+  desc: http.client low-level connection
+- pattern: \bsocket\.getaddrinfo\s*\(
+  desc: DNS lookups (C2-over-DNS pattern)
+- pattern: \bsocket\.gethostbyname\s*\(
+  desc: DNS hostname resolution
+- pattern: \bsubprocess\.(run|Popen|call|check_output|check_call)\s*\(
+  desc: OS exec in library
+- pattern: 169\.254\.169\.254
+  desc: AWS/GCP IMDS probe - credential harvesting
+- pattern: api\.telegram\.org/bot
+  desc: Telegram bot C2 exfiltration channel
+- pattern: \.icp0\.io
+  desc: ICP canister C2 (CanisterWorm) - decentralised exfil endpoint
+- pattern: open\s*\([^,]*(?:\.bashrc|\.zshrc|\.profile|bash_profile)[^,]*,\s*['\"]a['\"]
+  desc: shell RC append
+- pattern: subprocess\.[^\n]{0,60}["']node["'][^\n]{0,20}["']-e["']
+  desc: cross-lang node -e exec (Telnyx/TrapDoor)
+- pattern: \bsubprocess\.[^\n]{0,80}['"](?:bun|deno)['"][^\n]{0,40}\.(?:js|mjs|cjs)['"]
+  desc: cross-runtime JS payload (PyTorch Lightning Apr 2026)
+- pattern: freemyip\.com|dnslog\.cn
+  desc: free dynamic DNS C2 (Go Decimal typosquat May 2026)
+- pattern: api\.mainnet-beta\.solana\.com
+  desc: Solana RPC C2 dead-drop (GlassWorm)
+- pattern: api\.(?:devnet|testnet)\.solana\.com
+  desc: Solana non-mainnet RPC (same C2 pattern)
+- pattern: discord\.com/api/webhooks/
+  desc: Discord webhook exfil (Shai-Hulud / Yeshen-Asia)
+- pattern: logs\.betterstack\.com|logtail\.com
+  desc: BetterStack/Logtail exfil
+- pattern: api\.github\.com/gists
+  desc: GitHub Gist dead-drop
+- pattern: pastebin\.com/raw/
+  desc: Pastebin raw paste dead-drop (StegaBin C2 infrastructure)
+- pattern: open\s*\([^)]*['\"]\/proc\/\d+\/mem['\"]
+  desc: /proc/PID/mem read - CI secret extraction bypassing log masking (SAP CAP)
+- pattern: drive\.usercontent\.google\.com/download
+  desc: Google Drive CDN payload delivery (Contagious Interview Apr 2026)
+- pattern: drive\.google\.com/uc\?[^\"']{0,60}export=download
+  desc: Google Drive legacy direct-download
+- pattern: icanhazip\.com
+  desc: public IP oracle used to fingerprint victim before C2 beacon (Coruna art-template May 2026)
+- pattern: api\.svix\.com/ingest
+  desc: Svix webhook SaaS as C2 dead-drop (TanStack brandsquat Apr 2026)
 .js:
-  - pattern: '\bfetch\s*\('
-    desc: fetch API outbound network call
-  - pattern: '\baxios\.(get|post|put|delete|request|create)\b'
-    desc: axios HTTP client call
-  - pattern: '\bhttps?\.(request|get)\s*\('
-    desc: Node.js http/https module call
-  - pattern: '\bXMLHttpRequest\b'
-    desc: browser XHR outbound call
-  - pattern: '\bgot\s*[\.(]'
-    desc: got HTTP client call
-  - pattern: '\bsuperagent\b'
-    desc: superagent HTTP client
-  - pattern: '\bnode-fetch\b'
-    desc: node-fetch import
-  - pattern: '\bdns\.resolveTxt\s*\('
-    desc: DNS TXT C2 (node-ipc, Go decimal pattern)
-  - pattern: '\bdns\.resolve(?:Txt|Host|Mx|Ns)?\s*\('
-    desc: DNS resolution (possible C2 channel)
-  - pattern: '\bdns\.lookup\s*\('
-    desc: DNS lookup
-  - pattern: '169\.254\.169\.254'
-    desc: AWS/GCP IMDS probe — credential harvesting
-  - pattern: 'api\.telegram\.org/bot'
-    desc: Telegram bot C2 exfiltration channel
-  - pattern: '\.icp0\.io'
-    desc: ICP canister C2 (CanisterWorm) — decentralised exfil endpoint
-  - pattern: '(?:appendFileSync|writeFile(?:Sync)?)\s*\([^,]*(?:\.bashrc|\.zshrc|\.profile|bash_profile)'
-    desc: shell RC injection
-  - pattern: 'getTransaction\s*\(|getSignaturesForAddress\s*\(|getAccountInfo\s*\('
-    desc: Solana RPC C2 dead-drop (GlassWorm)
-  - pattern: 'discord\.com/api/webhooks/'
-    desc: Discord webhook exfil (Shai-Hulud / Yeshen-Asia)
-  - pattern: 'logs\.betterstack\.com|logtail\.com'
-    desc: BetterStack/Logtail exfil
-  - pattern: 'api\.github\.com/gists'
-    desc: GitHub Gist dead-drop
-  - pattern: 'api\.github\.com/user/repos'
-    desc: GitHub repo creation as encrypted dead-drop (Mini Shai-Hulud)
-  - pattern: 'window\.ethereum\s*=|window\.solana\s*=|window\.phantom\s*='
-    desc: crypto wallet API monkey-patching (September 2025 npm)
-  - pattern: '\bfetch\s*=\s*(?!==)|XMLHttpRequest\.prototype\.\w+\s*='
-    desc: global fetch/XHR hijack (crypto drainer)
-  - pattern: '\bchild_process\b.*\.(exec|execSync|spawn|spawnSync)\s*\('
-    desc: OS shell execution in library (download-and-exec)
-  - pattern: 'require\s*\(\s*[''"]child_process[''"]\s*\)'
-    desc: child_process require (shell execution capability)
-  - pattern: 'pastebin\.com/raw/'
-    desc: Pastebin raw paste dead-drop (StegaBin C2 infrastructure)
-  - pattern: '(?:musl|glibc)[^\n]{0,120}(?:oven-sh/bun|bun/releases/download)'
-    desc: libc detection + Bun download (SAP CAP May 2026)
-  - pattern: 'filev2\.getsession\.org'
-    desc: Session P2P messenger C2 dead-drop (TanStack/Mini Shai-Hulud May 2026)
-  - pattern: 'api\.github\.com/graphql[^\n]{0,200}createCommitOnBranch'
-    desc: GraphQL commit spoofing (Mini Shai-Hulud)
-  - pattern: 'drive\.usercontent\.google\.com/download'
-    desc: Google Drive CDN payload delivery (Contagious Interview Apr 2026)
-  - pattern: 'drive\.google\.com/uc\?[^"'']{0,60}export=download'
-    desc: Google Drive legacy direct-download (same campaign)
-  - pattern: 'azurestaticprovider\.net'
-    desc: lookalike Azure domain used for DNS TXT C2 (node-ipc stealer May 2026)
-  - pattern: '\bchild_process\b[^\n]{0,80}\bfork\s*\('
-    desc: child_process.fork in library code (node-ipc detached stealer process)
-  - pattern: 'icanhazip\.com'
-    desc: public IP oracle used to fingerprint victim before C2 beacon (Coruna art-template May 2026)
-
+- pattern: \bfetch\s*\(
+  desc: fetch API outbound network call
+- pattern: \baxios\.(get|post|put|delete|request|create)\b
+  desc: axios HTTP client call
+- pattern: \bhttps?\.(request|get)\s*\(
+  desc: Node.js http/https module call
+- pattern: \bXMLHttpRequest\b
+  desc: browser XHR outbound call
+- pattern: \bgot\s*[\.(]
+  desc: got HTTP client call
+- pattern: \bsuperagent\b
+  desc: superagent HTTP client
+- pattern: \bnode-fetch\b
+  desc: node-fetch import
+- pattern: \bdns\.resolveTxt\s*\(
+  desc: DNS TXT C2 (node-ipc, Go decimal pattern)
+- pattern: \bdns\.resolve(?:Txt|Host|Mx|Ns)?\s*\(
+  desc: DNS resolution (possible C2 channel)
+- pattern: \bdns\.lookup\s*\(
+  desc: DNS lookup
+- pattern: 169\.254\.169\.254
+  desc: AWS/GCP IMDS probe - credential harvesting
+- pattern: api\.telegram\.org/bot
+  desc: Telegram bot C2 exfiltration channel
+- pattern: \.icp0\.io
+  desc: ICP canister C2 (CanisterWorm) - decentralised exfil endpoint
+- pattern: (?:appendFileSync|writeFile(?:Sync)?)\s*\([^,]*(?:\.bashrc|\.zshrc|\.profile|bash_profile)
+  desc: shell RC injection
+- pattern: getTransaction\s*\(|getSignaturesForAddress\s*\(|getAccountInfo\s*\(
+  desc: Solana RPC C2 dead-drop (GlassWorm)
+- pattern: discord\.com/api/webhooks/
+  desc: Discord webhook exfil (Shai-Hulud / Yeshen-Asia)
+- pattern: logs\.betterstack\.com|logtail\.com
+  desc: BetterStack/Logtail exfil
+- pattern: api\.github\.com/gists
+  desc: GitHub Gist dead-drop
+- pattern: api\.github\.com/user/repos
+  desc: GitHub repo creation as encrypted dead-drop (Mini Shai-Hulud)
+- pattern: window\.ethereum\s*=|window\.solana\s*=|window\.phantom\s*=
+  desc: crypto wallet API monkey-patching (September 2025 npm)
+- pattern: \bfetch\s*=\s*(?!==)|XMLHttpRequest\.prototype\.\w+\s*=
+  desc: global fetch/XHR hijack (crypto drainer)
+- pattern: \bchild_process\b.*\.(exec|execSync|spawn|spawnSync)\s*\(
+  desc: OS shell execution in library (download-and-exec)
+- pattern: require\s*\(\s*['\"]child_process['\"]\s*\)
+  desc: child_process require (shell execution capability)
+- pattern: pastebin\.com/raw/
+  desc: Pastebin raw paste dead-drop (StegaBin C2 infrastructure)
+- pattern: (?:musl|glibc)[^\n]{0,120}(?:oven-sh/bun|bun/releases/download)
+  desc: libc detection + Bun download (SAP CAP May 2026)
+- pattern: filev2\.getsession\.org
+  desc: Session P2P messenger C2 dead-drop (TanStack/Mini Shai-Hulud May 2026)
+- pattern: api\.github\.com/graphql[^\n]{0,200}createCommitOnBranch
+  desc: GraphQL commit spoofing (Mini Shai-Hulud)
+- pattern: drive\.usercontent\.google\.com/download
+  desc: Google Drive CDN payload delivery (Contagious Interview Apr 2026)
+- pattern: drive\.google\.com/uc\?[^\"']{0,60}export=download
+  desc: Google Drive legacy direct-download (same campaign)
+- pattern: azurestaticprovider\.net
+  desc: lookalike Azure domain used for DNS TXT C2 (node-ipc stealer May 2026)
+- pattern: \bchild_process\b[^\n]{0,80}\bfork\s*\(
+  desc: child_process.fork in library code (node-ipc detached stealer process)
+- pattern: icanhazip\.com
+  desc: public IP oracle used to fingerprint victim before C2 beacon (Coruna art-template May 2026)
+- pattern: \bdns\.setServers\s*\(
+  desc: custom DNS resolver bootstrap - overrides system resolver to avoid detection (node-ipc stealer May 2026)
+- pattern: api\.svix\.com/ingest
+  desc: Svix webhook SaaS used as C2 dead-drop for stolen .env data (TanStack brandsquat Apr 2026)
 .ts:
-  - pattern: '\bfetch\s*\('
-    desc: fetch API outbound network call
-  - pattern: '\baxios\.(get|post|put|delete|request|create)\b'
-    desc: axios HTTP client call
-  - pattern: '\bhttps?\.(request|get)\s*\('
-    desc: Node.js http/https module call
-  - pattern: '\bXMLHttpRequest\b'
-    desc: browser XHR outbound call
-  - pattern: 'getTransaction\s*\(|getSignaturesForAddress\s*\(|getAccountInfo\s*\('
-    desc: Solana RPC C2
-  - pattern: 'discord\.com/api/webhooks/'
-    desc: Discord webhook exfil
-  - pattern: 'logs\.betterstack\.com|logtail\.com'
-    desc: BetterStack/Logtail exfil
-  - pattern: 'window\.ethereum\s*=|window\.solana\s*='
-    desc: wallet monkey-patching
-
+- pattern: \bfetch\s*\(
+  desc: fetch API outbound network call
+- pattern: \baxios\.(get|post|put|delete|request|create)\b
+  desc: axios HTTP client call
+- pattern: \bhttps?\.(request|get)\s*\(
+  desc: Node.js http/https module call
+- pattern: \bXMLHttpRequest\b
+  desc: browser XHR outbound call
+- pattern: getTransaction\s*\(|getSignaturesForAddress\s*\(|getAccountInfo\s*\(
+  desc: Solana RPC C2
+- pattern: discord\.com/api/webhooks/
+  desc: Discord webhook exfil
+- pattern: logs\.betterstack\.com|logtail\.com
+  desc: BetterStack/Logtail exfil
+- pattern: window\.ethereum\s*=|window\.solana\s*=
+  desc: wallet monkey-patching
 .cjs:
-  - pattern: '\bfetch\s*\('
-    desc: fetch API outbound network call
-  - pattern: '\baxios\.(get|post|put|delete|request|create)\b'
-    desc: axios HTTP client call
-  - pattern: '\bhttps?\.(request|get)\s*\('
-    desc: Node.js http/https module call
-  - pattern: '\bXMLHttpRequest\b'
-    desc: browser XHR outbound call
-  - pattern: '\bgot\s*[\.(]'
-    desc: got HTTP client call
-  - pattern: '\bdns\.resolveTxt\s*\('
-    desc: DNS TXT C2 (node-ipc used .cjs specifically to evade .js checks)
-  - pattern: '\bdns\.resolve(?:Txt|Host|Mx|Ns)?\s*\('
-    desc: DNS resolution (possible C2 channel)
-  - pattern: '\bdns\.lookup\s*\('
-    desc: DNS lookup
-  - pattern: '169\.254\.169\.254'
-    desc: AWS/GCP IMDS probe — credential harvesting
-  - pattern: 'api\.telegram\.org/bot'
-    desc: Telegram bot C2 exfiltration channel
-  - pattern: '\.icp0\.io'
-    desc: ICP canister C2 (CanisterWorm) — decentralised exfil endpoint
-  - pattern: '(?:appendFileSync|writeFile(?:Sync)?)\s*\([^,]*(?:\.bashrc|\.zshrc|\.profile|bash_profile)'
-    desc: shell RC injection
-  - pattern: 'getTransaction\s*\(|getSignaturesForAddress\s*\('
-    desc: Solana RPC C2
-  - pattern: 'discord\.com/api/webhooks/'
-    desc: Discord webhook exfil
-  - pattern: 'api\.github\.com/gists'
-    desc: GitHub Gist dead-drop
-  - pattern: '\bchild_process\b.*\.(exec|execSync|spawn|spawnSync)\s*\('
-    desc: OS shell execution
-  - pattern: 'require\s*\(\s*[''"]child_process[''"]\s*\)'
-    desc: child_process require
-  - pattern: 'pastebin\.com/raw/'
-    desc: Pastebin raw paste dead-drop
-  - pattern: 'azurestaticprovider\.net'
-    desc: lookalike Azure domain used for DNS TXT C2 (node-ipc stealer May 2026)
-  - pattern: '\bchild_process\b[^\n]{0,80}\bfork\s*\('
-    desc: child_process.fork in library (node-ipc detached stealer process)
-  - pattern: 'icanhazip\.com'
-    desc: public IP oracle used to fingerprint victim before C2 beacon (Coruna art-template May 2026)
-
+- pattern: \bfetch\s*\(
+  desc: fetch API outbound network call
+- pattern: \baxios\.(get|post|put|delete|request|create)\b
+  desc: axios HTTP client call
+- pattern: \bhttps?\.(request|get)\s*\(
+  desc: Node.js http/https module call
+- pattern: \bXMLHttpRequest\b
+  desc: browser XHR outbound call
+- pattern: \bgot\s*[\.(]
+  desc: got HTTP client call
+- pattern: \bdns\.resolveTxt\s*\(
+  desc: DNS TXT C2 (node-ipc used .cjs specifically to evade .js checks)
+- pattern: \bdns\.resolve(?:Txt|Host|Mx|Ns)?\s*\(
+  desc: DNS resolution (possible C2 channel)
+- pattern: \bdns\.lookup\s*\(
+  desc: DNS lookup
+- pattern: 169\.254\.169\.254
+  desc: AWS/GCP IMDS probe - credential harvesting
+- pattern: api\.telegram\.org/bot
+  desc: Telegram bot C2 exfiltration channel
+- pattern: \.icp0\.io
+  desc: ICP canister C2 (CanisterWorm) - decentralised exfil endpoint
+- pattern: (?:appendFileSync|writeFile(?:Sync)?)\s*\([^,]*(?:\.bashrc|\.zshrc|\.profile|bash_profile)
+  desc: shell RC injection
+- pattern: getTransaction\s*\(|getSignaturesForAddress\s*\(
+  desc: Solana RPC C2
+- pattern: discord\.com/api/webhooks/
+  desc: Discord webhook exfil
+- pattern: api\.github\.com/gists
+  desc: GitHub Gist dead-drop
+- pattern: \bchild_process\b.*\.(exec|execSync|spawn|spawnSync)\s*\(
+  desc: OS shell execution
+- pattern: require\s*\(\s*['\"]child_process['\"]\s*\)
+  desc: child_process require
+- pattern: pastebin\.com/raw/
+  desc: Pastebin raw paste dead-drop
+- pattern: azurestaticprovider\.net
+  desc: lookalike Azure domain used for DNS TXT C2 (node-ipc stealer May 2026)
+- pattern: \bchild_process\b[^\n]{0,80}\bfork\s*\(
+  desc: child_process.fork in library (node-ipc detached stealer process)
+- pattern: icanhazip\.com
+  desc: public IP oracle used to fingerprint victim before C2 beacon (Coruna art-template May 2026)
+- pattern: \bdns\.setServers\s*\(
+  desc: custom DNS resolver bootstrap (node-ipc stealer May 2026)
+- pattern: api\.svix\.com/ingest
+  desc: Svix webhook SaaS as C2 dead-drop (TanStack brandsquat Apr 2026)
 .mjs:
-  - pattern: '\bfetch\s*\('
-    desc: fetch API outbound network call
-  - pattern: '\baxios\b'
-    desc: axios import/usage
-  - pattern: '\bhttps?\.(request|get)\s*\('
-    desc: Node.js http/https module call
-  - pattern: 'discord\.com/api/webhooks/'
-    desc: Discord webhook exfil
-  - pattern: 'window\.ethereum\s*=|window\.solana\s*='
-    desc: wallet monkey-patching
-
+- pattern: \bfetch\s*\(
+  desc: fetch API outbound network call
+- pattern: \baxios\b
+  desc: axios import/usage
+- pattern: \bhttps?\.(request|get)\s*\(
+  desc: Node.js http/https module call
+- pattern: discord\.com/api/webhooks/
+  desc: Discord webhook exfil
+- pattern: window\.ethereum\s*=|window\.solana\s*=
+  desc: wallet monkey-patching
 .php:
-  - pattern: '\bcurl_exec\s*\('
-    desc: PHP curl execution
-  - pattern: '\bcurl_init\s*\('
-    desc: PHP curl init
-  - pattern: '\bfile_get_contents\s*\(\s*[''"]https?://'
-    desc: PHP file_get_contents remote URL fetch
-  - pattern: '\bGuzzleHttp\\'
-    desc: Guzzle HTTP client
-  - pattern: '\\Http\\Client\b'
-    desc: PHP HTTP client
-  - pattern: '(?:shell_exec|passthru|popen)\s*\(\s*[''"](?:curl|wget)\b'
-    desc: shell binary download (Intercom PHP)
-  - pattern: 'github\.com/[^/]+/[^/]+/releases/download/bun-'
-    desc: Bun runtime drop (Intercom PHP, SAP CAP)
-  - pattern: '\bexec\s*\(\s*[''"]php\s'
-    desc: PHP subprocess staging — drops payload to sys_get_temp_dir() then self-executes (Laravel Lang May 2026)
-  - pattern: 'sys_get_temp_dir\s*\(\s*\)\s*\.\s*[''"]\/\.'
-    desc: write to hidden path inside sys_get_temp_dir() — payload staging (Laravel Lang May 2026)
-
+- pattern: \bcurl_exec\s*\(
+  desc: PHP curl execution
+- pattern: \bcurl_init\s*\(
+  desc: PHP curl init
+- pattern: \bfile_get_contents\s*\(\s*['\"]https?://
+  desc: PHP file_get_contents remote URL fetch
+- pattern: \bGuzzleHttp\\
+  desc: Guzzle HTTP client
+- pattern: \\Http\\Client\b
+  desc: PHP HTTP client
+- pattern: (?:shell_exec|passthru|popen)\s*\(\s*['\"](?:curl|wget)\b
+  desc: shell binary download (Intercom PHP)
+- pattern: github\.com/[^/]+/[^/]+/releases/download/bun-
+  desc: Bun runtime drop (Intercom PHP, SAP CAP)
+- pattern: \bexec\s*\(\s*['\"]php\s
+  desc: PHP subprocess staging (Laravel Lang May 2026)
+- pattern: sys_get_temp_dir\s*\(\s*\)\s*\.\s*['\"]\/\.
+  desc: write to hidden path inside sys_get_temp_dir() - payload staging (Laravel Lang May 2026)
 .java:
-  - pattern: '\bHttpClient\b'
-    desc: Java HttpClient
-  - pattern: '\bHttpURLConnection\b'
-    desc: Java HttpURLConnection
-  - pattern: '\bOkHttpClient\b'
-    desc: OkHttp client
-  - pattern: '\bRestTemplate\b'
-    desc: Spring RestTemplate
-  - pattern: '\bWebClient\b'
-    desc: Spring WebClient
-
+- pattern: \bHttpClient\b
+  desc: Java HttpClient
+- pattern: \bHttpURLConnection\b
+  desc: Java HttpURLConnection
+- pattern: \bOkHttpClient\b
+  desc: OkHttp client
+- pattern: \bRestTemplate\b
+  desc: Spring RestTemplate
+- pattern: \bWebClient\b
+  desc: Spring WebClient
 .go:
-  - pattern: '\bhttp\.(Get|Post|Head)\s*\('
-    desc: net/http outbound calls
-  - pattern: '\bhttp\.NewRequest\s*\('
-    desc: net/http request construction
-  - pattern: '\bnet\.LookupTXT\s*\('
-    desc: DNS TXT C2 (Go decimal typosquat pattern)
-  - pattern: '\bnet\.LookupHost\s*\('
-    desc: DNS host lookup
-  - pattern: '\bnet\.LookupIP\s*\('
-    desc: DNS IP lookup
-  - pattern: '\bnet\.Dial\s*\('
-    desc: raw TCP dial
-  - pattern: '\bnet\.DialTCP\s*\('
-    desc: raw TCP dial (explicit)
-  - pattern: '\bos\.Setenv\s*\(\s*"GOPROXY"'
-    desc: redirect module downloads to attacker proxy
-  - pattern: '\bos\.Setenv\s*\(\s*"GOSUMDB"'
-    desc: disable checksum verification
-  - pattern: 'os\.Getenv\s*\(\s*"GITHUB_ENV"\s*\)'
-    desc: CI env-file poisoning (inject into Actions env)
-  - pattern: 'os\.Getenv\s*\(\s*"GITHUB_PATH"\s*\)'
-    desc: CI PATH poisoning (inject fake binaries)
-  - pattern: 'authorized_keys'
-    desc: SSH persistence via authorized_keys append
-  - pattern: '\bexec\.Command\s*\('
-    desc: subprocess execution in Go library code (BufferZoneCorp)
-  - pattern: 'freemyip\.com|dnslog\.cn'
-    desc: free dynamic DNS C2 (Go Decimal typosquat May 2026)
-  - pattern: '\bos\.Setenv\s*\(\s*"GOFLAGS"'
-    desc: force unsafe module resolution (-mod=mod) (BufferZoneCorp May 2026)
-  - pattern: '\bos\.Setenv\s*\(\s*"GONOSUMDB"'
-    desc: disable checksum verification for all modules
-  - pattern: '\bos\.Setenv\s*\(\s*"GOMODCACHE"'
-    desc: redirect module cache to attacker-controlled path
-
+- pattern: \bhttp\.(Get|Post|Head)\s*\(
+  desc: net/http outbound calls
+- pattern: \bhttp\.NewRequest\s*\(
+  desc: net/http request construction
+- pattern: \bnet\.LookupTXT\s*\(
+  desc: DNS TXT C2 (Go decimal typosquat pattern)
+- pattern: \bnet\.LookupHost\s*\(
+  desc: DNS host lookup
+- pattern: \bnet\.LookupIP\s*\(
+  desc: DNS IP lookup
+- pattern: \bnet\.Dial\s*\(
+  desc: raw TCP dial
+- pattern: \bnet\.DialTCP\s*\(
+  desc: raw TCP dial (explicit)
+- pattern: \bos\.Setenv\s*\(\s*"GOPROXY"
+  desc: redirect module downloads to attacker proxy
+- pattern: \bos\.Setenv\s*\(\s*"GOSUMDB"
+  desc: disable checksum verification
+- pattern: os\.Getenv\s*\(\s*"GITHUB_ENV"\s*\)
+  desc: CI env-file poisoning (inject into Actions env)
+- pattern: os\.Getenv\s*\(\s*"GITHUB_PATH"\s*\)
+  desc: CI PATH poisoning (inject fake binaries)
+- pattern: authorized_keys
+  desc: SSH persistence via authorized_keys append
+- pattern: \bexec\.Command\s*\(
+  desc: subprocess execution in Go library code (BufferZoneCorp)
+- pattern: freemyip\.com|dnslog\.cn
+  desc: free dynamic DNS C2 (Go Decimal typosquat May 2026)
+- pattern: \bos\.Setenv\s*\(\s*"GOFLAGS"
+  desc: force unsafe module resolution (-mod=mod) (BufferZoneCorp May 2026)
+- pattern: \bos\.Setenv\s*\(\s*"GONOSUMDB"
+  desc: disable checksum verification for all modules
+- pattern: \bos\.Setenv\s*\(\s*"GOMODCACHE"
+  desc: redirect module cache to attacker-controlled path
 .rs:
-  - pattern: '\breqwest::(get|post|Client|blocking)\b'
-    desc: reqwest — most common Rust HTTP client
-  - pattern: '\bTcpStream::connect\s*\('
-    desc: raw TCP (data exfiltration)
-  - pattern: '\bstd::net::TcpStream\b'
-    desc: Rust stdlib TCP stream
-  - pattern: '\bUdpSocket::bind\b'
-    desc: UDP socket bind
-
+- pattern: \breqwest::(get|post|Client|blocking)\b
+  desc: reqwest - most common Rust HTTP client
+- pattern: \bTcpStream::connect\s*\(
+  desc: raw TCP (data exfiltration)
+- pattern: \bstd::net::TcpStream\b
+  desc: Rust stdlib TCP stream
+- pattern: \bUdpSocket::bind\b
+  desc: UDP socket bind
 .cs:
-  - pattern: '\bHttpClient\b'
-    desc: .NET HttpClient
-  - pattern: '\bWebClient\b'
-    desc: .NET WebClient
-  - pattern: '\bHttpWebRequest\b'
-    desc: .NET HttpWebRequest
-  - pattern: '\bWebRequest\.Create\s*\('
-    desc: .NET WebRequest.Create
-  - pattern: '\bTcpClient\b'
-    desc: .NET TcpClient
-  - pattern: '\bUdpClient\b'
-    desc: .NET UdpClient
-  - pattern: '\bDns\.GetHostEntry\s*\('
-    desc: DNS lookup (C2-over-DNS)
-  - pattern: '\bDns\.Resolve\s*\('
-    desc: DNS resolve
+- pattern: \bHttpClient\b
+  desc: .NET HttpClient
+- pattern: \bWebClient\b
+  desc: .NET WebClient
+- pattern: \bHttpWebRequest\b
+  desc: .NET HttpWebRequest
+- pattern: \bWebRequest\.Create\s*\(
+  desc: .NET WebRequest.Create
+- pattern: \bTcpClient\b
+  desc: .NET TcpClient
+- pattern: \bUdpClient\b
+  desc: .NET UdpClient
+- pattern: \bDns\.GetHostEntry\s*\(
+  desc: DNS lookup (C2-over-DNS)
+- pattern: \bDns\.Resolve\s*\(
+  desc: DNS resolve

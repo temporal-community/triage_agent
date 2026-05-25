@@ -25,7 +25,7 @@ Each provider must implement all seven of the following. Note that the workflow 
 
 | Method | What it returns | Primary data source |
 |---|---|---|
-| `fetch_metadata` | `PyPIChecks` — weekly downloads, major-bump flag, description | Registry API |
+| `fetch_metadata` | `MetadataChecks` — weekly downloads, major-bump flag, description | Registry API |
 | `fetch_release_age` | `ReleaseAgeChecks` — hours since the version was published | Registry upload timestamp |
 | `fetch_maintainer` | `MaintainerChecks` — whether a new maintainer was added for this version | Registry maintainer list |
 | `get_archive_url` | `(url, filename, sha256)` or `None` | Registry file index |
@@ -41,7 +41,7 @@ Each provider must implement all seven of the following. Note that the workflow 
 # ecosystems/myecosystem.py
 import re
 from ecosystems import EcosystemProviderBase, validate_archive_url, ...
-from models import AttestationChecks, MaintainerChecks, PyPIChecks, ReleaseAgeChecks, ReleaseChecks
+from models import AttestationChecks, MaintainerChecks, MetadataChecks, ReleaseAgeChecks, ReleaseChecks
 
 class MyEcosystemProvider(EcosystemProviderBase):
     ecosystem_name  = "myecosystem"          # must be unique
@@ -49,7 +49,7 @@ class MyEcosystemProvider(EcosystemProviderBase):
     dependabot_slug = "my_ecosystem"         # Dependabot branch prefix
     name_re         = re.compile(r"^[a-z0-9_-]+$")  # package name allowlist
 
-    async def fetch_metadata(self, package, old_version, new_version) -> PyPIChecks: ...
+    async def fetch_metadata(self, package, old_version, new_version) -> MetadataChecks: ...
     async def fetch_release_age(self, package, new_version) -> ReleaseAgeChecks: ...
     async def fetch_maintainer(self, package, old_version, new_version) -> MaintainerChecks: ...
     async def get_archive_url(self, client, package, version) -> tuple[str, str, str] | None: ...
