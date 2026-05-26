@@ -57,9 +57,11 @@ The most common mistake is reaching for a classic PAT with `repo` scope. That gr
 
 A token with no scopes still authenticates your requests and raises the rate limit from 60 to 5,000 req/hour — which is the main reason you need one at all for `triage.py`. GitHub returns 403 (not 429) when the unauthenticated limit is exceeded, which can look like a permissions error.
 
-**Fine-grained PAT (preferred)** — create one at GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens:
+**Fine-grained PAT (preferred)** — create one at GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens.
 
-| Use case | Permissions needed |
+On the token creation page there are two separate permission sections: **Repository permissions** and **Account permissions**. Contents, Pull requests, and Metadata are all under **Repository permissions** — ignore the Account permissions section entirely.
+
+| Use case | Repository permissions needed |
 |---|---|
 | `triage.py` / `triage_all.py` (read-only) | Metadata: Read-only · Contents: Read-only · Pull requests: Read-only |
 | Worker — post comments | + Pull requests: Read and write |
