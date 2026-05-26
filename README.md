@@ -134,7 +134,7 @@ The Scout works with zero configuration — rule-based classifier, no PR comment
 | `GITHUB_TOKEN` or GitHub App | Posts real PR comments on GitHub |
 | `GITLAB_TOKEN` | Posts real MR comments on GitLab |
 | `ENABLE_PR_ACTIONS=true` | Can automatically merge GREEN PRs and/or close RED ones |
-| `SOCKET_API_KEY` | Adds Socket.dev supply-chain score check |
+| `SOCKET_API_KEY` | Adds Socket.dev supply-chain score check ([create token](https://socket.dev/dashboard/settings/api-tokens) — scope: `packages:list`) |
 
 Copy `.env.example` to `.env` and fill in what you have, or run `uv run python setup.py` to be walked through it interactively.
 
