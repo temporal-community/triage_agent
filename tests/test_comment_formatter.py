@@ -302,14 +302,26 @@ def test_signals_maintainer_warn_when_changed(pr, green_verdict, signals):
 def test_signals_age_ok_above_168h(pr, green_verdict, signals):
     signals.age.release_age_hours = 200.0
     out = format_comment(pr, green_verdict, signals)
-    assert "released 200h ago" in out
+    assert "released 8 days ago" in out
 
 
 def test_signals_age_warn_below_168h(pr, green_verdict, signals):
     signals.age.release_age_hours = 48.0
     out = format_comment(pr, green_verdict, signals)
     assert "⚠️" in out
-    assert "released 48h ago" in out
+    assert "released 2 days ago" in out
+
+
+def test_signals_age_months(pr, green_verdict, signals):
+    signals.age.release_age_hours = 3277.0  # 136 days → 4 months 16 days
+    out = format_comment(pr, green_verdict, signals)
+    assert "released 4 months 16 days ago" in out
+
+
+def test_signals_age_hours_when_under_24h(pr, green_verdict, signals):
+    signals.age.release_age_hours = 10.0
+    out = format_comment(pr, green_verdict, signals)
+    assert "released 10h ago" in out
 
 
 def test_signals_age_na_when_unknown(pr, green_verdict, signals):

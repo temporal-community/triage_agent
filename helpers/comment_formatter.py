@@ -17,6 +17,26 @@ def _sanitize_reasoning(text: str) -> str:
     return text
 
 
+def _format_age(hours: float) -> str:
+    days = int(hours // 24)
+    if days == 0:
+        return f"{int(hours)}h"
+    if days < 14:
+        return f"{days} day{'s' if days != 1 else ''}"
+    if days < 60:
+        w, d = divmod(days, 7)
+        s = f"{w} week{'s' if w != 1 else ''}"
+        return s + (f" {d} day{'s' if d != 1 else ''}" if d else "")
+    if days < 365:
+        mo, d = divmod(days, 30)
+        s = f"{mo} month{'s' if mo != 1 else ''}"
+        return s + (f" {d} day{'s' if d != 1 else ''}" if d else "")
+    yr, rem = divmod(days, 365)
+    mo = rem // 30
+    s = f"{yr} year{'s' if yr != 1 else ''}"
+    return s + (f" {mo} month{'s' if mo != 1 else ''}" if mo else "")
+
+
 _STATUS_ICON = {"ok": "✅", "warn": "⚠️", "bad": "🚨", "na": "—"}
 
 _CHECK_LABEL = {
@@ -69,7 +89,7 @@ def _signals_table(signals: PackageChecks) -> list[str]:
 
     h = signals.age.release_age_hours
     if h is not None:
-        _row("age", "warn" if h < 168 else "ok", f"released {h:.0f}h ago")
+        _row("age", "warn" if h < 168 else "ok", f"released {_format_age(h)} ago")
     else:
         _row("age", "na", "release age unknown")
 
