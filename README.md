@@ -82,13 +82,13 @@ uv run python triage.py --ecosystem pip --package requests --old 2.31.0 --new 2.
 
 The classifier defaults to rule-based (entirely local, no keys needed). Set `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or `OLLAMA_HOST` to use an LLM instead. Set `GITHUB_TOKEN` for higher API rate limits and private repos.
 
-When you want this to run **automatically on every PR** — with retry, the human-approval loop, and optional auto-merge — read on.
+When you're ready to process all your currently open PRs at once, add Temporal.
 
 ---
 
-## Full automated setup (5 minutes)
+## Batch-triage your open PRs
 
-Run the Scout as a persistent worker that picks up every new Dependabot or Renovate PR automatically — no manual runs needed. The worker posts a GREEN/YELLOW/RED comment on each PR and, if you've opted in, can auto-merge GREEN ones or close RED ones without you lifting a finger.
+Point the Scout at a repo and it will triage every open Dependabot or Renovate PR in one shot. Temporal handles fan-out and retries; the Temporal UI shows you what happened to each one.
 
 You need Python 3.10+, [`uv`](https://docs.astral.sh/uv/), and the [Temporal CLI](https://docs.temporal.io/cli).
 
@@ -108,19 +108,17 @@ Then:
 # Terminal 1 — Temporal dev server (runs in memory on your machine — no sign-up, no payment)
 temporal server start-dev
 
-# Terminal 2 — Scout worker (picks up triage jobs and runs the analysis)
+# Terminal 2 — Scout worker
 uv run python -m worker
 
-# Test a triage run against a real public package (no API keys needed)
-uv run python -m start_workflow \
-  --repo temporalio/ai-cookbook \
-  --package idna \
-  --old-version 3.11 \
-  --new-version 3.15 \
-  --pr-number 122
+# Triage every open Dependabot/Renovate PR in a repo
+uv run python triage_all.py --repo temporalio/ai-cookbook
+
+# Or limit to a subset while you're getting a feel for it
+uv run python triage_all.py --repo temporalio/ai-cookbook --limit 5
 ```
 
-Open **http://localhost:8233** to watch the workflow run in the Temporal UI. No API keys needed — it'll use the rule-based classifier and log what it would do without touching the actual PR.
+Open **http://localhost:8233** to watch each workflow run in the Temporal UI. No API keys needed — it'll use the rule-based classifier; without `GITHUB_TOKEN` it runs in dry-run mode (no PR comments posted).
 
 ### Configure your stack
 
@@ -139,6 +137,10 @@ The Scout works with zero configuration — rule-based classifier, no PR comment
 | `SOCKET_API_KEY` | Adds Socket.dev supply-chain score check |
 
 Copy `.env.example` to `.env` and fill in what you have, or run `uv run python setup.py` to be walked through it interactively.
+
+### What's next: continuous triage on every new PR
+
+Once you're happy with the results, you can set up the Scout as a persistent webhook listener — it triages every new Dependabot or Renovate PR automatically and can auto-merge GREEN ones or close RED ones. This requires a server that stays up when your laptop closes. See [docs/deployment.md](docs/deployment.md).
 
 ---
 
