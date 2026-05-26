@@ -10,6 +10,7 @@ from models.checks import (
     ReleaseAgeChecks,
     ReleaseChecks,
     ScorecardChecks,
+    SecurityAdvisoryChecks,
     SocketChecks,
     VersionLineageChecks,
 )
@@ -32,6 +33,7 @@ __all__ = [
     "ReleaseAgeChecks",
     "ReleaseChecks",
     "ScorecardChecks",
+    "SecurityAdvisoryChecks",
     "SocketChecks",
     "VersionLineageChecks",
     "Verdict",

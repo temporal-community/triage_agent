@@ -123,3 +123,9 @@ class VersionLineageChecks(BaseModel):
     )
     latest_major: int | None = None  # highest stable major in the registry
     bump_major: int | None = None  # major of the version being bumped to
+
+
+class SecurityAdvisoryChecks(BaseModel):
+    fixed_vulnerabilities: list[str] = []  # CVE/OSV IDs that are in old_version but not new_version
+    fixed_summaries: list[str] = []  # brief human-readable description for each fixed vuln
+    fixed_severity: list[str] = []  # CRITICAL/HIGH/MEDIUM/LOW per fixed vuln

@@ -31,6 +31,7 @@ from models import (
     ReleaseChecks,
     RepoConfig,
     ScorecardChecks,
+    SecurityAdvisoryChecks,
     SocketChecks,
     Verdict,
     VersionLineageChecks,
@@ -220,6 +221,14 @@ def _scorecard():
     return fetch
 
 
+def _security_advisory():
+    @activity.defn(name="activities.security_advisories.fetch")
+    async def fetch(*_):
+        return SecurityAdvisoryChecks()
+
+    return fetch
+
+
 def _custom_checks():
     @activity.defn(name="activities.custom_checks.run_all")
     async def run_all(_: CheckContext) -> dict:
@@ -285,6 +294,7 @@ async def _run_scenario(
         _version_lineage(),
         _depsdev(),
         _scorecard(),
+        _security_advisory(),
         _custom_checks(),
         _classifier(classification),
         _repo_config(config),

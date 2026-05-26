@@ -40,10 +40,14 @@ RED — likely supply chain attack. ANY of:
   - install_script_changed=true with suspicious diff content — modified install hook;
     treat as RED if the diff adds network calls, credential access, or obfuscated code;
     treat as YELLOW if the change is clearly benign (e.g., version string update)
-  - obfuscated_code=true — AUTOMATIC RED, no exceptions. Even when there is a
-    plausible benign explanation (e.g. "this looks like minified frontend JS"),
-    human verification is required to confirm it. Do not downgrade to YELLOW
-    based on a contextual hypothesis — that defeats the purpose of the signal.
+  - obfuscated_code=true — strong RED signal, but first research whether it is a
+    known benign pattern for this package (e.g. a bundled admin UI, minified React
+    assets, or a browser-target JS file that is well-known for the project). Use
+    web_search to look up the package and "obfuscated code" or "minified JS" before
+    concluding RED. If research confirms the obfuscated content is a legitimately
+    bundled UI or widely-acknowledged minified asset for this specific package, YELLOW
+    is appropriate with a clear explanation. If you cannot confirm a benign explanation,
+    treat as RED — human verification is required.
   - exec/eval on dynamic strings
   - new network call whose result is passed to exec/eval/pickle.loads
   - filesystem access to credentials paths (~/.npmrc, ~/.aws, ~/.ssh, etc.)
@@ -141,6 +145,13 @@ a security-sensitive role.
 Be conservative. When uncertain between GREEN and YELLOW, choose YELLOW.
 When uncertain between YELLOW and RED, choose YELLOW unless there are
 explicit malware indicators.
+
+When SECURITY ADVISORIES FIXED BY THIS BUMP are present, factor them into your verdict:
+- Fixed CRITICAL/HIGH CVEs make upgrading urgent — do not block on minor risk signals
+  that would normally trigger RED (e.g. obfuscated_code in a package that is widely known
+  to bundle a minified admin UI). Use web_search to confirm the context.
+- Fixed vulnerabilities do NOT excuse new malware indicators (install script, worm pattern,
+  artifact/source mismatch) — those are still RED regardless.
 
 Cite specific signal values in your reasoning. Reference the diff when relevant.
 

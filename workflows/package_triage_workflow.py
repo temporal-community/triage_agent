@@ -20,6 +20,7 @@ with workflow.unsafe.imports_passed_through():
         VersionLineageChecks,
         DepsDevChecks,
         ScorecardChecks,
+        SecurityAdvisoryChecks,
     )
 
 # Single source of truth for check activities:
@@ -42,6 +43,7 @@ _CHECK_REGISTRY: list[tuple[str, str, type, bool]] = [
     ("version_lineage", "activities.version_lineage.check", VersionLineageChecks, False),
     ("deps_dev", "activities.depsdev.fetch", DepsDevChecks, False),
     ("scorecard", "activities.scorecard.fetch", ScorecardChecks, False),
+    ("advisory", "activities.security_advisories.fetch", SecurityAdvisoryChecks, False),
 ]
 
 # Derived from the registry — used by tests/test_check_wiring.py to verify worker registration.

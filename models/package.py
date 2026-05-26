@@ -11,6 +11,7 @@ from models.checks import (
     ReleaseAgeChecks,
     ReleaseChecks,
     ScorecardChecks,
+    SecurityAdvisoryChecks,
     SocketChecks,
     VersionLineageChecks,
 )
@@ -33,6 +34,7 @@ class PackageChecks(BaseModel):
     version_lineage: VersionLineageChecks = Field(default_factory=VersionLineageChecks)
     deps_dev: DepsDevChecks = Field(default_factory=DepsDevChecks)
     scorecard: ScorecardChecks = Field(default_factory=ScorecardChecks)
+    advisory: SecurityAdvisoryChecks = Field(default_factory=SecurityAdvisoryChecks)
     custom_checks: dict[str, Any] = Field(default_factory=dict)  # plugin-supplied check results
 
     @field_validator("ecosystem")
