@@ -191,11 +191,20 @@ async def run(ecosystem: str, package: str, old_version: str, new_version: str) 
     else:
         clf_name = None
 
+    has_github_token = bool(os.environ.get("GITHUB_TOKEN"))
+
     setup_rows = [
         (
             "ok",
             "Core checks",
             "OSV, diff analysis, release age, maintainer history, version lineage, and more",
+        ),
+        (
+            "ok" if has_github_token else "info",
+            "GitHub",
+            "Authenticated API access"
+            if has_github_token
+            else "Add GITHUB_TOKEN to .env for higher rate limits and private repos",
         ),
         (
             "ok" if has_socket_key else "info",

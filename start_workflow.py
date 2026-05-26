@@ -30,7 +30,7 @@ async def main() -> None:
     parser.add_argument("--new-version", required=True, dest="new_version")
     parser.add_argument("--pr-number", type=int, default=1, dest="pr_number")
     parser.add_argument("--installation-id", type=int, default=0, dest="installation_id")
-    parser.add_argument("--ecosystem", default="pip", choices=["pip", "npm"])
+    parser.add_argument("--ecosystem", default="pip")
     args = parser.parse_args()
 
     tls: TLSConfig | bool = False
