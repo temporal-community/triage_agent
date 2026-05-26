@@ -444,5 +444,5 @@ def test_reasoning_long_shows_collapsible(pr):
     assert "</details>" in out
     # preview blockquote is present and truncated
     lines = out.splitlines()
-    blockquote_lines = [l for l in lines if l.startswith("> ")]
-    assert any(l.endswith("…") for l in blockquote_lines)
+    blockquote_lines = [ln for ln in lines if ln.startswith("> ")]
+    assert any(ln.endswith("…") for ln in blockquote_lines)
