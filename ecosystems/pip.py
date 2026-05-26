@@ -32,7 +32,7 @@ from models import (
     ReleaseAgeChecks,
     ReleaseChecks,
 )
-from helpers.http import get_client, get_with_retry
+from helpers.http import get_client
 
 
 class PipProvider(EcosystemProviderBase):
@@ -262,13 +262,18 @@ class PipProvider(EcosystemProviderBase):
 
 
 async def _fetch_weekly_downloads(client: httpx.AsyncClient, package: str) -> int | None:
-    resp = await get_with_retry(
+    resp = await client.get(
         f"https://pypistats.org/api/packages/{package.lower()}/recent",
         headers={"Accept": "application/json"},
+        timeout=10.0,
     )
-    if resp is not None and resp.status_code == 200:
+    if resp.status_code == 404:
+        return None  # Package not indexed by pypistats — permanent, not worth retrying
+    resp.raise_for_status()  # 5xx → propagates → Temporal retries the activity
+    try:
         return resp.json()["data"]["last_week"]
-    return None
+    except (KeyError, ValueError):
+        return None  # Unexpected response shape — treat as unavailable
 
 
 async def _fetch_version_info(client: httpx.AsyncClient, package: str, version: str) -> dict | None:

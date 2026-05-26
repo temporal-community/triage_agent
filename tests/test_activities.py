@@ -90,15 +90,15 @@ async def test_metadata_404_raises_non_retryable():
 
 
 @respx.mock
-async def test_metadata_pypistats_failure_returns_none():
+async def test_metadata_pypistats_5xx_raises_for_temporal_retry():
     respx.get(f"{PYPI_BASE}/requests/2.32.0/json").mock(
         return_value=httpx.Response(200, json=_pypi_response("requests", "2.32.0"))
     )
     respx.get(f"{PYPISTATS_BASE}/requests/recent").mock(return_value=httpx.Response(500))
 
     env = ActivityEnvironment()
-    result = await env.run(metadata_fetch, "pip", "requests", "2.31.0", "2.32.0")
-    assert result.weekly_downloads is None
+    with pytest.raises(Exception):
+        await env.run(metadata_fetch, "pip", "requests", "2.31.0", "2.32.0")
 
 
 # ---------------------------------------------------------------------------
@@ -226,7 +226,7 @@ async def test_maintainer_fetch_error_returns_no_change():
 
 
 @respx.mock
-async def test_metadata_pypistats_network_error_returns_none():
+async def test_metadata_pypistats_network_error_raises_for_temporal_retry():
     respx.get(f"{PYPI_BASE}/requests/2.32.0/json").mock(
         return_value=httpx.Response(200, json=_pypi_response("requests", "2.32.0"))
     )
@@ -234,8 +234,8 @@ async def test_metadata_pypistats_network_error_returns_none():
         side_effect=httpx.ConnectError("network down")
     )
     env = ActivityEnvironment()
-    result = await env.run(metadata_fetch, "pip", "requests", "2.31.0", "2.32.0")
-    assert result.weekly_downloads is None
+    with pytest.raises(Exception):
+        await env.run(metadata_fetch, "pip", "requests", "2.31.0", "2.32.0")
 
 
 def test_pypi_is_major_non_semver_returns_false():
@@ -356,27 +356,27 @@ async def test_npm_metadata_404_raises_non_retryable():
 
 
 @respx.mock
-async def test_npm_metadata_downloads_failure_returns_none():
+async def test_npm_metadata_downloads_5xx_raises_for_temporal_retry():
     respx.get(f"{NPM_BASE}/lodash/4.17.21").mock(
         return_value=httpx.Response(200, json={"name": "lodash", "description": "Lodash"})
     )
     respx.get(f"{NPM_DOWNLOADS_BASE}/lodash").mock(return_value=httpx.Response(500))
 
     env = ActivityEnvironment()
-    result = await env.run(metadata_fetch, "npm", "lodash", "4.17.20", "4.17.21")
-    assert result.weekly_downloads is None
+    with pytest.raises(Exception):
+        await env.run(metadata_fetch, "npm", "lodash", "4.17.20", "4.17.21")
 
 
 @respx.mock
-async def test_npm_metadata_downloads_network_error_returns_none():
+async def test_npm_metadata_downloads_network_error_raises_for_temporal_retry():
     respx.get(f"{NPM_BASE}/lodash/4.17.21").mock(
         return_value=httpx.Response(200, json={"name": "lodash", "description": "Lodash"})
     )
     respx.get(f"{NPM_DOWNLOADS_BASE}/lodash").mock(side_effect=httpx.ConnectError("down"))
 
     env = ActivityEnvironment()
-    result = await env.run(metadata_fetch, "npm", "lodash", "4.17.20", "4.17.21")
-    assert result.weekly_downloads is None
+    with pytest.raises(Exception):
+        await env.run(metadata_fetch, "npm", "lodash", "4.17.20", "4.17.21")
 
 
 @respx.mock
@@ -531,17 +531,16 @@ async def test_rubygems_metadata_fetch_success():
 
 
 @respx.mock
-async def test_rubygems_metadata_weekly_downloads_fallback_on_error():
-    """weekly_downloads is None when the search endpoint fails — metadata fetch still succeeds."""
+async def test_rubygems_metadata_weekly_downloads_5xx_raises_for_temporal_retry():
+    """5xx from the downloads endpoint propagates so Temporal can retry the activity."""
     respx.get(f"{RUBYGEMS_API}/rails.json").mock(
         return_value=httpx.Response(200, json={"info": "Framework", "downloads": 100})
     )
     respx.get(RUBYGEMS_DL_SEARCH).mock(return_value=httpx.Response(500))
 
     env = ActivityEnvironment()
-    result = await env.run(metadata_fetch, "rubygems", "rails", "7.0.0", "7.1.0")
-    assert result.weekly_downloads is None
-    assert result.is_major_bump is False
+    with pytest.raises(Exception):
+        await env.run(metadata_fetch, "rubygems", "rails", "7.0.0", "7.1.0")
 
 
 @respx.mock
@@ -549,7 +548,8 @@ async def test_rubygems_metadata_major_bump():
     respx.get(f"{RUBYGEMS_API}/rails.json").mock(
         return_value=httpx.Response(200, json={"info": "Framework", "downloads": 100})
     )
-    respx.get(RUBYGEMS_DL_SEARCH).mock(return_value=httpx.Response(500))
+    # 404 = gem not indexed in downloads API — returns None gracefully (no propagation)
+    respx.get(RUBYGEMS_DL_SEARCH).mock(return_value=httpx.Response(404))
 
     env = ActivityEnvironment()
     result = await env.run(metadata_fetch, "rubygems", "rails", "7.1.0", "8.0.0")
@@ -572,7 +572,8 @@ async def test_rubygems_metadata_empty_description():
     respx.get(f"{RUBYGEMS_API}/mygem.json").mock(
         return_value=httpx.Response(200, json={"info": "", "downloads": 0})
     )
-    respx.get(RUBYGEMS_DL_SEARCH).mock(return_value=httpx.Response(500))
+    # 404 = gem not indexed in downloads API — returns None gracefully (no propagation)
+    respx.get(RUBYGEMS_DL_SEARCH).mock(return_value=httpx.Response(404))
 
     env = ActivityEnvironment()
     result = await env.run(metadata_fetch, "rubygems", "mygem", "1.0.0", "1.0.1")

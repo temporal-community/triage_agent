@@ -27,7 +27,7 @@ from models import (
     ReleaseAgeChecks,
     ReleaseChecks,
 )
-from helpers.http import get_client, get_with_retry
+from helpers.http import get_client
 
 
 class RubyGemsProvider(EcosystemProviderBase):
@@ -250,16 +250,21 @@ async def _fetch_weekly_downloads(client: httpx.AsyncClient, package: str) -> in
     """
     to_date = date.today() - timedelta(days=1)  # yesterday (most recent complete day)
     from_date = to_date - timedelta(days=6)  # 7 days total
-    resp = await get_with_retry(
+    resp = await client.get(
         "https://rubygems.org/api/v1/downloads/search.json",
         params={
             "from": from_date.isoformat(),
             "to": to_date.isoformat(),
             "gem_name": package,
         },
+        timeout=10.0,
     )
-    if resp is not None and resp.status_code == 200:
+    if resp.status_code == 404:
+        return None  # Gem not found in downloads API — permanent
+    resp.raise_for_status()  # 5xx → propagates → Temporal retries the activity
+    try:
         daily = resp.json().get("rubygems") or {}
         total = sum(daily.values())
         return total if total > 0 else None
-    return None
+    except (ValueError, TypeError):
+        return None

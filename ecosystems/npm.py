@@ -29,7 +29,7 @@ from models import (
     ReleaseAgeChecks,
     ReleaseChecks,
 )
-from helpers.http import get_client, get_with_retry
+from helpers.http import get_client
 
 
 class NpmProvider(EcosystemProviderBase):
@@ -253,10 +253,17 @@ class NpmProvider(EcosystemProviderBase):
 
 
 async def _fetch_weekly_downloads(client: httpx.AsyncClient, package: str) -> int | None:
-    resp = await get_with_retry(f"https://api.npmjs.org/downloads/point/last-week/{package}")
-    if resp is not None and resp.status_code == 200:
+    resp = await client.get(
+        f"https://api.npmjs.org/downloads/point/last-week/{package}",
+        timeout=10.0,
+    )
+    if resp.status_code == 404:
+        return None  # Package not in npm downloads API — permanent
+    resp.raise_for_status()  # 5xx → propagates → Temporal retries the activity
+    try:
         return resp.json().get("downloads")
-    return None
+    except ValueError:
+        return None
 
 
 async def _fetch_version(client: httpx.AsyncClient, package: str, version: str) -> dict | None:
