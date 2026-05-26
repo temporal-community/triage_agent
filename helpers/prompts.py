@@ -40,7 +40,10 @@ RED — likely supply chain attack. ANY of:
   - install_script_changed=true with suspicious diff content — modified install hook;
     treat as RED if the diff adds network calls, credential access, or obfuscated code;
     treat as YELLOW if the change is clearly benign (e.g., version string update)
-  - obfuscated code, base64 blobs, hex-encoded strings
+  - obfuscated_code=true — AUTOMATIC RED, no exceptions. Even when there is a
+    plausible benign explanation (e.g. "this looks like minified frontend JS"),
+    human verification is required to confirm it. Do not downgrade to YELLOW
+    based on a contextual hypothesis — that defeats the purpose of the signal.
   - exec/eval on dynamic strings
   - new network call whose result is passed to exec/eval/pickle.loads
   - filesystem access to credentials paths (~/.npmrc, ~/.aws, ~/.ssh, etc.)

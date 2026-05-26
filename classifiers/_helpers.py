@@ -140,6 +140,26 @@ def _rule_based(signals: PackageChecks) -> Verdict:
             new_dependency_count=signals.diff.new_dependency_count,
         )
 
+    # Hard RED: obfuscated code — even when there's a plausible benign explanation
+    # (e.g. minified frontend JS), human verification is required; downgrading to YELLOW
+    # based on a contextual hypothesis defeats the purpose of the signal.
+    if signals.diff.obfuscated_code:
+        return Verdict(
+            classification="red",
+            confidence=0.88,
+            reasoning=(
+                "Obfuscated code detected in the diff — eval/atob chains, _0x vars, "
+                "gzip+base64 payloads, or >100KB single lines. "
+                "Human review required to confirm this is benign (e.g. minified frontend JS)."
+            ),
+            flags=[
+                "machine-generated obfuscation detected (eval/atob chains, _0x vars, or >100KB single line) — "
+                "review for hidden credential harvesting or C2 payload"
+            ],
+            release_age_hours=signals.age.release_age_hours,
+            new_dependency_count=signals.diff.new_dependency_count,
+        )
+
     # Collect yellow signals
     if signals.metadata.is_major_bump:
         flags.append("major version bump")
@@ -165,11 +185,6 @@ def _rule_based(signals: PackageChecks) -> Verdict:
         flags.append(
             "new dependency sourced from git/GitHub URL rather than registry — "
             "bypasses registry malware scanning (Mini Shai-Hulud / TanStack pattern)"
-        )
-    if signals.diff.obfuscated_code:
-        flags.append(
-            "machine-generated obfuscation detected (eval/atob chains, _0x vars, or >100KB single line) — "
-            "review for hidden credential harvesting or C2 payload"
         )
     if signals.diff.lockfile_integrity_downgraded:
         flags.append(

@@ -1463,7 +1463,7 @@ def test_classifier_flags_obfuscated_code():
         ),
     )
     verdict = _rule_based(signals)
-    assert verdict.classification == "yellow"
+    assert verdict.classification == "red"
     assert any("obfuscat" in f.lower() for f in verdict.flags)
 
 
