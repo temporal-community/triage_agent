@@ -24,9 +24,9 @@ auto_merge_enabled: false
 auto_merge_classifications: [green]
 
 # Minimum classifier confidence (0.0–1.0) required before auto-merge fires.
-# 0.80 means "the classifier must be at least 80% sure this is green".
-# Raise this if you want the bot to be more conservative.
-auto_merge_min_confidence: 0.80
+# 0.90 means "the classifier must be at least 90% sure this is green".
+# See docs/security.md before lowering this below 0.90.
+auto_merge_min_confidence: 0.90
 
 # Never auto-merge a release published less than this many hours ago,
 # even if the verdict is GREEN. Gives time for community review of fresh releases.

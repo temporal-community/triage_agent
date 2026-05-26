@@ -177,6 +177,7 @@ pip/uv, npm, RubyGems, Cargo, Composer, Maven/Gradle, NuGet, Go modules, GitHub 
 - [Configuration reference](docs/configuration.md) — every `.github/dependency-scout.yml` field
 - [How it works](docs/architecture.md) — two-workflow design, checks, classifier, security hardening
 - [Deployment](docs/deployment.md) — production setup, secrets, Temporal options, scaling
+- [Security hardening](docs/security.md) — token scoping, auto-merge thresholds, prompt injection
 - [Contributing](docs/contributing.md) — adding checks, ecosystems, detection patterns, design principles
 - [Extending with plugins](docs/extending.md) — ecosystem, classifier, platform, and check plugins
 

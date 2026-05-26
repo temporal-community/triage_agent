@@ -49,7 +49,7 @@ class RepoConfig(BaseModel):
     reviewers: list[str] = []
     min_release_age_hours: int = 168  # 7 days
     auto_merge_classifications: list[str] = ["green"]
-    auto_merge_min_confidence: float = 0.80  # classifier must reach this confidence to auto-merge
+    auto_merge_min_confidence: float = 0.90  # classifier must reach this confidence to auto-merge
     block_classifications: list[str] = [
         "red"
     ]  # close PRs classified as RED by default; set [] to observe-only

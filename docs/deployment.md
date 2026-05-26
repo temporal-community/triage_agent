@@ -2,6 +2,8 @@
 
 This guide covers running the Scout in production — secrets management, Temporal server options, webhook ingress, and monitoring. For local dev, `uv run python setup.py` is all you need.
 
+Before going to production, read [security.md](security.md) — it covers GitHub token scoping, auto-merge confidence thresholds, and prompt injection hardening.
+
 For a description of the three-process architecture (Temporal server, worker, webhook API), see [architecture.md](architecture.md).
 
 ---
