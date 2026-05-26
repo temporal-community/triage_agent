@@ -280,7 +280,7 @@ async def _triage_single(args: argparse.Namespace) -> None:
         PRActionWorkflow.run,
         pr,
         id=workflow_id,
-        task_queue=os.environ.get("TEMPORAL_TASK_QUEUE", "dependency-triage"),
+        task_queue=os.environ.get("TEMPORAL_TASK_QUEUE", "dependency-scout"),
     )
 
     ui_base = os.environ.get("TEMPORAL_UI_BASE_URL", "http://localhost:8233")
@@ -325,7 +325,7 @@ async def _triage_one(
         PRActionWorkflow.run,
         pr,
         id=workflow_id,
-        task_queue=os.environ.get("TEMPORAL_TASK_QUEUE", "dependency-triage"),
+        task_queue=os.environ.get("TEMPORAL_TASK_QUEUE", "dependency-scout"),
     )
     return pr_data, parsed, await handle.result()
 

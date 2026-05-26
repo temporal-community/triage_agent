@@ -192,7 +192,7 @@ The webhook API and worker both log to stdout/stderr in structured format:
 
 ```
 INFO uvicorn: Started server process
-INFO worker: Worker started — task_queue=dependency-triage temporal=localhost:7233 activities=12
+INFO worker: Worker started — task_queue=dependency-scout temporal=localhost:7233 activities=12
 INFO api.webhook: Started workflow pr-action-myorg-myrepo-123 for myorg/myrepo#123 (pip requests 2.31.0→2.32.0)
 WARNING api.webhook: Could not parse package/version from PR title — skipping myorg/myrepo#124. Title: 'Update CI'
 ```

@@ -98,7 +98,7 @@ async def lifespan(app: FastAPI):
         "Connected to Temporal at %s (namespace=%s, task_queue=%s)",
         os.environ.get("TEMPORAL_ADDRESS", "localhost:7233"),
         os.environ.get("TEMPORAL_NAMESPACE", "default"),
-        os.environ.get("TEMPORAL_TASK_QUEUE", "dependency-triage"),
+        os.environ.get("TEMPORAL_TASK_QUEUE", "dependency-scout"),
     )
     yield
 
@@ -131,7 +131,7 @@ async def _start_workflow(pr_context: PRContext) -> str:
         PRActionWorkflow.run,
         pr_context,
         id=workflow_id,
-        task_queue=os.environ.get("TEMPORAL_TASK_QUEUE", "dependency-triage"),
+        task_queue=os.environ.get("TEMPORAL_TASK_QUEUE", "dependency-scout"),
         id_reuse_policy=WorkflowIDReusePolicy.ALLOW_DUPLICATE_FAILED_ONLY,
         execution_timeout=timedelta(days=30),
     )

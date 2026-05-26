@@ -326,7 +326,7 @@ For local testing without a GitHub App, `GITHUB_TOKEN` (a classic PAT) works ins
 # Temporal
 TEMPORAL_ADDRESS=localhost:7233
 TEMPORAL_NAMESPACE=default
-TEMPORAL_TASK_QUEUE=dependency-triage
+TEMPORAL_TASK_QUEUE=dependency-scout
 TEMPORAL_UI_BASE_URL=http://localhost:8233
 
 # Anthropic (optional — enables LLM classifier)

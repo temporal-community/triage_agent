@@ -431,7 +431,7 @@ def collect_temporal_config() -> tuple[dict[str, str], str]:
         return {
             "TEMPORAL_ADDRESS": "localhost:7233",
             "TEMPORAL_NAMESPACE": "default",
-            "TEMPORAL_TASK_QUEUE": "dependency-triage",
+            "TEMPORAL_TASK_QUEUE": "dependency-scout",
             "TEMPORAL_UI_BASE_URL": "http://localhost:8233",
         }, "skip"
 
@@ -439,7 +439,7 @@ def collect_temporal_config() -> tuple[dict[str, str], str]:
         return {
             "TEMPORAL_ADDRESS": "localhost:7233",
             "TEMPORAL_NAMESPACE": "default",
-            "TEMPORAL_TASK_QUEUE": "dependency-triage",
+            "TEMPORAL_TASK_QUEUE": "dependency-scout",
             "TEMPORAL_UI_BASE_URL": "http://localhost:8233",
         }, "local"
 
@@ -463,7 +463,7 @@ def collect_temporal_config() -> tuple[dict[str, str], str]:
     return {
         "TEMPORAL_ADDRESS": address,
         "TEMPORAL_NAMESPACE": namespace,
-        "TEMPORAL_TASK_QUEUE": "dependency-triage",
+        "TEMPORAL_TASK_QUEUE": "dependency-scout",
         "TEMPORAL_UI_BASE_URL": "https://cloud.temporal.io",
         "TEMPORAL_TLS_CERT": cert_path,
         "TEMPORAL_TLS_KEY": key_path,

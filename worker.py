@@ -123,7 +123,7 @@ async def main() -> None:
     _check_config()
     address = os.environ.get("TEMPORAL_ADDRESS", "localhost:7233")
     namespace = os.environ.get("TEMPORAL_NAMESPACE", "default")
-    task_queue = os.environ.get("TEMPORAL_TASK_QUEUE", "dependency-triage")
+    task_queue = os.environ.get("TEMPORAL_TASK_QUEUE", "dependency-scout")
 
     tls: TLSConfig | bool = False
     cert_path = os.environ.get("TEMPORAL_TLS_CERT")
