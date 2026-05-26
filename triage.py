@@ -77,14 +77,8 @@ def _info(s: str) -> str:
     return f"{_C}{s}{_RST}"
 
 
-def _link(url: str, text: str | None = None) -> str:
-    label = text or url
-    return f"\033]8;;{url}\a{label}\033]8;;\a"
-
-
-def _link_dim(url: str, text: str | None = None) -> str:
-    label = text or url
-    return f"\033]8;;{url}\a{_DIM}{label}{_RST}\033]8;;\a"
+def _link_dim(url: str) -> str:
+    return _dim(url)
 
 
 # ---------------------------------------------------------------------------
@@ -286,7 +280,7 @@ async def _triage_single(args: argparse.Namespace) -> None:
     verdict = _verdict_from_result(result)
     print(f"  {_color_verdict(verdict)}  {_dim(result)}")
     if not args.dry_run and has_github and pr_number:
-        print(f"  PR: {_link(f'https://github.com/{repo}/pull/{pr_number}')}")
+        print(f"  PR: https://github.com/{repo}/pull/{pr_number}")
     print()
 
 
@@ -406,7 +400,7 @@ async def _triage_batch(args: argparse.Namespace) -> None:
             f"{parsed.old_version} → {parsed.new_version}"
         )
         wf_url = f"{ui_base}/namespaces/{ns}/workflows/{wf_id}"
-        print(f"        PR:       {_link(pr_url)}{comment_note}")
+        print(f"        PR:       {pr_url}{comment_note}")
         print(f"        Workflow: {_link_dim(wf_url)}")
 
     total = sum(counts.values())
