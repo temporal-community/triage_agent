@@ -97,7 +97,9 @@ class GitLabPlatformClient:
         encoded = quote(pr.repo, safe="")
         return f"{self._base_url}/api/v4/projects/{encoded}"
 
-    async def comment(self, pr: PRContext, verdict: Verdict, signals: PackageChecks | None = None) -> None:
+    async def comment(
+        self, pr: PRContext, verdict: Verdict, signals: PackageChecks | None = None
+    ) -> None:
         body = format_comment(pr, verdict, signals)
         if self._dry_run():
             activity.logger.info(f"[dry-run] Would post on {pr.repo}!{pr.pr_number}:\n{body}")

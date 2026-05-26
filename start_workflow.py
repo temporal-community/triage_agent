@@ -39,6 +39,9 @@ async def _fetch_pr(url: str) -> tuple[str, str, str, str, int]:
     token = os.environ.get("GITHUB_TOKEN")
     if token:
         headers["Authorization"] = f"Bearer {token}"
+        print(f"  GITHUB_TOKEN: set (starts with {token[:8]}...)")
+    else:
+        print("  GITHUB_TOKEN: not set — unauthenticated request (60 req/hour limit)")
 
     async with httpx.AsyncClient(timeout=15.0) as client:
         resp = await client.get(
@@ -48,7 +51,11 @@ async def _fetch_pr(url: str) -> tuple[str, str, str, str, int]:
     if resp.status_code == 404:
         sys.exit(f"PR not found: {url}  (private repo? set GITHUB_TOKEN in .env)")
     if resp.status_code != 200:
-        sys.exit(f"GitHub API error {resp.status_code} fetching {url}")
+        try:
+            detail = resp.json().get("message", resp.text[:200])
+        except Exception:
+            detail = resp.text[:200]
+        sys.exit(f"GitHub API error {resp.status_code} fetching {url}\n  {detail}")
 
     data = resp.json()
     parsed = parse_pr(

@@ -1,13 +1,5 @@
-import os
 import re
 from models import PRContext, PackageChecks, Verdict
-
-
-def _config_url(pr: PRContext) -> str:
-    if pr.platform == "gitlab":
-        base = os.environ.get("GITLAB_BASE_URL", "https://gitlab.com").rstrip("/")
-        return f"{base}/{pr.repo}/-/blob/HEAD/.gitlab/dependency-scout.yml"
-    return f"https://github.com/{pr.repo}/blob/HEAD/.github/dependency-scout.yml"
 
 
 _MAX_REASONING_LEN = 500
@@ -127,7 +119,6 @@ _FLAG_FOLD_THRESHOLD = 3
 
 def format_comment(pr: PRContext, verdict: Verdict, signals: PackageChecks | None = None) -> str:
     badge = _BADGE.get(verdict.classification, verdict.classification.upper())
-    config_url = _config_url(pr)
 
     lines = [
         f"## Dependency Scout — {badge}",
@@ -162,7 +153,9 @@ def format_comment(pr: PRContext, verdict: Verdict, signals: PackageChecks | Non
         lines += _signals_table(signals) + [""]
 
     lines += [
-        f"[Configure triage behavior]({config_url})",
+        "---",
+        "_[Dependency Scout](https://github.com/temporal-community/dependency-scout) — "
+        "automated supply-chain vetting for Dependabot/Renovate PRs_",
     ]
 
     return "\n".join(lines)

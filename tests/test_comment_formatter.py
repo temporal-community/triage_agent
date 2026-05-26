@@ -218,9 +218,19 @@ def test_signals_table_header_present(pr, green_verdict, signals):
 
 def test_signals_all_checks_present(pr, green_verdict, signals):
     out = format_comment(pr, green_verdict, signals)
-    for label in ("Downloads", "Socket score", "Vulnerabilities", "Diff scan",
-                  "Maintainer", "Release age", "Attestation", "Release notes",
-                  "Version lineage", "Deprecation", "OpenSSF Scorecard"):
+    for label in (
+        "Downloads",
+        "Socket score",
+        "Vulnerabilities",
+        "Diff scan",
+        "Maintainer",
+        "Release age",
+        "Attestation",
+        "Release notes",
+        "Version lineage",
+        "Deprecation",
+        "OpenSSF Scorecard",
+    ):
         assert label in out, f"missing check row: {label}"
 
 
@@ -337,9 +347,10 @@ def test_signals_deprecated_bad(pr, green_verdict, signals):
 # --- URL generation ---
 
 
-def test_config_url_points_to_repo(pr, green_verdict):
+def test_footer_contains_repo_link(pr, green_verdict):
     out = format_comment(pr, green_verdict)
-    assert "https://github.com/owner/repo/blob/HEAD/.github/dependency-scout.yml" in out
+    assert "https://github.com/temporal-community/dependency-scout" in out
+    assert "Dependency Scout" in out
 
 
 # --- reasoning is sanitized in output ---

@@ -108,7 +108,9 @@ class GitHubPlatformClient:
     def _repo_url(self, pr: PRContext) -> str:
         return f"https://api.github.com/repos/{pr.repo}"
 
-    async def comment(self, pr: PRContext, verdict: Verdict, signals: PackageChecks | None = None) -> None:
+    async def comment(
+        self, pr: PRContext, verdict: Verdict, signals: PackageChecks | None = None
+    ) -> None:
         body = format_comment(pr, verdict, signals)
         if self._dry_run():
             activity.logger.info(f"[dry-run] Would post on {pr.repo}#{pr.pr_number}:\n{body}")
