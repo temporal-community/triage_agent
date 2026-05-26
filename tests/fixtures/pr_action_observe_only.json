@@ -4,7 +4,7 @@
     "events": [
       {
         "eventId": "1",
-        "eventTime": "2026-05-26T10:10:16.140Z",
+        "eventTime": "2026-05-26T10:36:51.815Z",
         "eventType": "EVENT_TYPE_WORKFLOW_EXECUTION_STARTED",
         "workflowExecutionStartedEventAttributes": {
           "workflowType": {
@@ -26,9 +26,9 @@
           "workflowExecutionTimeout": "315360000s",
           "workflowRunTimeout": "315360000s",
           "workflowTaskTimeout": "10s",
-          "originalExecutionRunId": "0ba2925b-8c2f-48b4-8577-c298fd462cde",
-          "identity": "20613@Angies-MacBook-Pro.local",
-          "firstExecutionRunId": "0ba2925b-8c2f-48b4-8577-c298fd462cde",
+          "originalExecutionRunId": "f7cf5d62-62eb-455e-90c6-6ec464166ae5",
+          "identity": "22094@Angies-MacBook-Pro.local",
+          "firstExecutionRunId": "f7cf5d62-62eb-455e-90c6-6ec464166ae5",
           "attempt": 1,
           "firstWorkflowTaskBackoff": "0s",
           "priority": {}
@@ -36,7 +36,7 @@
       },
       {
         "eventId": "2",
-        "eventTime": "2026-05-26T10:10:16.140Z",
+        "eventTime": "2026-05-26T10:36:51.815Z",
         "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
         "workflowTaskScheduledEventAttributes": {
           "taskQueue": {
@@ -48,26 +48,26 @@
       },
       {
         "eventId": "3",
-        "eventTime": "2026-05-26T10:10:16.140Z",
+        "eventTime": "2026-05-26T10:36:51.815Z",
         "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
         "workflowTaskStartedEventAttributes": {
           "scheduledEventId": "2",
-          "identity": "20613@Angies-MacBook-Pro.local"
+          "identity": "22094@Angies-MacBook-Pro.local"
         }
       },
       {
         "eventId": "4",
-        "eventTime": "2026-05-26T10:10:16.150Z",
+        "eventTime": "2026-05-26T10:36:51.825Z",
         "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
         "workflowTaskCompletedEventAttributes": {
           "scheduledEventId": "2",
-          "identity": "20613@Angies-MacBook-Pro.local",
-          "binaryChecksum": "594740ea1b4642178876cb07b663e7e4",
+          "identity": "22094@Angies-MacBook-Pro.local",
+          "binaryChecksum": "417261810f229ca42962416189fd1af3",
           "sdkMetadata": {
             "coreUsedFlags": [
-              3,
               1,
-              2
+              2,
+              3
             ],
             "sdkName": "temporal-python",
             "sdkVersion": "1.27.2"
@@ -77,7 +77,7 @@
       },
       {
         "eventId": "5",
-        "eventTime": "2026-05-26T10:10:16.150Z",
+        "eventTime": "2026-05-26T10:36:51.825Z",
         "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
         "activityTaskScheduledEventAttributes": {
           "activityId": "1",
@@ -115,17 +115,17 @@
       },
       {
         "eventId": "6",
-        "eventTime": "2026-05-26T10:10:16.150Z",
+        "eventTime": "2026-05-26T10:36:51.825Z",
         "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
         "activityTaskStartedEventAttributes": {
           "scheduledEventId": "5",
-          "identity": "20613@Angies-MacBook-Pro.local",
+          "identity": "22094@Angies-MacBook-Pro.local",
           "attempt": 1
         }
       },
       {
         "eventId": "7",
-        "eventTime": "2026-05-26T10:10:16.151Z",
+        "eventTime": "2026-05-26T10:36:51.825Z",
         "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
         "activityTaskCompletedEventAttributes": {
           "result": {
@@ -140,12 +140,12 @@
           },
           "scheduledEventId": "5",
           "startedEventId": "6",
-          "identity": "20613@Angies-MacBook-Pro.local"
+          "identity": "22094@Angies-MacBook-Pro.local"
         }
       },
       {
         "eventId": "8",
-        "eventTime": "2026-05-26T10:10:16.151Z",
+        "eventTime": "2026-05-26T10:36:51.825Z",
         "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
         "workflowTaskScheduledEventAttributes": {
           "taskQueue": {
@@ -157,28 +157,28 @@
       },
       {
         "eventId": "9",
-        "eventTime": "2026-05-26T10:10:16.151Z",
+        "eventTime": "2026-05-26T10:36:51.825Z",
         "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
         "workflowTaskStartedEventAttributes": {
           "scheduledEventId": "8",
-          "identity": "20613@Angies-MacBook-Pro.local"
+          "identity": "22094@Angies-MacBook-Pro.local"
         }
       },
       {
         "eventId": "10",
-        "eventTime": "2026-05-26T10:10:16.152Z",
+        "eventTime": "2026-05-26T10:36:51.827Z",
         "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
         "workflowTaskCompletedEventAttributes": {
           "scheduledEventId": "8",
-          "identity": "20613@Angies-MacBook-Pro.local",
-          "binaryChecksum": "594740ea1b4642178876cb07b663e7e4",
+          "identity": "22094@Angies-MacBook-Pro.local",
+          "binaryChecksum": "417261810f229ca42962416189fd1af3",
           "sdkMetadata": {},
           "meteringMetadata": {}
         }
       },
       {
         "eventId": "11",
-        "eventTime": "2026-05-26T10:10:16.152Z",
+        "eventTime": "2026-05-26T10:36:51.827Z",
         "eventType": "EVENT_TYPE_START_CHILD_WORKFLOW_EXECUTION_INITIATED",
         "startChildWorkflowExecutionInitiatedEventAttributes": {
           "namespace": "default",
@@ -229,7 +229,7 @@
           "workflowTaskTimeout": "10s",
           "parentClosePolicy": "PARENT_CLOSE_POLICY_ABANDON",
           "workflowTaskCompletedEventId": "9",
-          "workflowIdReusePolicy": "WORKFLOW_ID_REUSE_POLICY_ALLOW_DUPLICATE",
+          "workflowIdReusePolicy": "WORKFLOW_ID_REUSE_POLICY_TERMINATE_IF_RUNNING",
           "header": {},
           "memo": {},
           "priority": {}
@@ -237,7 +237,7 @@
       },
       {
         "eventId": "12",
-        "eventTime": "2026-05-26T10:10:16.152Z",
+        "eventTime": "2026-05-26T10:36:51.827Z",
         "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
         "activityTaskScheduledEventAttributes": {
           "activityId": "2",
@@ -275,14 +275,14 @@
       },
       {
         "eventId": "13",
-        "eventTime": "2026-05-26T10:10:16.152Z",
+        "eventTime": "2026-05-26T10:36:51.827Z",
         "eventType": "EVENT_TYPE_CHILD_WORKFLOW_EXECUTION_STARTED",
         "childWorkflowExecutionStartedEventAttributes": {
           "namespace": "default",
           "initiatedEventId": "11",
           "workflowExecution": {
             "workflowId": "triage-pip-requests-2.31.0-2026-05-26",
-            "runId": "1a4585b3-8204-49fc-b515-16c3a63cacb3"
+            "runId": "cf7ed2c1-692a-4562-b6ca-2d2df39dd2bd"
           },
           "workflowType": {
             "name": "PackageTriageWorkflow"
@@ -291,7 +291,7 @@
       },
       {
         "eventId": "14",
-        "eventTime": "2026-05-26T10:10:16.152Z",
+        "eventTime": "2026-05-26T10:36:51.827Z",
         "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
         "workflowTaskScheduledEventAttributes": {
           "taskQueue": {
@@ -303,38 +303,38 @@
       },
       {
         "eventId": "15",
-        "eventTime": "2026-05-26T10:10:16.152Z",
+        "eventTime": "2026-05-26T10:36:51.827Z",
         "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
         "workflowTaskStartedEventAttributes": {
           "scheduledEventId": "14",
-          "identity": "20613@Angies-MacBook-Pro.local"
+          "identity": "22094@Angies-MacBook-Pro.local"
         }
       },
       {
         "eventId": "16",
-        "eventTime": "2026-05-26T10:10:16.155Z",
+        "eventTime": "2026-05-26T10:36:51.830Z",
         "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
         "workflowTaskCompletedEventAttributes": {
           "scheduledEventId": "14",
-          "identity": "20613@Angies-MacBook-Pro.local",
-          "binaryChecksum": "594740ea1b4642178876cb07b663e7e4",
+          "identity": "22094@Angies-MacBook-Pro.local",
+          "binaryChecksum": "417261810f229ca42962416189fd1af3",
           "sdkMetadata": {},
           "meteringMetadata": {}
         }
       },
       {
         "eventId": "17",
-        "eventTime": "2026-05-26T10:10:16.152Z",
+        "eventTime": "2026-05-26T10:36:51.827Z",
         "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
         "activityTaskStartedEventAttributes": {
           "scheduledEventId": "12",
-          "identity": "20613@Angies-MacBook-Pro.local",
+          "identity": "22094@Angies-MacBook-Pro.local",
           "attempt": 1
         }
       },
       {
         "eventId": "18",
-        "eventTime": "2026-05-26T10:10:16.155Z",
+        "eventTime": "2026-05-26T10:36:51.830Z",
         "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
         "activityTaskCompletedEventAttributes": {
           "result": {
@@ -349,12 +349,12 @@
           },
           "scheduledEventId": "12",
           "startedEventId": "16",
-          "identity": "20613@Angies-MacBook-Pro.local"
+          "identity": "22094@Angies-MacBook-Pro.local"
         }
       },
       {
         "eventId": "19",
-        "eventTime": "2026-05-26T10:10:16.155Z",
+        "eventTime": "2026-05-26T10:36:51.830Z",
         "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
         "workflowTaskScheduledEventAttributes": {
           "taskQueue": {
@@ -366,28 +366,28 @@
       },
       {
         "eventId": "20",
-        "eventTime": "2026-05-26T10:10:16.155Z",
+        "eventTime": "2026-05-26T10:36:51.830Z",
         "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
         "workflowTaskStartedEventAttributes": {
           "scheduledEventId": "19",
-          "identity": "20613@Angies-MacBook-Pro.local"
+          "identity": "22094@Angies-MacBook-Pro.local"
         }
       },
       {
         "eventId": "21",
-        "eventTime": "2026-05-26T10:10:16.158Z",
+        "eventTime": "2026-05-26T10:36:51.831Z",
         "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
         "workflowTaskCompletedEventAttributes": {
           "scheduledEventId": "19",
-          "identity": "20613@Angies-MacBook-Pro.local",
-          "binaryChecksum": "594740ea1b4642178876cb07b663e7e4",
+          "identity": "22094@Angies-MacBook-Pro.local",
+          "binaryChecksum": "417261810f229ca42962416189fd1af3",
           "sdkMetadata": {},
           "meteringMetadata": {}
         }
       },
       {
         "eventId": "22",
-        "eventTime": "2026-05-26T10:10:16.178Z",
+        "eventTime": "2026-05-26T10:36:51.848Z",
         "eventType": "EVENT_TYPE_CHILD_WORKFLOW_EXECUTION_COMPLETED",
         "childWorkflowExecutionCompletedEventAttributes": {
           "result": {
@@ -403,7 +403,7 @@
           "namespace": "default",
           "workflowExecution": {
             "workflowId": "triage-pip-requests-2.31.0-2026-05-26",
-            "runId": "1a4585b3-8204-49fc-b515-16c3a63cacb3"
+            "runId": "cf7ed2c1-692a-4562-b6ca-2d2df39dd2bd"
           },
           "workflowType": {
             "name": "PackageTriageWorkflow"
@@ -414,7 +414,7 @@
       },
       {
         "eventId": "23",
-        "eventTime": "2026-05-26T10:10:16.178Z",
+        "eventTime": "2026-05-26T10:36:51.848Z",
         "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
         "workflowTaskScheduledEventAttributes": {
           "taskQueue": {
@@ -426,28 +426,28 @@
       },
       {
         "eventId": "24",
-        "eventTime": "2026-05-26T10:10:16.178Z",
+        "eventTime": "2026-05-26T10:36:51.848Z",
         "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
         "workflowTaskStartedEventAttributes": {
           "scheduledEventId": "23",
-          "identity": "20613@Angies-MacBook-Pro.local"
+          "identity": "22094@Angies-MacBook-Pro.local"
         }
       },
       {
         "eventId": "25",
-        "eventTime": "2026-05-26T10:10:16.181Z",
+        "eventTime": "2026-05-26T10:36:51.850Z",
         "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
         "workflowTaskCompletedEventAttributes": {
           "scheduledEventId": "23",
-          "identity": "20613@Angies-MacBook-Pro.local",
-          "binaryChecksum": "594740ea1b4642178876cb07b663e7e4",
+          "identity": "22094@Angies-MacBook-Pro.local",
+          "binaryChecksum": "417261810f229ca42962416189fd1af3",
           "sdkMetadata": {},
           "meteringMetadata": {}
         }
       },
       {
         "eventId": "26",
-        "eventTime": "2026-05-26T10:10:16.181Z",
+        "eventTime": "2026-05-26T10:36:51.850Z",
         "eventType": "EVENT_TYPE_ACTIVITY_TASK_SCHEDULED",
         "activityTaskScheduledEventAttributes": {
           "activityId": "3",
@@ -497,17 +497,17 @@
       },
       {
         "eventId": "27",
-        "eventTime": "2026-05-26T10:10:16.181Z",
+        "eventTime": "2026-05-26T10:36:51.850Z",
         "eventType": "EVENT_TYPE_ACTIVITY_TASK_STARTED",
         "activityTaskStartedEventAttributes": {
           "scheduledEventId": "26",
-          "identity": "20613@Angies-MacBook-Pro.local",
+          "identity": "22094@Angies-MacBook-Pro.local",
           "attempt": 1
         }
       },
       {
         "eventId": "28",
-        "eventTime": "2026-05-26T10:10:16.182Z",
+        "eventTime": "2026-05-26T10:36:51.851Z",
         "eventType": "EVENT_TYPE_ACTIVITY_TASK_COMPLETED",
         "activityTaskCompletedEventAttributes": {
           "result": {
@@ -521,12 +521,12 @@
           },
           "scheduledEventId": "26",
           "startedEventId": "27",
-          "identity": "20613@Angies-MacBook-Pro.local"
+          "identity": "22094@Angies-MacBook-Pro.local"
         }
       },
       {
         "eventId": "29",
-        "eventTime": "2026-05-26T10:10:16.182Z",
+        "eventTime": "2026-05-26T10:36:51.851Z",
         "eventType": "EVENT_TYPE_WORKFLOW_TASK_SCHEDULED",
         "workflowTaskScheduledEventAttributes": {
           "taskQueue": {
@@ -538,28 +538,28 @@
       },
       {
         "eventId": "30",
-        "eventTime": "2026-05-26T10:10:16.182Z",
+        "eventTime": "2026-05-26T10:36:51.851Z",
         "eventType": "EVENT_TYPE_WORKFLOW_TASK_STARTED",
         "workflowTaskStartedEventAttributes": {
           "scheduledEventId": "29",
-          "identity": "20613@Angies-MacBook-Pro.local"
+          "identity": "22094@Angies-MacBook-Pro.local"
         }
       },
       {
         "eventId": "31",
-        "eventTime": "2026-05-26T10:10:16.183Z",
+        "eventTime": "2026-05-26T10:36:51.852Z",
         "eventType": "EVENT_TYPE_WORKFLOW_TASK_COMPLETED",
         "workflowTaskCompletedEventAttributes": {
           "scheduledEventId": "29",
-          "identity": "20613@Angies-MacBook-Pro.local",
-          "binaryChecksum": "594740ea1b4642178876cb07b663e7e4",
+          "identity": "22094@Angies-MacBook-Pro.local",
+          "binaryChecksum": "417261810f229ca42962416189fd1af3",
           "sdkMetadata": {},
           "meteringMetadata": {}
         }
       },
       {
         "eventId": "32",
-        "eventTime": "2026-05-26T10:10:16.183Z",
+        "eventTime": "2026-05-26T10:36:51.852Z",
         "eventType": "EVENT_TYPE_WORKFLOW_EXECUTION_COMPLETED",
         "workflowExecutionCompletedEventAttributes": {
           "result": {

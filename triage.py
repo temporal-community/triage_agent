@@ -386,7 +386,10 @@ async def _triage_batch(args: argparse.Namespace) -> None:
             pr_data, parsed, result = await future
         except Exception as exc:
             errors += 1
-            print(f"\n  {_r(_B + '✗  WORKFLOW FAILED' + _RST)}  {_r(str(exc))}\n")
+            # WorkflowFailureError wraps the real cause — unwrap it for a useful message
+            cause = getattr(exc, "cause", None)
+            msg = str(cause) if cause else str(exc)
+            print(f"\n  {_r(_B + '✗  WORKFLOW FAILED' + _RST)}  {_r(msg)}\n")
             continue
 
         result_str, *url_parts = result.split("||", 1)
