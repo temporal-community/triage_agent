@@ -2,7 +2,8 @@ import re
 from models import PRContext, PackageChecks, Verdict
 
 
-_MAX_REASONING_LEN = 500
+_MAX_REASONING_LEN = 2000  # hard safety cap on sanitized text
+_PREVIEW_LEN = 250  # chars shown in the blockquote before the collapsible expander
 
 
 def _sanitize_reasoning(text: str) -> str:
@@ -20,11 +21,28 @@ def _sanitize_reasoning(text: str) -> str:
     # renderer only styles the first paragraph, so numbered lists look broken
     text = re.sub(r"\n+", " ", text).strip()
     if len(text) > _MAX_REASONING_LEN:
-        # Truncate at word boundary to avoid mid-word cutoff
         truncated = text[:_MAX_REASONING_LEN]
         last_space = truncated.rfind(" ")
         text = (truncated[:last_space] if last_space > _MAX_REASONING_LEN // 2 else truncated) + "…"
     return text
+
+
+def _reasoning_block(text: str) -> list[str]:
+    """Return blockquote lines for reasoning, with a collapsible expander when long."""
+    if len(text) <= _PREVIEW_LEN:
+        return [f"> {text}"]
+    preview = text[:_PREVIEW_LEN]
+    last_space = preview.rfind(" ")
+    preview = (preview[:last_space] if last_space > _PREVIEW_LEN // 2 else preview) + "…"
+    return [
+        f"> {preview}",
+        "",
+        "<details><summary>Full reasoning</summary>",
+        "",
+        f"> {text}",
+        "",
+        "</details>",
+    ]
 
 
 def _format_age(hours: float) -> str:
@@ -258,7 +276,7 @@ def format_comment(pr: PRContext, verdict: Verdict, signals: PackageChecks | Non
         "",
         f"**Confidence:** {verdict.confidence:.0%}",
         "",
-        f"> {_sanitize_reasoning(verdict.reasoning)}",
+        *_reasoning_block(_sanitize_reasoning(verdict.reasoning)),
         "",
     ]
 

@@ -27,5 +27,6 @@ class Verdict(BaseModel):
         if isinstance(v, str):
             return [f.strip() for f in v.replace(";", ",").split(",") if f.strip()]
         return v
+
     release_age_hours: float | None = None  # passed through for per-repo age gate enforcement
     new_dependency_count: int = 0  # passed through for per-repo max_new_dependencies gate

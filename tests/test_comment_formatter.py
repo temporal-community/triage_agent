@@ -1,5 +1,5 @@
 import pytest
-from helpers.comment_formatter import format_comment, _sanitize_reasoning
+from helpers.comment_formatter import format_comment, _sanitize_reasoning, _reasoning_block
 from models import (
     PRContext,
     PackageChecks,
@@ -34,11 +34,41 @@ def test_sanitize_strips_multiple_links():
     assert _sanitize_reasoning(text) == "a and b"
 
 
-def test_sanitize_truncates_at_500():
-    long_text = "a" * 600
+def test_sanitize_truncates_at_2000():
+    long_text = "a" * 2100
     result = _sanitize_reasoning(long_text)
-    assert len(result) == 501  # 500 chars + "…"
+    assert len(result) == 2001  # 2000 chars + "…"
     assert result.endswith("…")
+
+
+def test_reasoning_block_short_returns_single_blockquote():
+    text = "Short reasoning."
+    block = _reasoning_block(text)
+    assert block == ["> Short reasoning."]
+
+
+def test_reasoning_block_long_includes_details():
+    text = "word " * 60  # well over 250 chars
+    text = text.strip()
+    block = _reasoning_block(text)
+    full_block = "\n".join(block)
+    assert "<details>" in full_block
+    assert "<summary>Full reasoning</summary>" in full_block
+    assert "</details>" in full_block
+    # preview line is first
+    assert block[0].startswith("> ")
+    assert block[0].endswith("…")
+    # full text appears inside details
+    assert f"> {text}" in block
+
+
+def test_reasoning_block_preview_ends_at_word_boundary():
+    # 250 chars of "word " repeated, so word boundary is clean
+    text = ("hello world " * 25).strip()
+    block = _reasoning_block(text)
+    preview = block[0][2:]  # strip "> "
+    assert preview.endswith("…")
+    assert not preview[:-1].endswith(" ")
 
 
 def test_sanitize_passthrough_clean():
@@ -386,3 +416,33 @@ def test_reasoning_links_stripped_in_output(pr):
     out = format_comment(pr, verdict)
     assert "https://attacker.com" not in out
     assert "Read this for details." in out
+
+
+def test_reasoning_short_no_details_block(pr):
+    verdict = Verdict(
+        classification="green",
+        confidence=0.9,
+        reasoning="Short and sweet.",
+        flags=[],
+    )
+    out = format_comment(pr, verdict)
+    assert "<details>" not in out
+    assert "> Short and sweet." in out
+
+
+def test_reasoning_long_shows_collapsible(pr):
+    long_reasoning = "This is a long sentence explaining the risk. " * 10
+    verdict = Verdict(
+        classification="yellow",
+        confidence=0.7,
+        reasoning=long_reasoning,
+        flags=[],
+    )
+    out = format_comment(pr, verdict)
+    assert "<details>" in out
+    assert "<summary>Full reasoning</summary>" in out
+    assert "</details>" in out
+    # preview blockquote is present and truncated
+    lines = out.splitlines()
+    blockquote_lines = [l for l in lines if l.startswith("> ")]
+    assert any(l.endswith("…") for l in blockquote_lines)
