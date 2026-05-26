@@ -1,3 +1,4 @@
+import json
 import re
 from models import PRContext, PackageChecks, Verdict
 
@@ -279,6 +280,7 @@ def format_comment(pr: PRContext, verdict: Verdict, signals: PackageChecks | Non
     lines = [
         f"## Dependency Scout — {badge}",
         "",
+        f"**Package:** `{pr.package_name}` {pr.old_version} → {pr.new_version}  ",
         f"**Confidence:** {verdict.confidence:.0%}",
     ]
 
@@ -294,6 +296,9 @@ def format_comment(pr: PRContext, verdict: Verdict, signals: PackageChecks | Non
         "",
     ]
 
+    if verdict.flags:
+        lines += [f"**Flags:** {' · '.join(verdict.flags)}", ""]
+
     if signals:
         lines += _signals_table(signals) + [""]
 
@@ -301,6 +306,20 @@ def format_comment(pr: PRContext, verdict: Verdict, signals: PackageChecks | Non
         "---",
         "_[Dependency Scout](https://github.com/temporal-community/dependency-scout) — "
         "automated supply-chain vetting for Dependabot/Renovate PRs_",
+        "",
+        "<!-- dependency-scout-data "
+        + json.dumps(
+            {
+                "classification": verdict.classification,
+                "confidence": round(verdict.confidence, 4),
+                "merge_recommendation": verdict.merge_recommendation,
+                "flags": verdict.flags,
+                "package": pr.package_name,
+                "from_version": pr.old_version,
+                "to_version": pr.new_version,
+            }
+        )
+        + " -->",
     ]
 
     return "\n".join(lines)

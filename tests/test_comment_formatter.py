@@ -157,10 +157,18 @@ def test_confidence_rendered_as_percentage(pr, green_verdict):
     assert "**Confidence:** 95%" in out
 
 
-# --- flags section is not rendered (signals table replaces it) ---
+# --- package header ---
 
 
-def test_no_flags_section_in_output(pr):
+def test_package_header_present(pr, green_verdict):
+    out = format_comment(pr, green_verdict)
+    assert "**Package:** `requests` 2.31.0 → 2.32.0" in out
+
+
+# --- flags section ---
+
+
+def test_flags_shown_when_present(pr):
     verdict = Verdict(
         classification="yellow",
         confidence=0.6,
@@ -168,7 +176,52 @@ def test_no_flags_section_in_output(pr):
         flags=["major version bump", "release age 2 days"],
     )
     out = format_comment(pr, verdict)
+    assert "**Flags:** major version bump · release age 2 days" in out
+
+
+def test_flags_hidden_when_empty(pr, green_verdict):
+    out = format_comment(pr, green_verdict)
     assert "**Flags:**" not in out
+
+
+# --- machine-readable data block ---
+
+
+def test_data_block_present(pr, green_verdict):
+    out = format_comment(pr, green_verdict)
+    assert "<!-- dependency-scout-data " in out
+    assert " -->" in out
+
+
+def test_data_block_parses_as_json(pr):
+    import json
+
+    verdict = Verdict(
+        classification="yellow",
+        confidence=0.75,
+        reasoning="Uncertain.",
+        flags=["major version bump"],
+        merge_recommendation="hold",
+    )
+    out = format_comment(pr, verdict)
+    raw = out.split("<!-- dependency-scout-data ")[1].split(" -->")[0]
+    data = json.loads(raw)
+    assert data["classification"] == "yellow"
+    assert data["confidence"] == 0.75
+    assert data["merge_recommendation"] == "hold"
+    assert data["flags"] == ["major version bump"]
+    assert data["package"] == "requests"
+    assert data["from_version"] == "2.31.0"
+    assert data["to_version"] == "2.32.0"
+
+
+def test_data_block_null_merge_recommendation(pr, green_verdict):
+    import json
+
+    out = format_comment(pr, green_verdict)
+    raw = out.split("<!-- dependency-scout-data ")[1].split(" -->")[0]
+    data = json.loads(raw)
+    assert data["merge_recommendation"] is None
 
 
 # --- signals table ---
