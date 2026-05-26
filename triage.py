@@ -175,10 +175,47 @@ async def run(ecosystem: str, package: str, old_version: str, new_version: str) 
             f"Supported ecosystems: {supported}"
         )
 
+    # --- Environment rows (no activity results needed) ----------------------
+    has_socket_key = bool(os.environ.get("SOCKET_API_KEY"))
+    has_llm_key = bool(
+        os.environ.get("ANTHROPIC_API_KEY")
+        or os.environ.get("OPENAI_API_KEY")
+        or os.environ.get("OLLAMA_HOST")
+        or os.environ.get("CLASSIFIER")
+    )
+
+    env_rows: list[tuple[str, str, str]] = []
+    if not has_socket_key:
+        env_rows.append(("socket", "info", "set SOCKET_API_KEY to enable Socket.dev analysis"))
+
+    if has_llm_key:
+        from classifiers import get_classifier
+
+        clf = get_classifier()
+        env_rows.append(
+            ("classifier", "ok", type(clf).__name__.replace("Classifier", " classifier"))
+        )
+    else:
+        env_rows.append(
+            (
+                "classifier",
+                "info",
+                "rule-based fallback — set ANTHROPIC_API_KEY (or OPENAI_API_KEY / OLLAMA_HOST) for LLM analysis",
+            )
+        )
+
+    if env_rows:
+        env_width = max(len(n) for n, _, _ in env_rows)
+        for name, status, text in env_rows:
+            icon_ansi, _, text_fn = _STATUS[status]
+            print(f"  {name:<{env_width}}  {icon_ansi}  {text_fn(text)}")  # type: ignore[operator]
+        print()
+
+    # --- Per-release checks --------------------------------------------------
     env = ActivityEnvironment()
     args = [ecosystem, package, old_version, new_version]
 
-    print(f"\nTriaging {package}  {old_version} → {new_version}  ({ecosystem})\n")
+    print(f"Triaging {package}  {old_version} → {new_version}  ({ecosystem})\n")
 
     # Run all 11 checks in parallel, degrading gracefully on failure.
     raw = await asyncio.gather(
@@ -214,13 +251,6 @@ async def run(ecosystem: str, package: str, old_version: str, new_version: str) 
 
     # Determine which checks raised exceptions (vs returned degraded defaults).
     failed = {field for (field, _), result in zip(_CHECKS, raw) if isinstance(result, Exception)}
-    has_socket_key = bool(os.environ.get("SOCKET_API_KEY"))
-    has_llm_key = bool(
-        os.environ.get("ANTHROPIC_API_KEY")
-        or os.environ.get("OPENAI_API_KEY")
-        or os.environ.get("OLLAMA_HOST")
-        or os.environ.get("CLASSIFIER")  # explicit override covers CLASSIFIER=rule_based too
-    )
 
     # Build rows: (name, status, plain_text)
     # status ∈ {"ok", "bad", "warn", "na", "fail"}
@@ -236,13 +266,12 @@ async def run(ecosystem: str, package: str, old_version: str, new_version: str) 
     else:
         _row("metadata", "na", "N/A — no download data for this ecosystem")
 
-    if not has_socket_key:
-        _row("socket", "info", "set SOCKET_API_KEY to enable Socket.dev analysis")
-    elif pkg.socket.socket_score is not None:
-        s = pkg.socket.socket_score
-        _row("socket", "ok" if s >= 70 else ("warn" if s >= 40 else "bad"), f"score {s}/100")
-    else:
-        _row("socket", "na", "no data")
+    if has_socket_key:
+        if pkg.socket.socket_score is not None:
+            s = pkg.socket.socket_score
+            _row("socket", "ok" if s >= 70 else ("warn" if s >= 40 else "bad"), f"score {s}/100")
+        else:
+            _row("socket", "na", "no data")
 
     if pkg.osv.osv_vulnerabilities:
         _row("osv", "bad", f"{len(pkg.osv.osv_vulnerabilities)} known vulnerabilities")
@@ -290,18 +319,6 @@ async def run(ecosystem: str, package: str, old_version: str, new_version: str) 
         _row("scorecard", "ok" if sc >= 7 else ("warn" if sc >= 4 else "bad"), f"score {sc:.1f}/10")
     else:
         _row("scorecard", "na", "N/A — not in Scorecard database")
-
-    if has_llm_key:
-        from classifiers import get_classifier
-
-        clf = get_classifier()
-        _row("classifier", "ok", type(clf).__name__.replace("Classifier", " classifier"))
-    else:
-        _row(
-            "classifier",
-            "info",
-            "rule-based fallback — set ANTHROPIC_API_KEY (or OPENAI_API_KEY / OLLAMA_HOST) for LLM analysis",
-        )
 
     # Print check summary.
     width = max(len(name) for name, _, _ in rows)
