@@ -1,4 +1,10 @@
-from models.pr import PRContext, PRFilesChecks, RepoConfig, _validate_ecosystem_name
+from models.pr import (
+    PRContext,
+    PRFilesChecks,
+    ActionsUsageChecks,
+    RepoConfig,
+    _validate_ecosystem_name,
+)
 from models.checks import (
     AttestationChecks,
     CheckContext,
@@ -22,6 +28,7 @@ __all__ = [
     "_validate_ecosystem_name",
     "PRContext",
     "PRFilesChecks",
+    "ActionsUsageChecks",
     "RepoConfig",
     "AttestationChecks",
     "CheckContext",

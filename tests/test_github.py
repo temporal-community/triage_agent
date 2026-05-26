@@ -13,8 +13,8 @@ import respx
 from temporalio.exceptions import ApplicationError
 from temporalio.testing import ActivityEnvironment
 
-from platforms.github import GitHubPlatformClient, _is_ci_infra_file
-from models import PRContext, PRFilesChecks, Verdict
+from platforms.github import GitHubPlatformClient, _is_ci_infra_file, _extract_action_usages
+from models import PRContext, PRFilesChecks, ActionsUsageChecks, Verdict
 
 
 # ---------------------------------------------------------------------------
@@ -581,6 +581,224 @@ async def test_check_pr_files_401_raises_non_retryable(client, pr, with_pat):
     with pytest.raises(ApplicationError) as exc_info:
         await env.run(client.check_pr_files, pr)
     assert exc_info.value.non_retryable is True
+
+
+# ---------------------------------------------------------------------------
+# _extract_action_usages — pure unit tests
+# ---------------------------------------------------------------------------
+
+
+def test_extract_action_usages_finds_step_with_inputs():
+    content = """
+jobs:
+  build:
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+"""
+    results = _extract_action_usages(content, "actions/checkout", "ci.yml")
+    assert len(results) == 1
+    assert "ci.yml" in results[0]
+    assert "actions/checkout@v4" in results[0]
+    assert "fetch-depth" in results[0]
+    assert "persist-credentials" in results[0]
+
+
+def test_extract_action_usages_finds_step_without_inputs():
+    content = """
+jobs:
+  build:
+    steps:
+      - uses: actions/checkout@v6
+"""
+    results = _extract_action_usages(content, "actions/checkout", "ci.yml")
+    assert len(results) == 1
+    assert "no inputs configured" in results[0]
+
+
+def test_extract_action_usages_case_insensitive():
+    content = """
+jobs:
+  build:
+    steps:
+      - uses: Actions/Checkout@v4
+"""
+    results = _extract_action_usages(content, "actions/checkout", "ci.yml")
+    assert len(results) == 1
+
+
+def test_extract_action_usages_skips_other_actions():
+    content = """
+jobs:
+  build:
+    steps:
+      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+"""
+    results = _extract_action_usages(content, "actions/checkout", "ci.yml")
+    assert len(results) == 1
+    assert "checkout" in results[0]
+
+
+def test_extract_action_usages_multiple_jobs():
+    content = """
+jobs:
+  build:
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+  deploy:
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+"""
+    results = _extract_action_usages(content, "actions/checkout", "release.yml")
+    assert len(results) == 2
+
+
+def test_extract_action_usages_invalid_yaml_returns_empty():
+    results = _extract_action_usages("not: valid: yaml: [[[", "actions/checkout", "bad.yml")
+    assert results == []
+
+
+# ---------------------------------------------------------------------------
+# fetch_actions_usage — integration tests with mocked GitHub API
+# ---------------------------------------------------------------------------
+
+_WORKFLOW_YAML = """\
+jobs:
+  build:
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+"""
+
+
+def _b64(s: str) -> str:
+    import base64
+
+    return base64.b64encode(s.encode()).decode()
+
+
+@respx.mock
+async def test_fetch_actions_usage_returns_empty_for_non_actions_ecosystem(client, pr, with_pat):
+    env = ActivityEnvironment()
+    result = await env.run(client.fetch_actions_usage, pr)  # pr.ecosystem == "pip"
+    assert result == ActionsUsageChecks()
+
+
+@respx.mock
+async def test_fetch_actions_usage_returns_empty_on_dry_run(dry_run):
+    actions_pr = PRContext(
+        repo=REPO,
+        pr_number=PR_NUM,
+        pr_author="dependabot[bot]",
+        installation_id=INSTALL_ID,
+        platform="github",
+        ecosystem="github_actions",
+        package_name="actions/checkout",
+        old_version="4",
+        new_version="6",
+    )
+    env = ActivityEnvironment()
+    result = await env.run(
+        GitHubPlatformClient(installation_id=INSTALL_ID).fetch_actions_usage, actions_pr
+    )
+    assert result == ActionsUsageChecks()
+
+
+@respx.mock
+async def test_fetch_actions_usage_returns_empty_when_workflows_dir_missing(with_pat):
+    actions_pr = PRContext(
+        repo=REPO,
+        pr_number=PR_NUM,
+        pr_author="dependabot[bot]",
+        installation_id=INSTALL_ID,
+        platform="github",
+        ecosystem="github_actions",
+        package_name="actions/checkout",
+        old_version="4",
+        new_version="6",
+    )
+    respx.get(f"{BASE_URL}/contents/.github/workflows").mock(return_value=httpx.Response(404))
+    env = ActivityEnvironment()
+    result = await env.run(
+        GitHubPlatformClient(installation_id=INSTALL_ID).fetch_actions_usage, actions_pr
+    )
+    assert result.flags == []
+
+
+@respx.mock
+async def test_fetch_actions_usage_extracts_inputs(with_pat):
+    actions_pr = PRContext(
+        repo=REPO,
+        pr_number=PR_NUM,
+        pr_author="dependabot[bot]",
+        installation_id=INSTALL_ID,
+        platform="github",
+        ecosystem="github_actions",
+        package_name="actions/checkout",
+        old_version="4",
+        new_version="6",
+    )
+    respx.get(f"{BASE_URL}/contents/.github/workflows").mock(
+        return_value=httpx.Response(200, json=[{"name": "ci.yml"}])
+    )
+    respx.get(f"{BASE_URL}/contents/.github/workflows/ci.yml").mock(
+        return_value=httpx.Response(
+            200,
+            json={"encoding": "base64", "content": _b64(_WORKFLOW_YAML)},
+        )
+    )
+    env = ActivityEnvironment()
+    result = await env.run(
+        GitHubPlatformClient(installation_id=INSTALL_ID).fetch_actions_usage, actions_pr
+    )
+    assert len(result.flags) == 1
+    assert "actions/checkout@v4" in result.flags[0]
+    assert "fetch-depth" in result.flags[0]
+    assert "persist-credentials" in result.flags[0]
+
+
+@respx.mock
+async def test_fetch_actions_usage_ignores_unrelated_workflows(with_pat):
+    other_yaml = """\
+jobs:
+  build:
+    steps:
+      - uses: actions/setup-python@v5
+"""
+    actions_pr = PRContext(
+        repo=REPO,
+        pr_number=PR_NUM,
+        pr_author="dependabot[bot]",
+        installation_id=INSTALL_ID,
+        platform="github",
+        ecosystem="github_actions",
+        package_name="actions/checkout",
+        old_version="4",
+        new_version="6",
+    )
+    respx.get(f"{BASE_URL}/contents/.github/workflows").mock(
+        return_value=httpx.Response(200, json=[{"name": "ci.yml"}])
+    )
+    respx.get(f"{BASE_URL}/contents/.github/workflows/ci.yml").mock(
+        return_value=httpx.Response(
+            200,
+            json={"encoding": "base64", "content": _b64(other_yaml)},
+        )
+    )
+    env = ActivityEnvironment()
+    result = await env.run(
+        GitHubPlatformClient(installation_id=INSTALL_ID).fetch_actions_usage, actions_pr
+    )
+    assert result.flags == []
 
 
 # ---------------------------------------------------------------------------

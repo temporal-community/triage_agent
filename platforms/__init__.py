@@ -19,7 +19,7 @@ from __future__ import annotations
 import os
 from typing import Protocol
 
-from models import PackageChecks, PRContext, PRFilesChecks, Verdict
+from models import PackageChecks, PRContext, PRFilesChecks, ActionsUsageChecks, Verdict
 
 
 class PlatformClient(Protocol):
@@ -31,6 +31,7 @@ class PlatformClient(Protocol):
     async def label(self, pr: PRContext, label_name: str) -> None: ...
     async def request_review(self, pr: PRContext, reviewers: list[str]) -> None: ...
     async def check_pr_files(self, pr: PRContext) -> PRFilesChecks: ...
+    async def fetch_actions_usage(self, pr: PRContext) -> ActionsUsageChecks: ...
 
 
 def get_platform_client(pr: PRContext) -> PlatformClient:

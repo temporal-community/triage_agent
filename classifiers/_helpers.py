@@ -373,6 +373,12 @@ def _rule_based(signals: PackageChecks) -> Verdict:
         flags.append(f"low socket score ({signals.socket.socket_score}/100)")
     if signals.metadata.weekly_downloads is not None and signals.metadata.weekly_downloads < 1_000:
         flags.append(f"low download count ({signals.metadata.weekly_downloads:,}/week)")
+    if signals.release.release_body:
+        notes_lower = signals.release.release_body.lower()
+        if any(
+            kw in notes_lower for kw in ("breaking change", "migration guide", "migration required")
+        ):
+            flags.append("release notes mention breaking changes — review changelog before merging")
 
     merge_rec = _advisory_merge_recommendation(signals)
 

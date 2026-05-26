@@ -616,3 +616,60 @@ def test_rule_based_flags_tag_signing_regression():
     verdict = _rule_based(signals)
     assert verdict.classification == "yellow"
     assert any("tag signing dropped" in f for f in verdict.flags)
+
+
+def test_rule_based_flags_breaking_change_in_release_notes():
+    from classifiers import _rule_based
+
+    signals = PackageChecks(
+        ecosystem="pip",
+        package_name="pkg",
+        old_version="1.0.0",
+        new_version="2.0.0",
+        age=ReleaseAgeChecks(release_age_hours=200.0),
+        release=ReleaseChecks(
+            github_release_exists=True,
+            release_body="## What's Changed\n\n### Breaking Changes\n- Removed `foo` parameter",
+        ),
+    )
+    verdict = _rule_based(signals)
+    assert verdict.classification == "yellow"
+    assert any("breaking change" in f.lower() for f in verdict.flags)
+
+
+def test_rule_based_flags_migration_guide_in_release_notes():
+    from classifiers import _rule_based
+
+    signals = PackageChecks(
+        ecosystem="github_actions",
+        package_name="actions/checkout",
+        old_version="4",
+        new_version="6",
+        age=ReleaseAgeChecks(release_age_hours=200.0),
+        release=ReleaseChecks(
+            github_release_exists=True,
+            release_body="See the migration guide for upgrading from v4 to v6.",
+        ),
+    )
+    verdict = _rule_based(signals)
+    assert verdict.classification == "yellow"
+    assert any("breaking change" in f.lower() for f in verdict.flags)
+
+
+def test_rule_based_no_false_positive_on_clean_release_notes():
+    from classifiers import _rule_based
+
+    signals = PackageChecks(
+        ecosystem="pip",
+        package_name="pkg",
+        old_version="1.0.0",
+        new_version="1.0.1",
+        age=ReleaseAgeChecks(release_age_hours=200.0),
+        release=ReleaseChecks(
+            github_release_exists=True,
+            release_body="Bug fixes and minor improvements.",
+        ),
+    )
+    verdict = _rule_based(signals)
+    assert verdict.classification == "green"
+    assert not any("breaking change" in f.lower() for f in verdict.flags)

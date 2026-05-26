@@ -18,6 +18,7 @@ from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Worker
 
 from models import (
+    ActionsUsageChecks,
     AttestationChecks,
     CheckContext,
     DepsDevChecks,
@@ -197,6 +198,14 @@ def _check_pr_files(unexpected: list[str] | None = None):
     return check_pr_files
 
 
+def _check_actions_usage():
+    @activity.defn(name="activities.platform.check_actions_usage")
+    async def check_actions_usage(*_):
+        return ActionsUsageChecks()
+
+    return check_actions_usage
+
+
 def _version_lineage():
     @activity.defn(name="activities.version_lineage.check")
     async def check(*_):
@@ -304,6 +313,7 @@ async def _run_scenario(
         _label(),
         _close_pr(),
         _check_pr_files(),
+        _check_actions_usage(),
     ]
     async with Worker(
         env.client,

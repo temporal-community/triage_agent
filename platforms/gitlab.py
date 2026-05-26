@@ -8,7 +8,7 @@ from urllib.parse import quote
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
-from models import PRContext, PackageChecks, PRFilesChecks, Verdict
+from models import PRContext, PackageChecks, PRFilesChecks, ActionsUsageChecks, Verdict
 from helpers.comment_formatter import format_comment
 from helpers.http import get_client
 
@@ -262,6 +262,10 @@ class GitLabPlatformClient:
 
         unexpected = [c["new_path"] for c in changes if _is_unexpected(c["new_path"])]
         return PRFilesChecks(unexpected_files=unexpected)
+
+    async def fetch_actions_usage(self, pr: PRContext) -> ActionsUsageChecks:
+        # GitHub Actions ecosystem only runs on GitHub — no-op on GitLab.
+        return ActionsUsageChecks()
 
 
 def create_client(pr: PRContext) -> GitLabPlatformClient:

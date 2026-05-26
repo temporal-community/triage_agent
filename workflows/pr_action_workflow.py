@@ -5,7 +5,14 @@ from temporalio.common import RetryPolicy
 from temporalio.workflow import ParentClosePolicy
 
 with workflow.unsafe.imports_passed_through():
-    from models import PRContext, PRFilesChecks, RepoConfig, TriageResult, Verdict
+    from models import (
+        PRContext,
+        PRFilesChecks,
+        ActionsUsageChecks,
+        RepoConfig,
+        TriageResult,
+        Verdict,
+    )
     from workflows.package_triage_workflow import PackageTriageWorkflow
 
 
@@ -100,12 +107,18 @@ class PRActionWorkflow:
                     )
                 raise
 
-        triage_result, pr_files = await asyncio.gather(
+        triage_result, pr_files, actions_usage = await asyncio.gather(
             _run_triage(),
             workflow.execute_activity(
                 "activities.platform.check_pr_files",
                 pr,
                 result_type=PRFilesChecks,
+                **opts,
+            ),
+            workflow.execute_activity(
+                "activities.platform.check_actions_usage",
+                pr,
+                result_type=ActionsUsageChecks,
                 **opts,
             ),
         )
@@ -161,6 +174,9 @@ class PRActionWorkflow:
                     ],
                 }
             )
+
+        if actions_usage.flags:
+            verdict = verdict.model_copy(update={"flags": verdict.flags + actions_usage.flags})
 
         comment_url: str = await workflow.execute_activity(
             "activities.platform.comment", args=[pr, verdict, signals], result_type=str, **opts

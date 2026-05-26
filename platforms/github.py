@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
-from models import PRContext, PackageChecks, PRFilesChecks, Verdict
+from models import PRContext, PackageChecks, PRFilesChecks, ActionsUsageChecks, Verdict
 from helpers.comment_formatter import format_comment
 from helpers.http import get_client
 
@@ -85,6 +85,36 @@ def _is_ci_infra_file(path: str) -> bool:
     if name_lower.startswith("dockerfile") or name_lower.startswith("docker-compose"):
         return True
     return any(name_lower.endswith(s) for s in _CI_INFRA_SCRIPT_SUFFIXES)
+
+
+def _extract_action_usages(content: str, action_name: str, filename: str) -> list[str]:
+    """Parse workflow YAML and return one usage description per step that references action_name."""
+    import yaml  # noqa: PLC0415
+
+    try:
+        data = yaml.safe_load(content)
+    except Exception:
+        return []
+    if not isinstance(data, dict):
+        return []
+    results: list[str] = []
+    for job in (data.get("jobs") or {}).values():
+        if not isinstance(job, dict):
+            continue
+        for step in job.get("steps") or []:
+            if not isinstance(step, dict):
+                continue
+            uses: str = step.get("uses") or ""
+            action_part = uses.split("@")[0] if "@" in uses else uses
+            if action_part.lower() != action_name.lower():
+                continue
+            with_inputs: dict = step.get("with") or {}
+            if with_inputs:
+                inputs_str = ", ".join(f"{k}: {v}" for k, v in with_inputs.items())
+                results.append(f"workflow {filename} uses {uses} — inputs: {inputs_str}")
+            else:
+                results.append(f"workflow {filename} uses {uses} (no inputs configured)")
+    return results
 
 
 class GitHubPlatformClient:
@@ -287,6 +317,50 @@ class GitHubPlatformClient:
         )
         resp.raise_for_status()
         activity.logger.info(f"Added label '{label_name}' to {pr.repo}#{pr.pr_number}")
+
+    async def fetch_actions_usage(self, pr: PRContext) -> ActionsUsageChecks:
+        """Fetch .github/workflows/ from the target repo and extract usage of the bumped action.
+
+        Returns empty results for non-github_actions ecosystems, dry-run mode, or API errors.
+        """
+        if pr.ecosystem != "github_actions" or self._dry_run():
+            return ActionsUsageChecks()
+        headers = await self._get_headers()
+        client = get_client()
+        resp = await client.get(
+            f"{self._repo_url(pr)}/contents/.github/workflows",
+            headers=headers,
+            timeout=10.0,
+        )
+        if resp.status_code != 200:
+            return ActionsUsageChecks()
+        workflow_files = [
+            f
+            for f in resp.json()
+            if isinstance(f, dict) and f.get("name", "").endswith((".yml", ".yaml"))
+        ]
+        import base64
+
+        flags: list[str] = []
+        for file_info in workflow_files[:20]:
+            if len(flags) >= 10:
+                break
+            file_resp = await client.get(
+                f"{self._repo_url(pr)}/contents/.github/workflows/{file_info['name']}",
+                headers=headers,
+                timeout=10.0,
+            )
+            if file_resp.status_code != 200:
+                continue
+            data = file_resp.json()
+            if data.get("encoding") != "base64" or not data.get("content"):
+                continue
+            try:
+                content = base64.b64decode(data["content"]).decode("utf-8", errors="replace")
+                flags.extend(_extract_action_usages(content, pr.package_name, file_info["name"]))
+            except Exception:
+                continue
+        return ActionsUsageChecks(flags=flags)
 
     async def check_pr_files(self, pr: PRContext) -> PRFilesChecks:
         if self._dry_run():

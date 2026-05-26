@@ -39,6 +39,10 @@ class PRFilesChecks(BaseModel):
     unexpected_files: list[str] = []  # CI/infra/script paths that shouldn't appear in a dep-bump PR
 
 
+class ActionsUsageChecks(BaseModel):
+    flags: list[str] = []  # one entry per workflow file that uses the bumped action
+
+
 class RepoConfig(BaseModel):
     """Loaded from .github/dependency-scout.yml in target repo. All fields optional.
 

@@ -13,7 +13,15 @@ import os
 from temporalio import activity
 
 from platforms import get_platform_client
-from models import PRContext, PackageChecks, PRFilesChecks, RepoConfig, TriageResult, Verdict
+from models import (
+    PRContext,
+    PackageChecks,
+    PRFilesChecks,
+    ActionsUsageChecks,
+    RepoConfig,
+    TriageResult,
+    Verdict,
+)
 from helpers.config_provider import get_config_provider
 from helpers.notification import get_notification_channels
 from helpers.temporal_client import connect as temporal_connect
@@ -60,6 +68,12 @@ async def request_review(pr: PRContext, reviewers: list[str]) -> None:
 async def check_pr_files(pr: PRContext) -> PRFilesChecks:
     """Fetch the list of files changed in the PR from the GitHub or GitLab API and return basic metadata about them (e.g. whether any lock files were modified)."""
     return await get_platform_client(pr).check_pr_files(pr)
+
+
+@activity.defn(name="activities.platform.check_actions_usage")
+async def check_actions_usage(pr: PRContext) -> ActionsUsageChecks:
+    """For github_actions bumps, fetch .github/workflows/ from the target repo and extract how the bumped action is used (which inputs are configured). Returns empty for non-Actions ecosystems."""
+    return await get_platform_client(pr).fetch_actions_usage(pr)
 
 
 @activity.defn(name="activities.platform.await_triage_result")
