@@ -98,11 +98,12 @@ uv run python setup.py
 
 The setup script checks prerequisites, explains the tradeoffs between a PAT and a GitHub App, lets you choose your LLM (Claude, OpenAI, Ollama, or skip), writes `.env`, and prints the repo config snippet to paste into your target repo.
 
+The Temporal dev server runs entirely on your machine — no account or payment needed.
+
 Then:
 
 ```bash
-# Terminal 1 — Temporal dev server (the job queue and state store)
-# Skip this if you're using Temporal Cloud — set TEMPORAL_TLS_CERT/KEY in .env instead
+# Terminal 1 — Temporal dev server (runs in memory on your machine — no sign-up, no payment)
 temporal server start-dev
 
 # Terminal 2 — Scout worker (picks up triage jobs and runs the analysis)

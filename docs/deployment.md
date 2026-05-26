@@ -8,7 +8,17 @@ For a description of the three-process architecture (Temporal server, worker, we
 
 ## Temporal server
 
-### Option A — Temporal Cloud (recommended)
+### Option A — Local dev server (start here)
+
+No account, no payment, no sign-up. The Temporal CLI ships a built-in dev server that runs entirely on your machine:
+
+```bash
+temporal server start-dev
+```
+
+Open **http://localhost:8233** to watch workflows run in the Temporal UI. The dev server uses in-memory storage — workflow history is lost on restart, which is fine for personal use and local testing. When you're ready for durability across restarts, see Option B or C below.
+
+### Option B — Temporal Cloud (optional, for production)
 
 [Temporal Cloud](https://cloud.temporal.io) pre-loads new accounts with credits, which covers low-volume use for a while. No servers to manage, built-in visibility UI.
 
@@ -23,7 +33,7 @@ TEMPORAL_TLS_CERT=/path/to/client.pem
 TEMPORAL_TLS_KEY=/path/to/client.key
 ```
 
-### Option B — Self-hosted with Docker Compose
+### Option C — Self-hosted with Docker Compose
 
 The included `docker-compose.yml` runs a single-node Temporal server suitable for personal use or small teams (a few dozen repos). It uses the in-memory default store — **data is lost on restart**. For durability, add a PostgreSQL backend:
 
