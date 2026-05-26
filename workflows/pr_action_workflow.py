@@ -168,6 +168,12 @@ class PRActionWorkflow:
         url_suffix = f"||{comment_url}" if comment_url else ""
 
         if verdict.classification in config.block_classifications:
+            if verdict.merge_recommendation == "merge":
+                # Repo policy overrides the LLM's recommendation — log but still block.
+                workflow.logger.warning(
+                    f"LLM set merge_recommendation='merge' for {verdict.classification.upper()} "
+                    f"but that classification is in block_classifications — repo policy wins."
+                )
             await workflow.execute_activity(
                 "activities.platform.label", args=[pr, "supply-chain-suspicious"], **opts
             )
@@ -180,12 +186,20 @@ class PRActionWorkflow:
             )
             return f"blocked-{verdict.classification}{url_suffix}"
 
-        if (
-            config.auto_merge_enabled
-            and verdict.classification in config.auto_merge_classifications
+        # Auto-merge logic with merge_recommendation support:
+        # - merge_recommendation="hold" suppresses auto-merge even for green classifications
+        # - merge_recommendation="merge" enables auto-merge for non-auto_merge_classifications
+        #   when auto_merge is on (e.g. yellow that patches a critical CVE)
+        normal_auto_merge = (
+            verdict.classification in config.auto_merge_classifications
             and verdict.confidence >= config.auto_merge_min_confidence
-        ):
+            and verdict.merge_recommendation != "hold"
+        )
+        recommendation_auto_merge = verdict.merge_recommendation == "merge"
+        if config.auto_merge_enabled and (normal_auto_merge or recommendation_auto_merge):
             await workflow.execute_activity("activities.platform.merge_pr", args=[pr], **opts)
+            if recommendation_auto_merge and not normal_auto_merge:
+                return f"auto-merged-security-context{url_suffix}"
             return f"auto-merged{url_suffix}"
 
         if config.reviewers:

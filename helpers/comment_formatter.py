@@ -267,6 +267,11 @@ _BADGE = {
     "red": "🔴 RED",
 }
 
+_MERGE_REC_BADGE = {
+    "merge": "✅ Merge recommended",
+    "hold": "⏸️ Hold for review",
+}
+
 
 def format_comment(pr: PRContext, verdict: Verdict, signals: PackageChecks | None = None) -> str:
     badge = _BADGE.get(verdict.classification, verdict.classification.upper())
@@ -275,6 +280,15 @@ def format_comment(pr: PRContext, verdict: Verdict, signals: PackageChecks | Non
         f"## Dependency Scout — {badge}",
         "",
         f"**Confidence:** {verdict.confidence:.0%}",
+    ]
+
+    if verdict.merge_recommendation is not None:
+        rec_badge = _MERGE_REC_BADGE.get(verdict.merge_recommendation, verdict.merge_recommendation)
+        lines += [
+            f"**Merge recommendation:** {rec_badge}",
+        ]
+
+    lines += [
         "",
         *_reasoning_block(_sanitize_reasoning(verdict.reasoning)),
         "",

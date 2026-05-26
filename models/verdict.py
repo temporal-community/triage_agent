@@ -7,8 +7,9 @@ class Verdict(BaseModel):
     confidence: float
     reasoning: str = Field(
         description=(
-            "One to three sentences summarising the key risk factors. "
-            "Plain text only — no markdown, no bullet points, no numbered lists. "
+            "One to three sentences summarising the key risk factors and, when "
+            "merge_recommendation differs from the classification, why the recommendation "
+            "diverges. Plain text only — no markdown, no bullet points, no numbered lists. "
             "Single paragraph."
         )
     )
@@ -19,6 +20,17 @@ class Verdict(BaseModel):
             "'release age 2 days', 'new outbound network calls in library code'. "
             "Do NOT use snake_case field names from the input JSON."
         )
+    )
+    merge_recommendation: Literal["merge", "hold"] | None = Field(
+        default=None,
+        description=(
+            "Override the default action implied by the classification. "
+            "'merge' = merging is recommended despite non-green signals "
+            "(e.g. this bump patches a critical CVE and the yellow signals are confirmed benign). "
+            "'hold' = hold for human review despite a green classification "
+            "(e.g. an unusual signal warrants a second look). "
+            "null = no override — follow the classification as normal."
+        ),
     )
 
     @field_validator("flags", mode="before")

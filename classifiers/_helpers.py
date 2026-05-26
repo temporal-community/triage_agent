@@ -6,6 +6,7 @@ Shared helpers used by multiple classifier implementations.
 """
 
 import json
+from typing import Literal
 
 from models import PackageChecks, Verdict
 
@@ -69,6 +70,28 @@ def _build_message(signals: PackageChecks) -> str:
             f"</untrusted_custom>"
         )
     return msg
+
+
+_ADVISORY_MERGE_SEVERITIES = {"critical", "high"}
+
+
+def _advisory_merge_recommendation(signals: PackageChecks) -> Literal["merge", "hold"] | None:
+    """Return 'merge' if fixed CVEs with HIGH/CRITICAL severity outweigh minor risk signals."""
+    if not signals.advisory.fixed_vulnerabilities:
+        return None
+    severities = {s.lower() for s in signals.advisory.fixed_severity if s}
+    if not severities & _ADVISORY_MERGE_SEVERITIES:
+        return None
+    # Only recommend merge if there are no hard malware signals
+    hard_signals = (
+        signals.diff.install_script_added
+        or signals.diff.artifact_source_mismatch
+        or signals.diff.persistence_mechanism_added
+        or signals.diff.worm_propagation_pattern
+    )
+    if hard_signals:
+        return None
+    return "merge"
 
 
 def _rule_based(signals: PackageChecks) -> Verdict:
@@ -351,12 +374,25 @@ def _rule_based(signals: PackageChecks) -> Verdict:
     if signals.metadata.weekly_downloads is not None and signals.metadata.weekly_downloads < 1_000:
         flags.append(f"low download count ({signals.metadata.weekly_downloads:,}/week)")
 
+    merge_rec = _advisory_merge_recommendation(signals)
+
     if flags:
+        fixed = signals.advisory.fixed_vulnerabilities
+        if merge_rec and fixed:
+            reasoning = (
+                f"[rule-based] Flagged: {', '.join(flags)}. "
+                f"However, this bump fixes {len(fixed)} known vulnerability(s) "
+                f"({', '.join(fixed[:3])}{'...' if len(fixed) > 3 else ''}) — "
+                "upgrading is recommended despite the flagged signals."
+            )
+        else:
+            reasoning = f"[rule-based] Flagged: {', '.join(flags)}."
         return Verdict(
             classification="yellow",
             confidence=0.75,
-            reasoning=f"[rule-based] Flagged: {', '.join(flags)}.",
+            reasoning=reasoning,
             flags=flags,
+            merge_recommendation=merge_rec,
             release_age_hours=signals.age.release_age_hours,
             new_dependency_count=signals.diff.new_dependency_count,
         )
@@ -378,6 +414,7 @@ def _rule_based(signals: PackageChecks) -> Verdict:
             f"no maintainer changes, {downloads} weekly downloads."
         ),
         flags=[],
+        merge_recommendation=merge_rec,
         release_age_hours=signals.age.release_age_hours,
         new_dependency_count=signals.diff.new_dependency_count,
     )
