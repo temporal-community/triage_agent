@@ -407,10 +407,13 @@ async def _triage_batch(args: argparse.Namespace) -> None:
 
     print(f"Triaging {len(tasks)} PR(s) in parallel ...\n")
 
-    # Collect all results before displaying so we can group duplicates.
+    # Phase 1 — stream one compact line per result as each workflow finishes.
+    # Phase 2 — print a grouped summary with URLs once everything is done.
     # Each entry: (pr_data, parsed, verdict, result_str, comment_url)
     completed: list[tuple] = []
     failed: list[str] = []
+    _verdict_rank = {"red": 0, "yellow": 1, "green": 2}
+
     for future in asyncio.as_completed(tasks):
         try:
             pr_data, parsed, result = await future
@@ -418,28 +421,31 @@ async def _triage_batch(args: argparse.Namespace) -> None:
             comment_url = url_parts[0] if url_parts else None
             verdict = _verdict_from_result(result_str)
             completed.append((pr_data, parsed, verdict, result_str, comment_url))
+            print(
+                f"  {_color_verdict(verdict)}  "
+                f"#{pr_data['number']:<5}  {parsed.package:<{pkg_w}}  "
+                f"{parsed.old_version} → {parsed.new_version}"
+            )
         except Exception as exc:
             cause = getattr(exc, "cause", None)
             failed.append(str(cause) if cause else str(exc))
+            print(f"  {_r(_B + '✗' + _RST)}  {_r(str(cause) if cause else str(exc))}")
 
-    # Group by (package, old_version, new_version) — monorepos produce many PRs
-    # for the same bump across sub-projects; show them as one line.
-    _verdict_rank = {"red": 0, "yellow": 1, "green": 2}
+    # Group by (package, old_version, new_version) for the summary.
     groups: dict[tuple, list] = {}
     for entry in completed:
         pr_data, parsed, verdict, result_str, comment_url = entry
         key = (parsed.package, parsed.old_version, parsed.new_version)
         groups.setdefault(key, []).append(entry)
 
-    # Sort: worst verdict first, then alphabetically by package.
     def _group_sort_key(item: tuple) -> tuple:
         (pkg, old_v, new_v), entries = item
         worst = min(_verdict_rank.get(e[2], 9) for e in entries)
         return (worst, pkg)
 
+    print(_dim("\n" + "─" * 60 + "\n"))
     counts: dict[str, int] = {"green": 0, "yellow": 0, "red": 0}
     for (pkg, old_v, new_v), entries in sorted(groups.items(), key=_group_sort_key):
-        # Worst verdict in the group (should always be the same, but be safe).
         verdict = min(entries, key=lambda e: _verdict_rank.get(e[2], 9))[2]
         counts[verdict] += len(entries)
         pr_nums = sorted(e[0]["number"] for e in entries)
@@ -449,7 +455,7 @@ async def _triage_batch(args: argparse.Namespace) -> None:
             pr_label = "×" + str(len(pr_nums)) + "  " + "  ".join(f"#{n}" for n in pr_nums)
 
         print(f"  {_color_verdict(verdict)}  {pr_label}  {pkg:<{pkg_w}}  {old_v} → {new_v}")
-        rep = entries[0]  # representative entry for URLs
+        rep = entries[0]
         rep_pr_data, _, _, _, comment_url = rep
         wf_id = f"pr-action-{repo_slug}-{rep_pr_data['number']}"
         wf_url = f"{ui_base}/namespaces/{ns}/workflows/{wf_id}"
@@ -460,9 +466,6 @@ async def _triage_batch(args: argparse.Namespace) -> None:
             pr_url = f"https://github.com/{args.repo}/pull/{rep_pr_data['number']}"
             print(f"        PR:       {pr_url}{extra}")
         print(f"        Workflow: {wf_url}{extra}")
-
-    for msg in failed:
-        print(f"\n  {_r(_B + '✗  WORKFLOW FAILED' + _RST)}  {_r(msg)}\n")
 
     total = sum(counts.values())
     g, y, r = counts["green"], counts["yellow"], counts["red"]
