@@ -186,7 +186,13 @@ async def run(ecosystem: str, package: str, old_version: str, new_version: str) 
 
     env_rows: list[tuple[str, str, str]] = []
     if not has_socket_key:
-        env_rows.append(("socket", "info", "set SOCKET_API_KEY to enable Socket.dev analysis"))
+        env_rows.append(
+            (
+                "socket",
+                "info",
+                "supply-chain threat intelligence — set SOCKET_API_KEY to enable  https://socket.dev",
+            )
+        )
 
     if has_llm_key:
         from classifiers import get_classifier
@@ -200,7 +206,7 @@ async def run(ecosystem: str, package: str, old_version: str, new_version: str) 
             (
                 "classifier",
                 "info",
-                "rule-based fallback — set ANTHROPIC_API_KEY (or OPENAI_API_KEY / OLLAMA_HOST) for LLM analysis",
+                "using rule-based fallback — set ANTHROPIC_API_KEY for LLM analysis  https://console.anthropic.com",
             )
         )
 
@@ -209,6 +215,7 @@ async def run(ecosystem: str, package: str, old_version: str, new_version: str) 
         for name, status, text in env_rows:
             icon_ansi, _, text_fn = _STATUS[status]
             print(f"  {name:<{env_width}}  {icon_ansi}  {text_fn(text)}")  # type: ignore[operator]
+        print(_dim("─" * 60))
         print()
 
     # --- Per-release checks --------------------------------------------------
