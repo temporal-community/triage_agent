@@ -1,7 +1,7 @@
 import asyncio
 from datetime import timedelta
 from temporalio import workflow
-from temporalio.common import RetryPolicy, WorkflowIDReusePolicy
+from temporalio.common import RetryPolicy
 from temporalio.workflow import ParentClosePolicy
 
 with workflow.unsafe.imports_passed_through():
@@ -76,7 +76,6 @@ class PRActionWorkflow:
                     config.extra_check_activities,
                 ],
                 id=f"triage-{pr.ecosystem}-{pr.package_name}-{pr.new_version}-{date_key}",
-                id_reuse_policy=WorkflowIDReusePolicy.TERMINATE_IF_RUNNING,
                 parent_close_policy=ParentClosePolicy.ABANDON,
                 execution_timeout=timedelta(minutes=15),
                 result_type=TriageResult,
