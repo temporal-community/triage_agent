@@ -80,13 +80,15 @@ Or pass the details explicitly:
 uv run python triage.py --ecosystem pip --package requests --old 2.31.0 --new 2.32.3
 ```
 
-Set `ANTHROPIC_API_KEY` in `.env` for Claude classification; without it, the rule-based classifier runs entirely locally. Set `GITHUB_TOKEN` for higher API rate limits and private repos.
+The classifier defaults to rule-based (entirely local, no keys needed). Set `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or `OLLAMA_HOST` to use an LLM instead. Set `GITHUB_TOKEN` for higher API rate limits and private repos.
 
 When you want this to run **automatically on every PR** — with retry, the human-approval loop, and optional auto-merge — read on.
 
 ---
 
 ## Full automated setup (5 minutes)
+
+Run the Scout as a persistent worker that picks up every new Dependabot or Renovate PR automatically — no manual runs needed. The worker posts a GREEN/YELLOW/RED comment on each PR and, if you've opted in, can auto-merge GREEN ones or close RED ones without you lifting a finger.
 
 You need Python 3.10+, [`uv`](https://docs.astral.sh/uv/), and the [Temporal CLI](https://docs.temporal.io/cli).
 
@@ -120,9 +122,11 @@ uv run python -m start_workflow \
 
 Open **http://localhost:8233** to watch the workflow run in the Temporal UI. No API keys needed — it'll use the rule-based classifier and log what it would do without touching the actual PR.
 
-### What each credential unlocks
+### Configure your stack
 
-| Configured | What changes |
+The Scout works with zero configuration — rule-based classifier, no PR comments, no auto-actions. Each addition makes it smarter or more capable:
+
+| `.env` setting | What it enables |
 |---|---|
 | _(none)_ | Rule-based classifier, log-only output |
 | `ANTHROPIC_API_KEY` | Claude classifies (set `ANTHROPIC_MODEL` to pin a version) |
@@ -162,7 +166,7 @@ See [docs/configuration.md](docs/configuration.md) for the full field reference.
 
 ## Ecosystem coverage
 
-pip, npm, RubyGems, Cargo, Composer, Maven, NuGet, Go modules. Signal availability varies by registry — see [docs/architecture.md](docs/architecture.md) for the full coverage table.
+pip/uv, npm, RubyGems, Cargo, Composer, Maven/Gradle, NuGet, Go modules, GitHub Actions, Mix (Hex), Pub (Dart/Flutter), Elm, Docker, Terraform, Swift. Signal availability varies by registry — see [docs/architecture.md](docs/architecture.md) for the full coverage table.
 
 ---
 
