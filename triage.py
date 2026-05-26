@@ -184,19 +184,41 @@ async def run(ecosystem: str, package: str, old_version: str, new_version: str) 
         or os.environ.get("CLASSIFIER")
     )
 
-    missing: list[str] = []
-    if not has_socket_key:
-        missing.append("SOCKET_API_KEY (Socket.dev threat intelligence)")
-    if not has_llm_key:
-        missing.append("ANTHROPIC_API_KEY (LLM-powered classification)")
+    if has_llm_key:
+        from classifiers import get_classifier
 
-    print(_dim("Running checks."), end="")
-    if missing:
-        keys = " and ".join(missing)
-        print(_dim(f" Set {keys} for deeper analysis — see docs/configuration.md"))
+        clf_name = type(get_classifier()).__name__.replace("Classifier", "")
     else:
-        print()
-    print(_dim("─" * 60))
+        clf_name = None
+
+    setup_rows = [
+        (
+            "ok",
+            "Core checks",
+            "OSV, diff analysis, release age, maintainer history, version lineage, and more",
+        ),
+        (
+            "ok" if has_socket_key else "info",
+            "Socket.dev",
+            "Supply-chain threat intelligence"
+            + ("" if has_socket_key else " — add SOCKET_API_KEY to .env  (socket.dev)"),
+        ),
+        (
+            "ok" if clf_name else "info",
+            "Classifier",
+            f"{clf_name} — LLM-powered GREEN/YELLOW/RED verdict"
+            if clf_name
+            else "Rule-based fallback — add ANTHROPIC_API_KEY to .env for LLM analysis",
+        ),
+    ]
+
+    print(_dim("Running the following checks:\n"))
+    w = max(len(label) for _, label, _ in setup_rows)
+    for status, label, desc in setup_rows:
+        icon_ansi, _, text_fn = _STATUS[status]
+        print(f"  {icon_ansi}  {label:<{w}}  {text_fn(desc)}")  # type: ignore[operator]
+    print(_dim("\n  See docs/configuration.md for setup details."))
+    print(_dim("\n" + "─" * 60))
     print()
 
     # --- Per-release checks --------------------------------------------------
