@@ -17,9 +17,13 @@ Maintainers aren’t careless — they’re exhausted. And modern supply-chain a
 - **Zombie packages** — deprecated packages and patches to abandoned major version lines
 - **Suspicious PR files** — CI scripts or Dockerfiles in a "routine dep bump" are a red flag
 
-Classifies GREEN / YELLOW / RED, posts a comment explaining its reasoning, and takes action based on your config (or nothing if you haven't configured anything).
+Classifies 🟢 GREEN / 🟡 YELLOW / 🔴 RED, posts a comment explaining its reasoning, and takes action based on your config (or nothing if you haven't configured anything).
 
 > **Status:** Experimental — self-hosted, bring your own keys. No shared infrastructure, no accounts, no sign-up.
+
+<img width="891" height="596" alt="Testing 24 PRs at once, with LLM-based classifier determining both security checks and merge-ability" src="https://github.com/user-attachments/assets/e3246410-b45b-405c-8edc-4f2e505689f3" />
+
+<img width="678" height="685" alt="Sample comment showing checks" src="https://github.com/user-attachments/assets/cba5dcac-713e-4bde-a31e-0410ff79aefa" />
 
 ---
 
@@ -48,7 +52,7 @@ uv run python -m worker
 uv run python -m triage https://github.com/your-org/your-repo/pull/123
 ```
 
-Open **http://localhost:8233** to watch the workflow run. With `GITHUB_TOKEN` set, the Scout posts a comment directly on the PR — [here's a real example](https://github.com/temporalio/ai-cookbook/pull/102#issuecomment-4543265735).
+Open **http://localhost:8233** to watch the workflow run. With `GITHUB_TOKEN` set, the Scout posts a comment directly on the PR — [here's a real example](https://github.com/temporalio/ai-cookbook/pull/104#issuecomment-4543267396).
 
 No API keys needed to start — the rule-based classifier runs entirely locally. Without `GITHUB_TOKEN` it prints what it would have posted instead of actually posting it.
 
