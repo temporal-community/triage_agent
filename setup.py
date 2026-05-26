@@ -426,11 +426,8 @@ def print_next_steps(used_app: bool, temporal_mode: str = "local") -> None:
   2. Start the worker (in a separate terminal):
        uv run python -m worker
 
-  3. Test a triage run against a real public package (no webhook needed):
-       uv run python -m start_workflow \\
-         --repo temporalio/ai-cookbook \\
-         --package idna --old-version 3.11 --new-version 3.15 \\
-         --pr-number 122
+  3. Test a triage run against a real Dependabot PR (no webhook needed):
+       uv run python -m start_workflow https://github.com/your-org/your-repo/pull/123
 
      Watch the run at: {workflow_ui}
 

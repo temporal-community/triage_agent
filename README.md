@@ -112,10 +112,10 @@ temporal server start-dev
 uv run python -m worker
 
 # Triage every open Dependabot/Renovate PR in a repo
-uv run python triage_all.py --repo temporalio/ai-cookbook
+uv run python triage_all.py --repo your-org/your-repo
 
 # Or limit to a subset while you're getting a feel for it
-uv run python triage_all.py --repo temporalio/ai-cookbook --limit 5
+uv run python triage_all.py --repo your-org/your-repo --limit 5
 ```
 
 Open **http://localhost:8233** to watch each workflow run in the Temporal UI. No API keys needed — it'll use the rule-based classifier; without `GITHUB_TOKEN` it runs in dry-run mode (no PR comments posted).
