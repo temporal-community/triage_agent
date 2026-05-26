@@ -18,6 +18,8 @@ import sys
 import textwrap
 from pathlib import Path
 
+from dotenv import dotenv_values
+
 HERE = Path(__file__).parent
 ENV_FILE = HERE / ".env"
 ENV_EXAMPLE = HERE / ".env.example"
@@ -528,8 +530,15 @@ def main() -> None:
         print()
         _warn(".env already exists")
         if not _ask_yn("Overwrite it?", default=False):
-            print("  Aborted.")
-            sys.exit(0)
+            _ok("Keeping existing .env — skipping credential setup.")
+            if not check_prerequisites():
+                sys.exit(1)
+            existing = dotenv_values(ENV_FILE)
+            used_app = "GITHUB_APP_ID" in existing
+            temporal_mode = "cloud" if existing.get("TEMPORAL_TLS_CERT") else "local"
+            print_repo_config()
+            print_next_steps(used_app, temporal_mode)
+            return
 
     if not check_prerequisites():
         sys.exit(1)

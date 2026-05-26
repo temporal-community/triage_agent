@@ -20,8 +20,18 @@ _token_cache: dict[int, tuple[str, float]] = {}  # installation_id → (token, u
 def _load_private_key() -> str:
     """Load the App private key from a file path or inline env var."""
     if path := os.environ.get("GITHUB_APP_PRIVATE_KEY_PATH"):
-        with open(path) as f:
-            return f.read()
+        path = path.strip()
+        if not path or path.startswith("#"):
+            pass  # placeholder value from .env template — treat as unset
+        else:
+            try:
+                with open(path) as f:
+                    return f.read()
+            except FileNotFoundError:
+                raise ValueError(
+                    f"GITHUB_APP_PRIVATE_KEY_PATH is set to {path!r} but that file does not exist. "
+                    "Check the path in your .env file."
+                )
     if key := os.environ.get("GITHUB_APP_PRIVATE_KEY"):
         # Deployment platforms often encode newlines as literal \n
         return key.replace("\\n", "\n")
