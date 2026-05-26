@@ -101,6 +101,44 @@ GITHUB_APP_PRIVATE_KEY=-----BEGIN RSA PRIVATE KEY-----\nMIIE...\n-----END RSA PR
 
 The webhook API must be reachable from GitHub's IP ranges over HTTPS.
 
+### Local testing with ngrok (start here)
+
+Before setting up a real server, test end-to-end on your laptop:
+
+```bash
+# Terminal 1 — Temporal dev server
+temporal server start-dev
+
+# Terminal 2 — Scout worker
+uv run python -m worker
+
+# Terminal 3 — webhook API
+uv run uvicorn api.webhook:app --port 8080
+
+# Terminal 4 — expose it to the internet
+ngrok http 8080
+```
+
+ngrok prints a line like `Forwarding https://abc123.ngrok-free.app -> localhost:8080` — that's your webhook URL.
+
+**Register the webhook:**
+
+- **PAT users:** go to `https://github.com/OWNER/REPO/settings/hooks/new` for each repo you want to monitor. Fill in:
+  - Payload URL: `https://abc123.ngrok-free.app/webhook`
+  - Content type: `application/json`
+  - Secret: copy `GITHUB_WEBHOOK_SECRET` from your `.env`
+  - Events: select "Let me select individual events" → tick **Pull requests**
+
+- **GitHub App users:** go to `https://github.com/settings/apps/YOUR-APP` → General → Webhook URL: `https://abc123.ngrok-free.app/webhook`. GitHub will send a ping — a ✓ means it's wired.
+
+When a new Dependabot PR opens, GitHub will POST to ngrok → your local API → Temporal → worker. Watch it at **http://localhost:8233**.
+
+---
+
+### Production ingress
+
+When you're ready to run 24/7 without a laptop, swap ngrok for a real reverse proxy.
+
 ### Reverse proxy (nginx / Caddy)
 
 ```nginx
@@ -126,14 +164,12 @@ scout.yourdomain.com {
 }
 ```
 
-### GitHub webhook configuration
+### GitHub webhook configuration (production)
 
-In your GitHub App settings (`github.com/settings/apps/YOUR-APP`):
+Same as the ngrok setup above, but use your real domain instead:
 
-- **Webhook URL:** `https://scout.yourdomain.com/webhook`
-- **Content type:** `application/json`
-- **Secret:** must match `GITHUB_WEBHOOK_SECRET` in `.env`
-- **Events:** Pull requests ✓, Pull request reviews ✓
+- **PAT users:** update each repo's webhook URL to `https://scout.yourdomain.com/webhook`
+- **GitHub App users:** update the Webhook URL in your App settings to `https://scout.yourdomain.com/webhook`
 
 GitHub retries failed webhook deliveries with exponential backoff — the Scout returns 200 immediately (before the workflow completes), so delivery failures only happen if the webhook API is down.
 
