@@ -41,6 +41,15 @@ load_dotenv()
 mcp = FastMCP("dependency-scout")
 
 
+_COLORS = {"GREEN": "\033[32m", "YELLOW": "\033[33m", "RED": "\033[31m"}
+_RESET = "\033[0m"
+
+
+def _colorize(classification: str) -> str:
+    color = _COLORS.get(classification.upper(), "")
+    return f"{color}{classification.upper()}{_RESET}" if color else classification.upper()
+
+
 @mcp.tool()
 async def check_dependency(
     package: str,
@@ -79,7 +88,7 @@ async def check_dependency(
     v = result.verdict
 
     lines = [
-        f"VERDICT: {v.classification.upper()}",
+        f"VERDICT: {_colorize(v.classification)}",
         f"Confidence: {v.confidence:.0%}",
         "",
         v.reasoning,
