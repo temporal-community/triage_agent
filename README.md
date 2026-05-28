@@ -112,6 +112,34 @@ claude mcp add dependency-scout -- uv run python -m mcp_server
 
 Once configured, Claude Code will have a `check_dependency` tool available and can call it before `pip install`, `npm install`, etc.
 
+Test by asking Claude a question like:
+
+```
+Check if requests 2.32.0 is safe to install 
+```
+
+You should get back a response somewhat like:
+
+```
+⏺ Let me use the dependency-scout MCP tool to check that package.
+                                                                                
+  Called dependency-scout (ctrl+o to expand)
+
+⏺ RED — Do not install requests 2.32.0.
+
+  Here's the summary of why:
+
+  - Version is yanked on PyPI — officially pulled due to a conflict with the CVE-2024-35195
+  mitigation. It broke applications using custom schemes (e.g. docker-py).
+  - Open CVEs not fixed — CVE-2024-47081 and CVE-2026-25645 remain unresolved at this version.
+  - Install script regression — setup.py was substantially rewritten, reverting from modern
+  pyproject.toml packaging to a legacy build script with older Python/dependency constraints.
+  - Maintainer change with unknown account age adds further supply chain concern.
+
+  Recommendation: upgrade to requests 2.32.2 or newer — that's the version that properly resolved
+  the CVE regression without the breakage that caused 2.32.0 to be yanked.
+```
+
 ### Configure your stack
 
 The Scout works with zero configuration — rule-based classifier, no PR comments, no auto-actions. Each addition makes it smarter or more capable:
