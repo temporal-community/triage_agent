@@ -70,6 +70,36 @@ uv run python -m triage --repo your-org/your-repo
 uv run python -m triage --repo your-org/your-repo --limit 5
 ```
 
+### Check a package before installing it
+
+The Scout can also vet a dependency **before** you install or upgrade it — useful when you're adding something new or when an agent is about to run `pip install` / `npm install`:
+
+```bash
+# Fresh install check (no old version)
+uv run python -m scout check requests 2.32.0
+
+# Upgrade check
+uv run python -m scout check requests 2.32.0 --from 2.31.0 --ecosystem pip
+
+# Different ecosystems
+uv run python -m scout check @angular/core 18.0.0 --ecosystem npm
+uv run python -m scout check serde 1.0.219 --ecosystem cargo
+```
+
+Exit codes are scriptable: `0` = green, `1` = yellow, `2` = red.
+
+Results are automatically shared across callers — if another project already checked the same version bump today, you get the cached verdict instantly.
+
+#### Use as a Claude Code tool (MCP)
+
+Add the Scout as an MCP server so Claude Code can call it automatically when it's about to install a new dependency. From the `dependency-scout` directory:
+
+```bash
+claude mcp add dependency-scout -- uv run python -m mcp_server
+```
+
+Once configured, Claude Code will have a `check_dependency` tool available and can call it before `pip install`, `npm install`, etc.
+
 ### Configure your stack
 
 The Scout works with zero configuration — rule-based classifier, no PR comments, no auto-actions. Each addition makes it smarter or more capable:
