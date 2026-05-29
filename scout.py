@@ -179,6 +179,14 @@ async def _list_dependabot_prs(repo: str, token: str | None) -> list[dict]:
     return prs
 
 
+def _unwrap_cause(exc: Exception) -> str:
+    """Walk Temporal's WorkflowFailureError → ActivityError → ApplicationError chain to get the real message."""
+    cause: Exception = exc
+    while hasattr(cause, "cause") and getattr(cause, "cause", None) is not None:
+        cause = cause.cause  # type: ignore[assignment]
+    return str(cause)
+
+
 def _parse_result(result: str) -> tuple[str, str | None, str | None]:
     """Return (status, comment_url, merge_recommendation) from workflow result string."""
     parts = result.split("||")
@@ -442,9 +450,9 @@ async def _triage_batch(args: argparse.Namespace) -> None:
                 f"{parsed.old_version} → {parsed.new_version}"
             )
         except Exception as exc:
-            cause = getattr(exc, "cause", None)
-            failed.append(str(cause) if cause else str(exc))
-            print(f"  {_r(_B + '✗' + _RST)}  {_r(str(cause) if cause else str(exc))}")
+            msg = _unwrap_cause(exc)
+            failed.append(msg)
+            print(f"  {_r(_B + '✗' + _RST)}  {_r(msg)}")
 
     groups: dict[tuple, list] = {}
     for entry in completed:

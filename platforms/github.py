@@ -238,6 +238,21 @@ class GitHubPlatformClient:
                 non_retryable=True,
             )
 
+        mergeable_state = pr_data.get("mergeable_state", "unknown")
+        base_ref = pr_data.get("base", {}).get("ref", "the base branch")
+
+        if mergeable_state == "behind":
+            raise ApplicationError(
+                f"PR #{pr.pr_number} branch is behind {base_ref!r} — will close so Dependabot can recreate with an updated branch",
+                type="stale_branch",
+                non_retryable=True,
+            )
+        if mergeable_state == "dirty":
+            raise ApplicationError(
+                f"PR #{pr.pr_number} has merge conflicts with {base_ref!r} — needs manual resolution",
+                non_retryable=True,
+            )
+
         merge_resp = await client.put(
             f"{self._repo_url(pr)}/pulls/{pr.pr_number}/merge",
             headers=headers,
@@ -245,8 +260,14 @@ class GitHubPlatformClient:
             timeout=15.0,
         )
         if merge_resp.status_code == 405:
+            if mergeable_state == "blocked":
+                reason = "required checks have not passed yet"
+            elif mergeable_state == "unknown":
+                reason = "mergeability is still being computed — will retry"
+            else:
+                reason = f"mergeable_state={mergeable_state!r}"
             raise ApplicationError(
-                f"PR #{pr.pr_number} not mergeable — CI may still be running",
+                f"PR #{pr.pr_number} not mergeable — {reason}",
                 non_retryable=False,
             )
         if merge_resp.status_code == 422:

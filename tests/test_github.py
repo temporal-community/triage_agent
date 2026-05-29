@@ -281,6 +281,43 @@ async def test_merge_pr_skips_sha_check_when_head_sha_empty(client, pr, with_pat
 
 
 @respx.mock
+async def test_merge_pr_behind_raises_stale_branch_non_retryable(client, pr, with_pat):
+    payload = {**_open_pr_payload(), "mergeable_state": "behind", "base": {"ref": "main"}}
+    respx.get(f"{BASE_URL}/pulls/{PR_NUM}").mock(return_value=httpx.Response(200, json=payload))
+    env = ActivityEnvironment()
+    with pytest.raises(ApplicationError) as exc_info:
+        await env.run(client.merge_pr, pr)
+    assert exc_info.value.non_retryable is True
+    assert exc_info.value.type == "stale_branch"
+    assert "main" in str(exc_info.value)
+
+
+@respx.mock
+async def test_merge_pr_dirty_raises_non_retryable(client, pr, with_pat):
+    payload = {**_open_pr_payload(), "mergeable_state": "dirty", "base": {"ref": "main"}}
+    respx.get(f"{BASE_URL}/pulls/{PR_NUM}").mock(return_value=httpx.Response(200, json=payload))
+    env = ActivityEnvironment()
+    with pytest.raises(ApplicationError) as exc_info:
+        await env.run(client.merge_pr, pr)
+    assert exc_info.value.non_retryable is True
+    assert "merge conflicts" in str(exc_info.value)
+
+
+@respx.mock
+async def test_merge_pr_405_blocked_is_retryable(client, pr, with_pat):
+    payload = {**_open_pr_payload(), "mergeable_state": "blocked"}
+    respx.get(f"{BASE_URL}/pulls/{PR_NUM}").mock(return_value=httpx.Response(200, json=payload))
+    respx.put(f"{BASE_URL}/pulls/{PR_NUM}/merge").mock(
+        return_value=httpx.Response(405, json={"message": "not mergeable"})
+    )
+    env = ActivityEnvironment()
+    with pytest.raises(ApplicationError) as exc_info:
+        await env.run(client.merge_pr, pr)
+    assert exc_info.value.non_retryable is False
+    assert "required checks" in str(exc_info.value)
+
+
+@respx.mock
 async def test_merge_pr_405_is_retryable(client, pr, with_pat):
     respx.get(f"{BASE_URL}/pulls/{PR_NUM}").mock(
         return_value=httpx.Response(200, json=_open_pr_payload())

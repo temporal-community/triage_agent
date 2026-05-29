@@ -2,6 +2,7 @@ import asyncio
 from datetime import timedelta
 from temporalio import workflow
 from temporalio.common import RetryPolicy, WorkflowIDReusePolicy
+from temporalio.exceptions import ActivityError, ApplicationError
 from temporalio.workflow import ParentClosePolicy
 
 with workflow.unsafe.imports_passed_through():
@@ -28,6 +29,27 @@ class PRActionWorkflow:
     def __init__(self) -> None:
         self._human_decision: str | None = None
         self._approver: str = ""
+
+    async def _try_merge(self, pr: "PRContext", opts: dict) -> bool:
+        """Attempt merge; if branch is stale, close the PR and return False. Re-raises all other errors."""
+        try:
+            await workflow.execute_activity("activities.platform.merge_pr", args=[pr], **opts)
+            return True
+        except ActivityError as e:
+            if (
+                isinstance(e.cause, ApplicationError)
+                and getattr(e.cause, "type", None) == "stale_branch"
+            ):
+                await workflow.execute_activity(
+                    "activities.platform.close_pr",
+                    args=[
+                        pr,
+                        "Branch is behind the base branch — closing so Dependabot can recreate with an updated branch.",
+                    ],
+                    **opts,
+                )
+                return False
+            raise
 
     @workflow.signal
     def submit_decision(self, decision: str, approver: str = "") -> None:
@@ -146,20 +168,26 @@ class PRActionWorkflow:
         # The shared PackageTriageWorkflow verdict may have been produced for a different repo
         # with a different age policy, or the LLM may have ignored the age signal.
         if (
-            verdict.classification == "green"
-            and verdict.release_age_hours is not None
+            verdict.release_age_hours is not None
             and verdict.release_age_hours < config.min_release_age_hours
         ):
-            verdict = verdict.model_copy(
-                update={
-                    "classification": "yellow",
-                    "flags": verdict.flags
-                    + [
-                        f"release too fresh: {verdict.release_age_hours:.0f}h "
-                        f"< {config.min_release_age_hours}h minimum for this repo"
-                    ],
-                }
-            )
+            updates: dict = {}
+            if verdict.classification == "green":
+                updates["classification"] = "yellow"
+                updates["flags"] = verdict.flags + [
+                    f"release too fresh: {verdict.release_age_hours:.0f}h "
+                    f"< {config.min_release_age_hours}h minimum for this repo"
+                ]
+            if verdict.merge_recommendation == "merge":
+                # Repo age policy is a hard floor — LLM cannot bypass it.
+                updates.setdefault("flags", verdict.flags)
+                updates["flags"] = updates["flags"] + [
+                    f"LLM merge recommendation suppressed: release is {verdict.release_age_hours:.0f}h old "
+                    f"(< {config.min_release_age_hours}h minimum for this repo)"
+                ]
+                updates["merge_recommendation"] = None
+            if updates:
+                verdict = verdict.model_copy(update=updates)
 
         if (
             verdict.classification == "green"
@@ -215,7 +243,9 @@ class PRActionWorkflow:
         )
         recommendation_auto_merge = verdict.merge_recommendation == "merge"
         if config.auto_merge_enabled and (normal_auto_merge or recommendation_auto_merge):
-            await workflow.execute_activity("activities.platform.merge_pr", args=[pr], **opts)
+            merged = await self._try_merge(pr, opts)
+            if not merged:
+                return f"closed-stale-branch{url_suffix}{mr_suffix}"
             if recommendation_auto_merge and not normal_auto_merge:
                 return f"auto-merged-security-context{url_suffix}{mr_suffix}"
             return f"auto-merged{url_suffix}{mr_suffix}"
@@ -248,7 +278,9 @@ class PRActionWorkflow:
                 self._approver = ""
 
             if self._human_decision == "approve":
-                await workflow.execute_activity("activities.platform.merge_pr", args=[pr], **opts)
+                merged = await self._try_merge(pr, opts)
+                if not merged:
+                    return f"closed-stale-branch{url_suffix}{mr_suffix}"
                 return f"human-approved-merged{url_suffix}{mr_suffix}"
             return f"human-rejected{url_suffix}{mr_suffix}"
 

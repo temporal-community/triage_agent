@@ -521,7 +521,7 @@ wheels = [
 
 [[package]]
 name = "dependency-scout"
-version = "0.1.2"
+version = "0.1.4"
 source = { editable = "." }
 dependencies = [
     { name = "anthropic" },
