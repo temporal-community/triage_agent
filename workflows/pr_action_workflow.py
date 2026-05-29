@@ -235,13 +235,16 @@ class PRActionWorkflow:
         # Auto-merge logic with merge_recommendation support:
         # - merge_recommendation="hold" suppresses auto-merge even for green classifications
         # - merge_recommendation="merge" enables auto-merge for non-auto_merge_classifications
-        #   when auto_merge is on (e.g. yellow that patches a critical CVE)
+        #   only when there are confirmed fixed CVEs — this is a CVE-urgency override, not a
+        #   general "LLM thinks it looks fine" override
         normal_auto_merge = (
             verdict.classification in config.auto_merge_classifications
             and verdict.confidence >= config.auto_merge_min_confidence
             and verdict.merge_recommendation != "hold"
         )
-        recommendation_auto_merge = verdict.merge_recommendation == "merge"
+        recommendation_auto_merge = verdict.merge_recommendation == "merge" and bool(
+            signals.advisory.fixed_vulnerabilities
+        )
         if config.auto_merge_enabled and (normal_auto_merge or recommendation_auto_merge):
             merged = await self._try_merge(pr, opts)
             if not merged:
